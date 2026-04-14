@@ -34,6 +34,7 @@ class DocMetadata:
     modified_at: datetime | None = None
     app_name: str | None = None
     app_version: str | None = None
+    template: str | None = None
 
 
 def _parse_iso_dt(s: str | None) -> datetime | None:
@@ -81,12 +82,14 @@ def extract_metadata(file_path: str | Path) -> DocMetadata:
     company = None
     app_name = None
     app_version = None
+    template = None
     if app_xml:
         try:
             root = etree.fromstring(app_xml)
             company = _text(root, "ap:Company", _APP_NS)
             app_name = _text(root, "ap:Application", _APP_NS)
             app_version = _text(root, "ap:AppVersion", _APP_NS)
+            template = _text(root, "ap:Template", _APP_NS)
         except Exception as e:
             logger.warning("app.xml parse failed: %s", e)
 
@@ -98,6 +101,7 @@ def extract_metadata(file_path: str | Path) -> DocMetadata:
         modified_at=modified,
         app_name=app_name,
         app_version=app_version,
+        template=template,
     )
 
 

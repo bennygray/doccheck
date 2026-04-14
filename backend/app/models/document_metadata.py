@@ -39,6 +39,7 @@ class DocumentMetadata(Base):
     )
     app_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     app_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    template: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     def __repr__(self) -> str:  # pragma: no cover - debug only
         return (

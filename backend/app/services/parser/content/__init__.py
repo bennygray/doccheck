@@ -181,6 +181,7 @@ async def _extract_content_inner(
                 doc_modified_at=meta.modified_at,
                 app_name=meta.app_name,
                 app_version=meta.app_version,
+                template=meta.template,
             )
         )
 

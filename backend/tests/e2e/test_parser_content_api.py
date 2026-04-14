@@ -111,6 +111,22 @@ async def test_docx_metadata_written(seed_bidder_with_file, tmp_path: Path):
         assert meta.author == "张三"
 
 
+async def test_docx_template_written(seed_bidder_with_file, tmp_path: Path):
+    """C10:python-docx 保存的文件默认 app.xml 中 Template=Normal.dotm。"""
+    path = make_real_docx(
+        tmp_path / "tpl.docx", body_paragraphs=["x"], author="李四"
+    )
+    doc_id = await seed_bidder_with_file(path, ".docx")
+    async with async_session() as s:
+        await extract_content(s, doc_id)
+
+    async with async_session() as s:
+        meta = await s.get(DocumentMetadata, doc_id)
+        assert meta is not None
+        assert meta.template == "Normal.dotm"
+        assert meta.author == "李四"
+
+
 async def test_xlsx_sheet_extracted(seed_bidder_with_file, tmp_path: Path):
     path = make_real_xlsx(
         tmp_path / "x.xlsx",

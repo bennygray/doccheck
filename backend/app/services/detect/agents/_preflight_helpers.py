@@ -70,6 +70,7 @@ async def bidder_has_metadata(
         stmt = stmt.where(
             (DocumentMetadata.app_version.is_not(None))
             | (DocumentMetadata.app_name.is_not(None))
+            | (DocumentMetadata.template.is_not(None))
         )
     result = await session.execute(stmt)
     return (result.scalar() or 0) > 0

@@ -140,6 +140,35 @@ uv run python -m scripts.backfill_document_sheets            # 全量回填
 uv run python -m scripts.backfill_document_sheets --dry-run  # 只扫不写
 ```
 
+### C10 detect-agents-metadata 依赖
+
+C10 把 3 个 metadata Agent(`metadata_author` / `metadata_time` / `metadata_machine`)的 `run()` 从 dummy 替换为真实算法(纯程序化,零 LLM):
+- **author**:author / last_saved_by / company 三子字段 NFKC+casefold+strip 归一化后跨投标人精确聚类(hit_strength = `|∩| / min(|A|, |B|)`)
+- **time**:`doc_modified_at` 5 分钟滑窗跨 bidder 聚集 + `doc_created_at` 秒级精确相等
+- **machine**:`(app_name, app_version, template)` 三字段元组跨投标人精确碰撞
+
+同时延伸 C5 持久化:`document_metadata` 表追加 `template VARCHAR(255) NULL` 列(alembic 0007);`parser/content/metadata_parser` 从 `docProps/app.xml` 读 `<Template>` 节点写入;已有文档通过 `backend/scripts/backfill_document_metadata_template.py` 手工回填。
+
+- **零新增第三方依赖**:`unicodedata`(stdlib)+ `datetime` + `collections`
+- **C6 contract 锁定**:3 Agent 注册 `name+agent_type+preflight` 三元组不变,仅替换 run()
+- **alembic 迁移**:`0007_add_doc_meta_template`(revision 字符串受 alembic_version VARCHAR(32) 限制简写);部署后需手工 `uv run python -m scripts.backfill_document_metadata_template` 回填已有文档
+
+环境变量(统一 `METADATA_` 前缀):
+
+- `METADATA_AUTHOR_ENABLED` / `METADATA_TIME_ENABLED` / `METADATA_MACHINE_ENABLED`(默认 `true`)— 子检测 flag 单独开关
+- `METADATA_TIME_CLUSTER_WINDOW_MIN`(默认 `5`)— 修改时间滑窗宽度(分钟)
+- `METADATA_AUTHOR_SUBDIM_WEIGHTS`(默认 `"0.5,0.3,0.2"`)— 顺序 author,last_saved_by,company
+- `METADATA_TIME_SUBDIM_WEIGHTS`(默认 `"0.7,0.3"`)— 顺序 modified_at_cluster,created_at_match
+- `METADATA_IRONCLAD_THRESHOLD`(默认 `85.0`)— Agent score ≥ 阈值 → is_ironclad
+- `METADATA_MAX_HITS_PER_AGENT`(默认 `50`)— evidence hits 截断上限
+
+回填脚本:
+
+```bash
+uv run python -m scripts.backfill_document_metadata_template            # 全量回填
+uv run python -m scripts.backfill_document_metadata_template --dry-run  # 只扫不写(显示前 5 样例)
+```
+
 ## 常用命令
 
 ```bash

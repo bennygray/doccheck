@@ -59,7 +59,28 @@ async def classify_bidder(
     bidder_id: int,
     llm: LLMProvider,
 ) -> ClassifyResult:
-    """为 bidder 批量分类 + 身份信息提取;LLM 错走规则兜底。"""
+    """为 bidder 批量分类 + 身份信息提取;LLM 错走规则兜底。
+
+    C6 起外层包 ``async with track()``;系统重启导致分类任务中断时,
+    scanner 扫到 stuck 后把 bidder.parse_status 从 identifying 回滚到 identify_failed。
+    """
+    # 延迟导入避免循环依赖
+    from app.services.async_tasks.tracker import track
+
+    async with track(
+        subtype="llm_classify",
+        entity_type="bidder",
+        entity_id=bidder_id,
+    ):
+        return await _classify_bidder_inner(session, bidder_id, llm)
+
+
+async def _classify_bidder_inner(
+    session: AsyncSession,
+    bidder_id: int,
+    llm: LLMProvider,
+) -> ClassifyResult:
+    """原 classify_bidder 主体。"""
     # 收集该 bidder 的 DOCX/XLSX 文件(仅 identified 文件,即内容已提取完)
     stmt = (
         select(BidDocument)

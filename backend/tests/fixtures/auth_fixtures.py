@@ -19,8 +19,13 @@ from sqlalchemy import delete
 
 from app.db.session import async_session
 from app.main import app
+from app.models.agent_task import AgentTask
+from app.models.analysis_report import AnalysisReport
+from app.models.async_task import AsyncTask
 from app.models.bid_document import BidDocument
 from app.models.bidder import Bidder
+from app.models.overall_analysis import OverallAnalysis
+from app.models.pair_comparison import PairComparison
 from app.models.price_config import ProjectPriceConfig
 from app.models.document_image import DocumentImage
 from app.models.document_metadata import DocumentMetadata
@@ -40,6 +45,13 @@ async def _delete_all() -> None:
             → projects → users。新表加进来必须按 FK 顺序往前插入。
     """
     async with async_session() as s:
+        # C6: async_tasks 无 FK,先清无妨
+        await s.execute(delete(AsyncTask))
+        # C6: analysis 相关 4 张表依赖 projects / bidders,在 bidders 之前清
+        await s.execute(delete(AnalysisReport))
+        await s.execute(delete(OverallAnalysis))
+        await s.execute(delete(PairComparison))
+        await s.execute(delete(AgentTask))
         # C5: 先清 price_items + document_* 三张表(都引用 bid_documents)
         await s.execute(delete(PriceItem))
         await s.execute(delete(DocumentImage))

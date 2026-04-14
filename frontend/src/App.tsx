@@ -5,6 +5,7 @@ import ChangePasswordPage from "./pages/ChangePasswordPage";
 import ProjectListPage from "./pages/projects/ProjectListPage";
 import ProjectCreatePage from "./pages/projects/ProjectCreatePage";
 import ProjectDetailPage from "./pages/projects/ProjectDetailPage";
+import ReportPage from "./pages/reports/ReportPage";
 import SseDemoPage from "./pages/SseDemoPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
@@ -55,6 +56,14 @@ function App() {
         element={
           <ProtectedRoute>
             <ProjectDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/:projectId/:version"
+        element={
+          <ProtectedRoute>
+            <ReportPage />
           </ProtectedRoute>
         }
       />

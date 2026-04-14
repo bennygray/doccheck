@@ -66,6 +66,25 @@ client_max_body_size 500M;
 
 uvicorn 自身没有 multipart 大小限制,但生产建议挂 nginx/Caddy 做边界防护。
 
+### C6 detect-framework 依赖
+
+C6 引入异步检测框架 + 10 Agent 骨架 + SSE 检测推送 + 通用任务表:
+
+- **无新系统 / 第三方依赖**:纯 asyncio + SQLAlchemy + 复用 C5 progress_broker
+- **启动时扫描 stuck 任务**:FastAPI lifespan startup 调 `scanner.scan_and_recover()`,心跳过期的 `async_tasks` 行会触发回滚 handler(extract / content_parse / llm_classify / agent_run 4 subtype)
+- **ProcessPoolExecutor 接口预留**:`app/services/detect/engine.get_cpu_executor()`,C6 dummy Agent 不消费,C7+ 真 CPU Agent 调用
+- **SSE 端点**:`/api/projects/{pid}/analysis/events`;nginx 同 C5 `proxy_read_timeout ≥ 60s` + `proxy_buffering off`
+
+环境变量:
+
+- `AGENT_TIMEOUT_S`(默认 300)— 单 Agent 超时秒数
+- `GLOBAL_TIMEOUT_S`(默认 1800)— 整轮检测全局超时秒数
+- `ASYNC_TASK_HEARTBEAT_S`(默认 30)— 心跳更新间隔
+- `ASYNC_TASK_STUCK_THRESHOLD_S`(默认 60)— scanner 判 stuck 阈值
+- `ASYNC_TASK_MAX_SCAN_ROWS`(默认 1000)— scanner 单次处理上限
+- `INFRA_DISABLE_DETECT=1` — 测试用:`POST /analysis/start` 仅创建 AgentTask 行,不 asyncio.create_task 调度
+- `INFRA_DISABLE_SCANNER=1` — 测试用:跳过 lifespan startup 的 scanner 扫描
+
 ## 常用命令
 
 ```bash
@@ -77,4 +96,5 @@ pytest tests/e2e/                                   # L2 接口 E2E
 INFRA_DISABLE_LIFECYCLE=1 uvicorn ...               # 跳过生命周期清理(测试常用)
 INFRA_DISABLE_EXTRACT=1 pytest ...                  # 跳过自动解压协程(L2 用 fixture 手动 await)
 INFRA_DISABLE_PIPELINE=1 pytest ...                 # 跳过解析流水线协程(C5 L2 用 fixture 手动 await)
+INFRA_DISABLE_DETECT=1 pytest ...                   # 跳过自动检测调度(C6 L2 用 fixture 手动 await)
 ```

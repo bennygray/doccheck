@@ -36,7 +36,26 @@ _SKIPPED = {".doc", ".xls", ".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".
 async def extract_content(
     session: AsyncSession, bid_document_id: int
 ) -> None:
-    """按 file_type 分派解析 + 落盘。失败兜底到 identify_failed。"""
+    """按 file_type 分派解析 + 落盘。失败兜底到 identify_failed。
+
+    C6 起外层包 ``async with track()``;系统重启导致提取任务中断时,
+    scanner 扫到 stuck 后把 bid_document.parse_status 从 identifying 回滚到
+    identify_failed。
+    """
+    # 延迟导入避免循环依赖
+    from app.services.async_tasks.tracker import track
+
+    async with track(
+        subtype="content_parse",
+        entity_type="bid_document",
+        entity_id=bid_document_id,
+    ):
+        await _extract_content_inner(session, bid_document_id)
+
+
+async def _extract_content_inner(
+    session: AsyncSession, bid_document_id: int
+) -> None:
     doc = await session.get(BidDocument, bid_document_id)
     if doc is None:
         logger.warning("extract_content: document %d not found", bid_document_id)

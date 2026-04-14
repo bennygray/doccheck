@@ -8,6 +8,8 @@
  */
 import { authStorage } from "../contexts/AuthContext";
 import type {
+  AnalysisStartResponse,
+  AnalysisStatusResponse,
   BidDocument,
   Bidder,
   BidderListResponse,
@@ -23,6 +25,7 @@ import type {
   ProjectDetail,
   ProjectListQuery,
   ProjectListResponse,
+  ReportResponse,
   UploadResult,
 } from "../types";
 
@@ -304,4 +307,26 @@ export const api = {
   /** GET /api/projects/{pid}/parse-progress(SSE URL,EventSource 用) */
   parseProgressUrl: (projectId: number | string) =>
     `${API_BASE}/projects/${projectId}/parse-progress`,
+
+  // ===========================================================================
+  // C6 detect-framework 新增
+  // ===========================================================================
+
+  /** POST /api/projects/{pid}/analysis/start — 启动检测 */
+  startAnalysis: (projectId: number | string) =>
+    request<AnalysisStartResponse>(`/projects/${projectId}/analysis/start`, {
+      method: "POST",
+    }),
+
+  /** GET /api/projects/{pid}/analysis/status — 检测状态快照 */
+  getAnalysisStatus: (projectId: number | string) =>
+    request<AnalysisStatusResponse>(`/projects/${projectId}/analysis/status`),
+
+  /** SSE URL:GET /api/projects/{pid}/analysis/events */
+  analysisEventsUrl: (projectId: number | string) =>
+    `${API_BASE}/projects/${projectId}/analysis/events`,
+
+  /** GET /api/projects/{pid}/reports/{version} — 报告骨架 */
+  getReport: (projectId: number | string, version: number | string) =>
+    request<ReportResponse>(`/projects/${projectId}/reports/${version}`),
 };

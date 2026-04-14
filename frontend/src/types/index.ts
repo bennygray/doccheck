@@ -247,3 +247,108 @@ export interface DocumentRolePatchResult {
   role_confidence: RoleConfidence | string;
   warn: string | null;
 }
+
+// =============================================================================
+// C6 detect-framework 类型
+// =============================================================================
+
+/** AgentTask 6 态 */
+export type AgentTaskStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "timeout"
+  | "skipped";
+
+export type AgentType = "pair" | "global";
+export type RiskLevel = "high" | "medium" | "low";
+
+export interface AgentTask {
+  id: number;
+  agent_name: string;
+  agent_type: AgentType;
+  pair_bidder_a_id: number | null;
+  pair_bidder_b_id: number | null;
+  status: AgentTaskStatus;
+  started_at: string | null;
+  finished_at: string | null;
+  elapsed_ms: number | null;
+  score: string | null; // Decimal 序列化为字符串
+  summary: string | null;
+  error: string | null;
+}
+
+/** POST /analysis/start 201 */
+export interface AnalysisStartResponse {
+  version: number;
+  agent_task_count: number;
+}
+
+/** POST /analysis/start 409 */
+export interface AnalysisStartConflict {
+  current_version: number;
+  started_at: string | null;
+  message: string;
+}
+
+/** GET /analysis/status */
+export interface AnalysisStatusResponse {
+  version: number | null;
+  project_status: string;
+  started_at: string | null;
+  agent_tasks: AgentTask[];
+}
+
+/** SSE 事件类型 */
+export type DetectEventType =
+  | "snapshot"
+  | "agent_status"
+  | "report_ready"
+  | "heartbeat";
+
+export interface DetectEvent {
+  event_type: DetectEventType;
+  data: Record<string, unknown>;
+}
+
+/** 项目详情的 analysis 字段 */
+export interface ProjectAnalysisSummary {
+  current_version: number | null;
+  project_status: string;
+  started_at: string | null;
+  agent_task_count: number;
+  latest_report: ProjectAnalysisReport | null;
+}
+
+export interface ProjectAnalysisReport {
+  version: number;
+  total_score: number;
+  risk_level: RiskLevel;
+  created_at: string;
+}
+
+/** GET /reports/{version} */
+export interface ReportDimensionStatusCounts {
+  succeeded: number;
+  failed: number;
+  timeout: number;
+  skipped: number;
+}
+
+export interface ReportDimension {
+  dimension: string;
+  best_score: number;
+  is_ironclad: boolean;
+  status_counts: ReportDimensionStatusCounts;
+  summaries: string[];
+}
+
+export interface ReportResponse {
+  version: number;
+  total_score: number;
+  risk_level: RiskLevel;
+  llm_conclusion: string;
+  created_at: string;
+  dimensions: ReportDimension[];
+}

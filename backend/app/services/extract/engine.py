@@ -99,18 +99,35 @@ async def extract_archive(
     - 任何 needs_password → needs_password
     - 任何 failed 且无 extracted → failed
     - 混合(部分 extracted + 部分 failed/skipped)→ partial
+
+    C6 起外层用 ``async with track()`` 包裹,scanner 在启动期可扫到心跳
+    过期的 stuck 解压任务并回滚 bidder.parse_status。
     """
-    async with session_factory() as session:  # type: ignore[misc]
-        try:
-            await _process_bidder(session, bidder_id, password)
-        except Exception as exc:  # noqa: BLE001 - 顶层兜底,绝不能让协程死无对证
-            logger.exception("extract_archive top-level failure for bidder=%s", bidder_id)
-            try:
-                await _set_bidder_failed(session, bidder_id, str(exc)[:500])
-                await session.commit()
-            except Exception:  # noqa: BLE001
-                # DB 也挂了 → 日志已留,放弃
-                logger.exception("failed to write bidder failed-status for %s", bidder_id)
+    # 延迟导入避免循环依赖;测试中允许 tracker 失败不影响主流程
+    from app.services.async_tasks.tracker import track
+
+    try:
+        async with track(
+            subtype="extract",
+            entity_type="bidder",
+            entity_id=bidder_id,
+        ):
+            async with session_factory() as session:  # type: ignore[misc]
+                try:
+                    await _process_bidder(session, bidder_id, password)
+                except Exception as exc:  # noqa: BLE001 - 顶层兜底
+                    logger.exception(
+                        "extract_archive top-level failure for bidder=%s", bidder_id
+                    )
+                    try:
+                        await _set_bidder_failed(session, bidder_id, str(exc)[:500])
+                        await session.commit()
+                    except Exception:  # noqa: BLE001
+                        logger.exception(
+                            "failed to write bidder failed-status for %s", bidder_id
+                        )
+    except Exception:  # noqa: BLE001 - 上面已吞所有业务异常,这里兜底 tracker 异常
+        logger.exception("extract_archive tracker failure for bidder=%s", bidder_id)
 
 
 async def _process_bidder(

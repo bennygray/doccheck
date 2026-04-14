@@ -28,7 +28,11 @@ from app.schemas.bid_document import (
     ProjectProgress,
 )
 from app.schemas.bidder import BidderSummary
+from app.models.agent_task import AgentTask
+from app.models.analysis_report import AnalysisReport
 from app.schemas.project import (
+    ProjectAnalysisReport,
+    ProjectAnalysisSummary,
     ProjectCreate,
     ProjectDetailResponse,
     ProjectListResponse,
@@ -204,7 +208,63 @@ async def get_project(
     detail.bidders = [BidderSummary.model_validate(b) for b in bidders_rows]
     detail.files = [BidDocumentSummary.model_validate(f) for f in files_rows]
     detail.progress = progress
+
+    # C6: analysis 字段聚合
+    detail.analysis = await _build_project_analysis_summary(
+        session, project_id, project.status
+    )
+    # C6: 列表的 risk_level 回填(详情这里读 project.risk_level,由 judge 写入);
+    # 若 judge 已写入则 ProjectResponse.risk_level 已经是非 null
     return detail
+
+
+async def _build_project_analysis_summary(
+    session: AsyncSession, project_id: int, project_status: str
+) -> ProjectAnalysisSummary | None:
+    """C6 聚合 analysis 字段;从未检测过返 None。"""
+    row = (
+        await session.execute(
+            select(
+                AgentTask.version,
+                func.min(AgentTask.started_at),
+                func.min(AgentTask.created_at),
+                func.count(AgentTask.id),
+            )
+            .where(AgentTask.project_id == project_id)
+            .group_by(AgentTask.version)
+            .order_by(AgentTask.version.desc())
+            .limit(1)
+        )
+    ).first()
+    if row is None:
+        return None
+
+    version, started_min, created_min, count = row
+    # latest_report(若存在)
+    report = (
+        await session.execute(
+            select(AnalysisReport)
+            .where(AnalysisReport.project_id == project_id)
+            .order_by(AnalysisReport.version.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    latest_report = None
+    if report is not None:
+        latest_report = ProjectAnalysisReport(
+            version=report.version,
+            total_score=float(report.total_score),
+            risk_level=report.risk_level,
+            created_at=report.created_at,
+        )
+
+    return ProjectAnalysisSummary(
+        current_version=int(version),
+        project_status=project_status,
+        started_at=started_min or created_min,
+        agent_task_count=int(count),
+        latest_report=latest_report,
+    )
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

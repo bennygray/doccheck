@@ -76,16 +76,37 @@ class ProjectResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProjectAnalysisReport(BaseModel):
+    """C6 最新 AnalysisReport 摘要。"""
+
+    version: int
+    total_score: float
+    risk_level: str
+    created_at: datetime
+
+
+class ProjectAnalysisSummary(BaseModel):
+    """C6 项目检测汇总(详情响应 analysis 字段)。"""
+
+    current_version: int | None
+    project_status: str
+    started_at: datetime | None
+    agent_task_count: int
+    latest_report: ProjectAnalysisReport | None = None
+
+
 class ProjectDetailResponse(ProjectResponse):
     """项目详情响应。
 
     C4 起 bidders / files / progress 由 ``GET /api/projects/{id}`` 路由真实
     JOIN 聚合(file-upload spec MODIFIED Requirement)。空项目返空数组与零进度。
+    C6 新增 analysis 字段;未检测过的项目为 null。
     """
 
     bidders: list[BidderSummary] = Field(default_factory=list)
     files: list[BidDocumentSummary] = Field(default_factory=list)
     progress: ProjectProgress | None = None
+    analysis: ProjectAnalysisSummary | None = None
 
 
 class ProjectListResponse(BaseModel):

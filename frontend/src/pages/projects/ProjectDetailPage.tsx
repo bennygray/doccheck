@@ -16,6 +16,9 @@ import ParseProgressIndicator from "../../components/projects/ParseProgressIndic
 import PriceConfigForm from "../../components/projects/PriceConfigForm";
 import PriceRulesPanel from "../../components/projects/PriceRulesPanel";
 import UploadButton from "../../components/projects/UploadButton";
+import { DetectProgressIndicator } from "../../components/detect/DetectProgressIndicator";
+import { StartDetectButton } from "../../components/detect/StartDetectButton";
+import { useDetectProgress } from "../../hooks/useDetectProgress";
 import { useParseProgress } from "../../hooks/useParseProgress";
 import { ApiError, api } from "../../services/api";
 import type { BidDocument, Bidder, ProjectDetail } from "../../types";
@@ -253,6 +256,9 @@ export default function ProjectDetailPage() {
         </div>
       </section>
 
+      {/* C6 detect-framework: 启动检测按钮 + 进度指示 */}
+      <DetectSection projectId={project.id} project={project} onGoReport={(v) => navigate(`/reports/${project.id}/${v}`)} />
+
       {(sse.progress ?? progress) && (
         <section style={{ marginTop: 16 }}>
           <ParseProgressIndicator
@@ -451,5 +457,51 @@ export default function ProjectDetailPage() {
         />
       )}
     </main>
+  );
+}
+
+/**
+ * C6 detect-framework 子组件(放同文件以保持 ProjectDetailPage 作为单一入口)。
+ * 订阅 /analysis/events SSE,展示启动检测按钮与进度指示器。
+ */
+function DetectSection({
+  projectId,
+  project,
+  onGoReport,
+}: {
+  projectId: number;
+  project: ProjectDetail;
+  onGoReport: (version: number) => void;
+}) {
+  const detect = useDetectProgress(projectId);
+  const hasStarted =
+    detect.version !== null || project.status === "analyzing" ||
+    project.status === "completed";
+
+  return (
+    <section style={{ marginTop: 24 }} data-testid="detect-section">
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <StartDetectButton
+          projectId={projectId}
+          projectStatus={detect.projectStatus || project.status}
+          bidders={project.bidders ?? []}
+          onStarted={(v) => {
+            if (v > 0) {
+              // 乐观刷新:等 SSE 推状态
+            }
+          }}
+        />
+      </div>
+      {hasStarted && detect.agentTasks.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <DetectProgressIndicator
+            agentTasks={detect.agentTasks}
+            connected={detect.connected}
+            latestReport={detect.latestReport}
+            onViewReport={onGoReport}
+          />
+        </div>
+      )}
+    </section>
   );
 }

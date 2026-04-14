@@ -116,8 +116,63 @@ def make_price_rule_response(
     )
 
 
+# C7 新增:text_similarity 专用 mock 工厂 -----------------------------------
+
+
+def make_text_similarity_response(
+    judgments: list[tuple[int, str]],
+    overall: str = "mock overall",
+    confidence: str = "high",
+) -> str:
+    """构造 text_similarity LLM 成功响应 JSON 文本(按 L-4 规格)。"""
+    import json
+
+    return json.dumps(
+        {
+            "pairs": [
+                {"idx": idx, "judgment": j, "note": "mock"}
+                for idx, j in judgments
+            ],
+            "overall": overall,
+            "confidence": confidence,
+        },
+        ensure_ascii=False,
+    )
+
+
+@pytest.fixture
+def mock_llm_text_sim_success() -> ScriptedLLMProvider:
+    """默认返全部 plagiarism(用于抄袭命中 scenario)。"""
+    # 构造 "idx 0..N"(最多 30)都标 plagiarism 的通用响应;
+    # scripted 的 loop_last=True 让无论调几次都一致返这个
+    payload = make_text_similarity_response(
+        [(i, "plagiarism") for i in range(30)],
+        overall="技术方案段落高度疑似同源",
+        confidence="high",
+    )
+    return ScriptedLLMProvider([payload], loop_last=True)
+
+
+@pytest.fixture
+def mock_llm_text_sim_bad_json() -> ScriptedLLMProvider:
+    """始终返回非 JSON(触发 2 次解析失败 → 降级)。"""
+    return ScriptedLLMProvider(["this is not json"], loop_last=True)
+
+
+@pytest.fixture
+def mock_llm_text_sim_timeout() -> ScriptedLLMProvider:
+    """始终返 timeout error(触发降级)。"""
+    return ScriptedLLMProvider(
+        [LLMError(kind="timeout", message="mocked text_sim timeout")],
+        loop_last=True,
+    )
+
+
 class ScriptedLLMProvider:
-    """按调用顺序依次返不同响应/错 的 provider。用于 rule_coordinator 等多次调用场景。"""
+    """按调用顺序依次返不同响应/错 的 provider。
+
+    用于 rule_coordinator 等多次调用场景。
+    """
 
     def __init__(self, scripts: list, *, loop_last: bool = True):
         self.name = "scripted"

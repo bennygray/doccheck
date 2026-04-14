@@ -50,23 +50,90 @@ async def test_text_similarity_skip_when_missing_session():
 
 
 @pytest.mark.asyncio
-async def test_text_similarity_ok_when_shared_role():
+async def test_text_similarity_ok_when_shared_role_and_enough_chars(monkeypatch):
+    """C7 更新:preflight 在"同角色文档存在"之外追加 total_chars 字数检查。"""
     session = AsyncMock()
-    # bidders_share_any_role 返 True
+    from app.services.detect.agents import text_similarity as mod
+    from app.services.detect.agents.text_sim_impl import segmenter
+
+    monkeypatch.setattr(
+        mod.segmenter,
+        "choose_shared_role",
+        AsyncMock(return_value=["technical"]),
+    )
+    monkeypatch.setattr(
+        mod.segmenter,
+        "load_paragraphs_for_roles",
+        AsyncMock(
+            return_value=segmenter.SegmentResult(
+                doc_role="technical", doc_id=1, paragraphs=["x" * 600], total_chars=600
+            )
+        ),
+    )
+
+    ctx = _make_ctx(
+        bidder_a=_make_bidder(1),
+        bidder_b=_make_bidder(2),
+        session=session,
+    )
+    result = await ts_preflight(ctx)
+    assert result.status == "ok"
+
+
+@pytest.mark.asyncio
+async def test_text_similarity_skip_when_no_shared_role(monkeypatch):
+    session = AsyncMock()
     from app.services.detect.agents import text_similarity as mod
 
-    original = mod.bidders_share_any_role
-    mod.bidders_share_any_role = AsyncMock(return_value=True)
-    try:
-        ctx = _make_ctx(
-            bidder_a=_make_bidder(1),
-            bidder_b=_make_bidder(2),
-            session=session,
-        )
-        result = await ts_preflight(ctx)
-        assert result.status == "ok"
-    finally:
-        mod.bidders_share_any_role = original
+    monkeypatch.setattr(
+        mod.segmenter,
+        "choose_shared_role",
+        AsyncMock(return_value=[]),  # 无共有 role
+    )
+
+    ctx = _make_ctx(
+        bidder_a=_make_bidder(1),
+        bidder_b=_make_bidder(2),
+        session=session,
+    )
+    result = await ts_preflight(ctx)
+    assert result.status == "skip"
+    assert result.reason == "缺少可对比文档"
+
+
+@pytest.mark.asyncio
+async def test_text_similarity_skip_when_doc_too_short(monkeypatch):
+    """C7 新增:任一侧 total_chars < MIN_DOC_CHARS → skip '文档过短无法对比'。"""
+    session = AsyncMock()
+    from app.services.detect.agents import text_similarity as mod
+    from app.services.detect.agents.text_sim_impl import segmenter
+
+    monkeypatch.setattr(
+        mod.segmenter,
+        "choose_shared_role",
+        AsyncMock(return_value=["technical"]),
+    )
+    # 第一次调返超短(a 侧),第二次调返正常(b 侧) — mode: 单边短也 skip
+    short = segmenter.SegmentResult(
+        doc_role="technical", doc_id=1, paragraphs=["短"], total_chars=10
+    )
+    long_ = segmenter.SegmentResult(
+        doc_role="technical", doc_id=2, paragraphs=["x" * 600], total_chars=600
+    )
+    monkeypatch.setattr(
+        mod.segmenter,
+        "load_paragraphs_for_roles",
+        AsyncMock(side_effect=[short, long_]),
+    )
+
+    ctx = _make_ctx(
+        bidder_a=_make_bidder(1),
+        bidder_b=_make_bidder(2),
+        session=session,
+    )
+    result = await ts_preflight(ctx)
+    assert result.status == "skip"
+    assert result.reason == "文档过短无法对比"
 
 
 # ---------- error_consistency(downgrade)----------

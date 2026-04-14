@@ -17,7 +17,7 @@ import asyncio
 import logging
 import os
 from concurrent.futures import ProcessPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -110,7 +110,7 @@ async def run_detection(project_id: int, version: int) -> None:
                 asyncio.gather(*coros, return_exceptions=True),
                 timeout=get_global_timeout_s(),
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "detect: global timeout project=%s v=%s", project_id, version
             )
@@ -171,7 +171,7 @@ async def _execute_agent_task(agent_task_id: int) -> None:
 
         # status=running + started_at
         task.status = "running"
-        task.started_at = datetime.now(timezone.utc)
+        task.started_at = datetime.now(UTC)
         await session.commit()
         await _publish_agent_status(task)
 
@@ -198,7 +198,7 @@ async def _execute_agent_task(agent_task_id: int) -> None:
         # run with timeout
         try:
             result = await asyncio.wait_for(spec.run(ctx), timeout=get_agent_timeout_s())
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await _mark_timeout(session, task)
             await session.commit()
             await _publish_agent_status(task)
@@ -236,6 +236,16 @@ async def _build_ctx(session: AsyncSession, task: AgentTask) -> AgentContext:
         )
         all_bidders = list((await session.execute(stmt)).scalars().all())
 
+    # C7: text_similarity 起需要真实 llm_provider;C6 dummy Agent 不触 LLM 字段
+    # 测试通过 monkeypatch app.services.llm.factory._build_default_provider 注入 mock
+    # 读失败(未配 API key / env)时 provider=None,Agent 自然进降级分支
+    from app.services.llm import get_llm_provider
+
+    try:
+        llm_provider = get_llm_provider()
+    except Exception:  # noqa: BLE001 - LLM 未配置不应 crash 检测流程
+        llm_provider = None
+
     return AgentContext(
         project_id=task.project_id,
         version=task.version,
@@ -243,7 +253,7 @@ async def _build_ctx(session: AsyncSession, task: AgentTask) -> AgentContext:
         bidder_a=bidder_a,
         bidder_b=bidder_b,
         all_bidders=all_bidders,
-        llm_provider=None,  # C6 不用
+        llm_provider=llm_provider,
         session=session,
         downgrade=False,
     )
@@ -253,10 +263,10 @@ async def _build_ctx(session: AsyncSession, task: AgentTask) -> AgentContext:
 def _elapsed_ms(task: AgentTask) -> int:
     if task.started_at is None:
         return 0
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     started = task.started_at
     if started.tzinfo is None:
-        started = started.replace(tzinfo=timezone.utc)
+        started = started.replace(tzinfo=UTC)
     return max(0, int((now - started).total_seconds() * 1000))
 
 
@@ -266,7 +276,7 @@ async def _mark_succeeded(
     task.status = "succeeded"
     task.score = Decimal(str(round(score, 2)))
     task.summary = (summary or "")[:500]
-    task.finished_at = datetime.now(timezone.utc)
+    task.finished_at = datetime.now(UTC)
     task.elapsed_ms = _elapsed_ms(task)
 
 
@@ -275,7 +285,7 @@ async def _mark_skipped(
 ) -> None:
     task.status = "skipped"
     task.summary = reason[:500]
-    task.finished_at = datetime.now(timezone.utc)
+    task.finished_at = datetime.now(UTC)
     task.elapsed_ms = _elapsed_ms(task) if task.started_at else 0
 
 
@@ -284,14 +294,14 @@ async def _mark_failed(
 ) -> None:
     task.status = "failed"
     task.error = error[:500]
-    task.finished_at = datetime.now(timezone.utc)
+    task.finished_at = datetime.now(UTC)
     task.elapsed_ms = _elapsed_ms(task)
 
 
 async def _mark_timeout(session: AsyncSession, task: AgentTask) -> None:
     task.status = "timeout"
     task.summary = f"Agent 超时 (>{int(get_agent_timeout_s())}s)"
-    task.finished_at = datetime.now(timezone.utc)
+    task.finished_at = datetime.now(UTC)
     task.elapsed_ms = _elapsed_ms(task)
 
 
@@ -308,7 +318,7 @@ async def _mark_all_running_as_timeout(project_id: int, version: int) -> None:
             .values(
                 status="timeout",
                 summary="Agent 超时 (全局)",
-                finished_at=datetime.now(timezone.utc),
+                finished_at=datetime.now(UTC),
             )
         )
         await session.execute(stmt)

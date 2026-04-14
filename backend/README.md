@@ -100,6 +100,20 @@ C7 把 `text_similarity` Agent 的 `run()` 从 dummy 替换为真实双轨算法
 - `TEXT_SIM_PAIR_SCORE_THRESHOLD`(默认 0.70)— 段落对 cosine 相似度 ≥ 此值才进 LLM 候选
 - `TEXT_SIM_MAX_PAIRS_TO_LLM`(默认 30)— 单 pair 最多发 LLM 的段落对数(防 token 爆炸)
 
+### C8 detect-agent-section-similarity 依赖
+
+C8 把 `section_similarity` Agent 的 `run()` 从 dummy 替换为真实章节级双轨算法(正则切章 → 对齐 → 复用 C7 `text_sim_impl` 跑章节内 TF-IDF + LLM 定性);章节切分失败 → 降级到整文档粒度(A1 独立降级,与 C7 text_similarity 并行不耦合)。
+
+- **零新增第三方依赖**:纯正则 + 复用 C7 `text_sim_impl/` 子包(只读,不改一字)
+- **ProcessPoolExecutor 共享**:与 C7 共用同一 `get_cpu_executor()` 单例
+- **LLM 调用**:章节对合并后按 `title_sim × avg_para_sim` 粗排,仅前 `TEXT_SIM_MAX_PAIRS_TO_LLM` 个发 LLM(复用 C7 上限,不叠加)
+
+环境变量(C8 专属,与 C7 并列):
+
+- `SECTION_SIM_MIN_CHAPTERS`(默认 3)— 任一侧章节数 < 此值触发降级到整文档粒度
+- `SECTION_SIM_MIN_CHAPTER_CHARS`(默认 100)— 章节内字符 < 此值合并进前一章节
+- `SECTION_SIM_TITLE_ALIGN_THRESHOLD`(默认 0.40)— title TF-IDF sim ≥ 此值算对齐成功(by title);否则走序号回退对齐
+
 ## 常用命令
 
 ```bash

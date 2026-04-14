@@ -168,6 +168,42 @@ def mock_llm_text_sim_timeout() -> ScriptedLLMProvider:
     )
 
 
+# C8 新增:section_similarity LLM mock --------------------------------------
+
+
+def make_section_similarity_response(
+    judgments: list[tuple[int, str]],
+    overall: str = "mock section overall",
+    confidence: str = "high",
+) -> str:
+    """构造 section_similarity LLM 响应 JSON(与 C7 response schema 一致)。
+
+    C8 评分器把跨章节段落对合并为一次 LLM 调用,返 schema 完全复用 C7。
+    单独命名工厂便于测试语义区分。
+    """
+    return make_text_similarity_response(judgments, overall, confidence)
+
+
+@pytest.fixture
+def mock_llm_section_sim_success() -> ScriptedLLMProvider:
+    """返全 plagiarism(用于章节雷同 scenario)。"""
+    payload = make_section_similarity_response(
+        [(i, "plagiarism") for i in range(30)],
+        overall="章节级高度疑似同源",
+        confidence="high",
+    )
+    return ScriptedLLMProvider([payload], loop_last=True)
+
+
+@pytest.fixture
+def mock_llm_section_sim_degraded() -> ScriptedLLMProvider:
+    """返 timeout → 降级(evidence.degraded=true)。"""
+    return ScriptedLLMProvider(
+        [LLMError(kind="timeout", message="mocked section_sim timeout")],
+        loop_last=True,
+    )
+
+
 class ScriptedLLMProvider:
     """按调用顺序依次返不同响应/错 的 provider。
 

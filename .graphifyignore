@@ -1,0 +1,25 @@
+# graphify 扫描排除清单（语法同 .gitignore）
+
+# Playwright 失败产物：自动生成的 mojibake 调试残留，不入图
+e2e/artifacts/playwright-output/
+
+# graphify 自己的输出，避免自指
+graphify-out
+*.md.orig
+# converted/ 是 office 转 md 的中间缓存，避免被当文档再次扫描
+converted
+
+# 上传/解压的实际文件（运行时数据，非源码）
+uploads/
+extracted/
+backend/uploads/
+backend/extracted/
+
+# 依赖与构建产物
+node_modules/
+.venv/
+__pycache__/
+*.egg-info/
+dist/
+build/
+frontend/dist/

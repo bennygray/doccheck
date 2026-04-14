@@ -7,6 +7,13 @@
  * 保留 C1 现有接口(health/projects/documents/analysis),C3+ 改造时替换。
  */
 import { authStorage } from "../contexts/AuthContext";
+import type {
+  Project,
+  ProjectCreatePayload,
+  ProjectDetail,
+  ProjectListQuery,
+  ProjectListResponse,
+} from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
@@ -97,6 +104,24 @@ export const api = {
       body: JSON.stringify({ old_password, new_password }),
     }),
 
-  // 遗留占位(C3/C4/C6 改造范围,C2 不使用)
-  listProjects: () => request("/projects"),
+  // C3 project-mgmt
+  listProjects: (q?: ProjectListQuery) => {
+    const params = new URLSearchParams();
+    if (q?.page != null) params.set("page", String(q.page));
+    if (q?.size != null) params.set("size", String(q.size));
+    if (q?.status) params.set("status", q.status);
+    if (q?.risk_level) params.set("risk_level", q.risk_level);
+    if (q?.search) params.set("search", q.search);
+    const qs = params.toString();
+    return request<ProjectListResponse>(`/projects/${qs ? `?${qs}` : ""}`);
+  },
+  createProject: (payload: ProjectCreatePayload) =>
+    request<Project>("/projects/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getProject: (id: number | string) =>
+    request<ProjectDetail>(`/projects/${id}`),
+  deleteProject: (id: number | string) =>
+    request<void>(`/projects/${id}`, { method: "DELETE" }),
 };

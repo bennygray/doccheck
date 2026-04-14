@@ -52,3 +52,7 @@ test-results/
 
 # 临时日志 / 调试输出
 *.log
+
+# graphify 知识图谱产物(可重建,不入库)
+graphify-out/
+raw/

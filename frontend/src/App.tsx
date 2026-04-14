@@ -2,7 +2,9 @@ import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import LoginPage from "./pages/LoginPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
-import ProjectsPlaceholderPage from "./pages/ProjectsPlaceholderPage";
+import ProjectListPage from "./pages/projects/ProjectListPage";
+import ProjectCreatePage from "./pages/projects/ProjectCreatePage";
+import ProjectDetailPage from "./pages/projects/ProjectDetailPage";
 import SseDemoPage from "./pages/SseDemoPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
@@ -36,7 +38,23 @@ function App() {
         path="/projects"
         element={
           <ProtectedRoute>
-            <ProjectsPlaceholderPage />
+            <ProjectListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/projects/new"
+        element={
+          <ProtectedRoute>
+            <ProjectCreatePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/projects/:id"
+        element={
+          <ProtectedRoute>
+            <ProjectDetailPage />
           </ProtectedRoute>
         }
       />

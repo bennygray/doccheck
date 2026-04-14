@@ -19,6 +19,7 @@ from sqlalchemy import delete
 
 from app.db.session import async_session
 from app.main import app
+from app.models.project import Project
 from app.models.user import User
 from app.services.auth.jwt import create_access_token
 from app.services.auth.password import hash_password
@@ -26,12 +27,19 @@ from app.services.auth.password import hash_password
 
 @pytest_asyncio.fixture
 async def clean_users() -> AsyncIterator[None]:
-    """每个用到 users 表的 L2 测试前后都清表,避免状态污染。"""
+    """每个用到 users 表的 L2 测试前后都清表,避免状态污染。
+
+    FK 依赖:projects.owner_id → users.id,所以先清 projects 再清 users。
+    C2 引入时只有 users 表;C3 加入 projects 后扩展此 fixture 的清理范围,
+    使所有 C2/C3 测试共享同一张 fixture,不必再各自维护。
+    """
     async with async_session() as s:
+        await s.execute(delete(Project))
         await s.execute(delete(User))
         await s.commit()
     yield
     async with async_session() as s:
+        await s.execute(delete(Project))
         await s.execute(delete(User))
         await s.commit()
 

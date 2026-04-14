@@ -9,15 +9,18 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e/tests",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // C2 引入 auth 后,多个 spec 共享 admin 账户并会改密码,串行避免竞态
+  workers: 1,
   reporter: [
     ["list"],
     ["html", { outputFolder: "playwright-report", open: "never" }],
   ],
-  outputDir: "./e2e/artifacts",
+  // outputDir 用独立 playwright-output 目录,避免清理已入库的里程碑凭证(c1-manual-*.md、m1-demo-*/**)
+  outputDir: "./e2e/artifacts/playwright-output",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5173",
     trace: "on-first-retry",

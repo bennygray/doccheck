@@ -16,9 +16,18 @@ class Settings(BaseSettings):
     upload_dir: str = "./uploads"
     max_file_size_mb: int = 50
 
-    # JWT
-    secret_key: str = "change-this-in-production"
-    access_token_expire_minutes: int = 60 * 24
+    # JWT / Auth (C2)
+    secret_key: str = "change-this-in-production"  # 生产部署必须通过 env 覆盖
+    access_token_expire_minutes: int = 60 * 24  # 24h
+    jwt_algorithm: str = "HS256"
+
+    # 账户锁定(C2 auth)
+    auth_lockout_threshold: int = 5
+    auth_lockout_ttl_minutes: int = 15
+
+    # 默认管理员 seed(C2 auth);生产必须通过 env 覆盖,且 must_change_password=true 首次登录强制改
+    auth_seed_admin_username: str = "admin"
+    auth_seed_admin_password: str = "admin123"
 
     # LLM 适配层 (C1 infra-base)
     llm_provider: str = "dashscope"  # dashscope | openai

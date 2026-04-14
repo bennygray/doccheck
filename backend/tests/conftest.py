@@ -6,4 +6,5 @@
 
 pytest_plugins = [
     "tests.fixtures.llm_mock",
+    "tests.fixtures.auth_fixtures",
 ]

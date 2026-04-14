@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
 from app.db.base import Base
+from app import models  # noqa: F401 - 触发模型注册,填充 Base.metadata
 
 config = context.config
 # 从应用配置注入 URL,覆盖 alembic.ini 中的占位

@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { loginAdmin } from "../fixtures/auth-helper";
 
-test.describe("C1 冒烟:SSE demo 心跳", () => {
+test.describe("冒烟:SSE demo 心跳(登录后访问)", () => {
   test.setTimeout(60_000);
   test("/demo/sse 页至少渲染 1 条心跳", async ({ page }) => {
+    await loginAdmin(page);
     // SSE 是长连接,永不触发 load 事件,用 domcontentloaded 即可
     await page.goto("/demo/sse", { waitUntil: "domcontentloaded" });
     await expect(page.locator("h1")).toContainText("SSE 心跳演示");

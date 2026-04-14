@@ -12,9 +12,11 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list[str] = ["http://localhost:5173"]
 
-    # File upload
+    # File upload (C4 file-upload):压缩包原文件 + 解压产物各自的根目录;
+    # 上限与 services/upload/validator.py MAX_ARCHIVE_BYTES 同步 = 500MB
     upload_dir: str = "./uploads"
-    max_file_size_mb: int = 50
+    extracted_dir: str = "./extracted"
+    max_file_size_mb: int = 500
 
     # JWT / Auth (C2)
     secret_key: str = "change-this-in-production"  # 生产部署必须通过 env 覆盖

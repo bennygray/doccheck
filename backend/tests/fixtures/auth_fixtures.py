@@ -19,29 +19,43 @@ from sqlalchemy import delete
 
 from app.db.session import async_session
 from app.main import app
+from app.models.bid_document import BidDocument
+from app.models.bidder import Bidder
+from app.models.price_config import ProjectPriceConfig
+from app.models.price_parsing_rule import PriceParsingRule
 from app.models.project import Project
 from app.models.user import User
 from app.services.auth.jwt import create_access_token
 from app.services.auth.password import hash_password
 
 
+async def _delete_all() -> None:
+    """按 FK 依赖顺序清所有业务表。
+
+    顺序: bid_documents → bidders → price_parsing_rules → project_price_configs
+            → projects → users。新表加进来必须按 FK 顺序往前插入。
+    """
+    async with async_session() as s:
+        await s.execute(delete(BidDocument))
+        await s.execute(delete(Bidder))
+        await s.execute(delete(PriceParsingRule))
+        await s.execute(delete(ProjectPriceConfig))
+        await s.execute(delete(Project))
+        await s.execute(delete(User))
+        await s.commit()
+
+
 @pytest_asyncio.fixture
 async def clean_users() -> AsyncIterator[None]:
     """每个用到 users 表的 L2 测试前后都清表,避免状态污染。
 
-    FK 依赖:projects.owner_id → users.id,所以先清 projects 再清 users。
-    C2 引入时只有 users 表;C3 加入 projects 后扩展此 fixture 的清理范围,
-    使所有 C2/C3 测试共享同一张 fixture,不必再各自维护。
+    FK 依赖:projects.owner_id → users.id;C4 后又叠了 bidders / bid_documents
+    / price_configs / price_rules,清理顺序从子表向父表。所有 C2/C3/C4 测试
+    共享同一 fixture,不必各自维护。
     """
-    async with async_session() as s:
-        await s.execute(delete(Project))
-        await s.execute(delete(User))
-        await s.commit()
+    await _delete_all()
     yield
-    async with async_session() as s:
-        await s.execute(delete(Project))
-        await s.execute(delete(User))
-        await s.commit()
+    await _delete_all()
 
 
 @pytest_asyncio.fixture

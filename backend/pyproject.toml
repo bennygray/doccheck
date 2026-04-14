@@ -17,6 +17,13 @@ dependencies = [
     "pymupdf>=1.24",
     "python-docx>=1.1",
     "openpyxl>=3.1",
+    # C4 file-upload: 压缩包/文件类型/编码探测
+    "py7zr>=0.21",
+    "rarfile>=4.2",
+    "chardet>=5.2",
+    # Windows 用 python-magic-bin(自带 libmagic);Linux 用 python-magic + libmagic1
+    'python-magic-bin>=0.4 ; sys_platform == "win32"',
+    'python-magic>=0.4 ; sys_platform != "win32"',
     # Text analysis
     "jieba>=0.42",
     "scikit-learn>=1.5",

@@ -19,8 +19,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
+from app.models.bid_document import BidDocument
+from app.models.bidder import Bidder
 from app.models.project import Project, get_visible_projects_stmt
 from app.models.user import User
+from app.schemas.bid_document import (
+    BidDocumentSummary,
+    ProjectProgress,
+)
+from app.schemas.bidder import BidderSummary
 from app.schemas.project import (
     ProjectCreate,
     ProjectDetailResponse,
@@ -136,8 +143,46 @@ async def get_project(
     user: User = Depends(get_current_user),
 ) -> ProjectDetailResponse:
     project = await _fetch_visible_project(session, user, project_id)
-    # bidders/files/progress 在 C3 范围内固定占位,由 ProjectDetailResponse 默认值给出
-    return ProjectDetailResponse.model_validate(project)
+
+    # C4: 真实聚合 bidders / files / progress(file-upload spec MODIFIED Req)
+    bidders_rows = (
+        await session.execute(
+            select(Bidder)
+            .where(Bidder.project_id == project_id, Bidder.deleted_at.is_(None))
+            .order_by(Bidder.created_at.desc())
+        )
+    ).scalars().all()
+
+    if bidders_rows:
+        bidder_ids = [b.id for b in bidders_rows]
+        files_rows = (
+            await session.execute(
+                select(BidDocument)
+                .where(BidDocument.bidder_id.in_(bidder_ids))
+                .order_by(BidDocument.created_at.asc())
+            )
+        ).scalars().all()
+    else:
+        files_rows = []
+
+    progress = ProjectProgress(
+        total_bidders=len(bidders_rows),
+        pending_count=sum(1 for b in bidders_rows if b.parse_status == "pending"),
+        extracting_count=sum(1 for b in bidders_rows if b.parse_status == "extracting"),
+        extracted_count=sum(
+            1 for b in bidders_rows if b.parse_status in {"extracted", "partial"}
+        ),
+        failed_count=sum(1 for b in bidders_rows if b.parse_status == "failed"),
+        needs_password_count=sum(
+            1 for b in bidders_rows if b.parse_status == "needs_password"
+        ),
+    )
+
+    detail = ProjectDetailResponse.model_validate(project)
+    detail.bidders = [BidderSummary.model_validate(b) for b in bidders_rows]
+    detail.files = [BidDocumentSummary.model_validate(f) for f in files_rows]
+    detail.progress = progress
+    return detail
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

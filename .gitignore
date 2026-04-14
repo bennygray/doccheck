@@ -21,8 +21,11 @@ frontend/dist/
 .env
 backend/.env
 
-# Uploads
+# Uploads / 解压产物 (C4 file-upload)
 uploads/
+backend/uploads/
+extracted/
+backend/extracted/
 
 # Database
 *.db

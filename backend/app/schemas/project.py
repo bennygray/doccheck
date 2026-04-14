@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.bid_document import BidDocumentSummary, ProjectProgress
+from app.schemas.bidder import BidderSummary
 
 
 # 合法的 status 取值集合;C3 阶段 API 只会产生 "draft",其余值预留给 C6+
@@ -75,15 +77,15 @@ class ProjectResponse(BaseModel):
 
 
 class ProjectDetailResponse(ProjectResponse):
-    """项目详情响应,含 C4+ 预留占位字段。
+    """项目详情响应。
 
-    bidders / files / progress 在 C3 范围内固定为 [] / [] / null;
-    C4/C6 上线后将从对应表填充。
+    C4 起 bidders / files / progress 由 ``GET /api/projects/{id}`` 路由真实
+    JOIN 聚合(file-upload spec MODIFIED Requirement)。空项目返空数组与零进度。
     """
 
-    bidders: list[Any] = Field(default_factory=list)
-    files: list[Any] = Field(default_factory=list)
-    progress: Any | None = None
+    bidders: list[BidderSummary] = Field(default_factory=list)
+    files: list[BidDocumentSummary] = Field(default_factory=list)
+    progress: ProjectProgress | None = None
 
 
 class ProjectListResponse(BaseModel):

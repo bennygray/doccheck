@@ -8,11 +8,19 @@
  */
 import { authStorage } from "../contexts/AuthContext";
 import type {
+  BidDocument,
+  Bidder,
+  BidderListResponse,
+  PriceConfig,
+  PriceConfigPayload,
+  PriceParsingRule,
+  PriceParsingRulePayload,
   Project,
   ProjectCreatePayload,
   ProjectDetail,
   ProjectListQuery,
   ProjectListResponse,
+  UploadResult,
 } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
@@ -124,4 +132,126 @@ export const api = {
     request<ProjectDetail>(`/projects/${id}`),
   deleteProject: (id: number | string) =>
     request<void>(`/projects/${id}`, { method: "DELETE" }),
+
+  // ==========================================================================
+  // C4 file-upload — bidders / documents / price
+  // ==========================================================================
+
+  listBidders: (projectId: number | string) =>
+    request<BidderListResponse>(`/projects/${projectId}/bidders/`),
+
+  /**
+   * 创建投标人;同一 multipart 请求里可附带一个文件(US-3.1 一步完成)。
+   * 不传 file → 仅创建空投标人。
+   */
+  createBidder: async (
+    projectId: number | string,
+    name: string,
+    file?: File | null,
+  ): Promise<Bidder> => {
+    const fd = new FormData();
+    fd.append("name", name);
+    if (file) fd.append("file", file);
+    const headers = new Headers();
+    const token = authStorage.getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`${API_BASE}/projects/${projectId}/bidders/`, {
+      method: "POST",
+      body: fd,
+      headers,
+    });
+    if (res.status === 401) {
+      authStorage.clear();
+      onUnauthorized?.();
+      throw new ApiError(401, "unauthorized");
+    }
+    if (!res.ok) {
+      let detail: unknown = res.statusText;
+      try {
+        detail = (await res.json())?.detail ?? res.statusText;
+      } catch {
+        // body 可能非 JSON
+      }
+      throw new ApiError(res.status, detail);
+    }
+    return (await res.json()) as Bidder;
+  },
+
+  getBidder: (projectId: number | string, bidderId: number | string) =>
+    request<Bidder>(`/projects/${projectId}/bidders/${bidderId}`),
+
+  deleteBidder: (projectId: number | string, bidderId: number | string) =>
+    request<void>(`/projects/${projectId}/bidders/${bidderId}`, {
+      method: "DELETE",
+    }),
+
+  /** 已有投标人追加上传(US-3.2)。 */
+  uploadToBidder: async (
+    projectId: number | string,
+    bidderId: number | string,
+    file: File,
+  ): Promise<UploadResult> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const headers = new Headers();
+    const token = authStorage.getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(
+      `${API_BASE}/projects/${projectId}/bidders/${bidderId}/upload`,
+      { method: "POST", body: fd, headers },
+    );
+    if (res.status === 401) {
+      authStorage.clear();
+      onUnauthorized?.();
+      throw new ApiError(401, "unauthorized");
+    }
+    if (!res.ok) {
+      let detail: unknown = res.statusText;
+      try {
+        detail = (await res.json())?.detail ?? res.statusText;
+      } catch {
+        // body 可能非 JSON
+      }
+      throw new ApiError(res.status, detail);
+    }
+    return (await res.json()) as UploadResult;
+  },
+
+  listDocuments: (projectId: number | string, bidderId: number | string) =>
+    request<BidDocument[]>(
+      `/projects/${projectId}/bidders/${bidderId}/documents`,
+    ),
+
+  deleteDocument: (documentId: number | string) =>
+    request<void>(`/documents/${documentId}`, { method: "DELETE" }),
+
+  downloadDocument: (documentId: number | string) =>
+    `${API_BASE}/documents/${documentId}/download`,
+
+  decryptDocument: (documentId: number | string, password: string) =>
+    request<{ detail: string }>(`/documents/${documentId}/decrypt`, {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+
+  getPriceConfig: (projectId: number | string) =>
+    request<PriceConfig | null>(`/projects/${projectId}/price-config`),
+
+  putPriceConfig: (projectId: number | string, payload: PriceConfigPayload) =>
+    request<PriceConfig>(`/projects/${projectId}/price-config`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  listPriceRules: (projectId: number | string) =>
+    request<PriceParsingRule[]>(`/projects/${projectId}/price-rules`),
+
+  putPriceRule: (
+    projectId: number | string,
+    payload: PriceParsingRulePayload,
+  ) =>
+    request<PriceParsingRule>(`/projects/${projectId}/price-rules`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
 };

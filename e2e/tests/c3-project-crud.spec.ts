@@ -46,10 +46,11 @@ test.describe("C3 项目 CRUD 主线", () => {
     await expect(page.getByTestId("project-status")).toContainText("草稿");
     await expect(page.getByTestId("project-bid-code")).toContainText(UNIQUE_BID);
     await expect(page.getByTestId("project-max-price")).toContainText("9999.99");
-    // C4+ 占位区可见
-    await expect(page.getByTestId("bidders-placeholder")).toBeVisible();
-    await expect(page.getByTestId("files-placeholder")).toBeVisible();
-    await expect(page.getByTestId("progress-placeholder")).toBeVisible();
+    // C4 起 placeholder 被实装组件取代:断言新的 section 与"添加投标人"按钮可见
+    await expect(page.getByTestId("bidders-section")).toBeVisible();
+    await expect(page.getByTestId("open-add-bidder")).toBeVisible();
+    await expect(page.getByTestId("price-section")).toBeVisible();
+    await expect(page.getByTestId("progress-summary")).toBeVisible();
 
     // 捕获刚创建项目的 id(URL 尾数)
     const urlMatch = page.url().match(/\/projects\/(\d+)$/);

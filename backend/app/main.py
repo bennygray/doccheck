@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.api.routes import analysis, auth, documents, projects
+from app.api.routes import analysis, auth, bidders, documents, price, projects
 from app.api.routes.sse_demo import router as sse_demo_router
 from app.core.config import settings
 from app.db.session import engine
@@ -43,7 +43,16 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+# C4 投标人路由挂在 /api/projects/{project_id}/bidders 下;path param 由路由
+# 函数签名声明,prefix 直接拼字面量
+app.include_router(
+    bidders.router,
+    prefix="/api/projects/{project_id}/bidders",
+    tags=["bidders"],
+)
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
+# C4 报价配置/规则 路由共用 /api/projects 前缀,与 projects 路由错开 path
+app.include_router(price.router, prefix="/api/projects", tags=["price"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(sse_demo_router, prefix="/demo", tags=["demo"])
 

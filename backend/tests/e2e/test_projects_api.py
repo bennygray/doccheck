@@ -301,10 +301,17 @@ async def test_detail_reviewer_sees_own(
     body = r.json()
     assert body["id"] == p.id
     assert body["name"] == "my project"
-    # C4+ 占位字段必须存在
+    # C4 起 progress 由真实聚合产出;空项目所有计数 = 0(file-upload MODIFIED Req)
     assert body["bidders"] == []
     assert body["files"] == []
-    assert body["progress"] is None
+    assert body["progress"] == {
+        "total_bidders": 0,
+        "pending_count": 0,
+        "extracting_count": 0,
+        "extracted_count": 0,
+        "failed_count": 0,
+        "needs_password_count": 0,
+    }
 
 
 async def test_detail_reviewer_others_returns_404(
@@ -542,7 +549,8 @@ async def test_detail_contains_placeholder_fields(
     body = r.json()
     assert body["bidders"] == []
     assert body["files"] == []
-    assert body["progress"] is None
+    # C4 起 progress 由真实聚合产出;空项目所有计数 = 0
+    assert body["progress"]["total_bidders"] == 0
 
 
 async def test_list_items_contain_risk_level_field(

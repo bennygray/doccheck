@@ -114,6 +114,32 @@ C8 把 `section_similarity` Agent 的 `run()` 从 dummy 替换为真实章节级
 - `SECTION_SIM_MIN_CHAPTER_CHARS`(默认 100)— 章节内字符 < 此值合并进前一章节
 - `SECTION_SIM_TITLE_ALIGN_THRESHOLD`(默认 0.40)— title TF-IDF sim ≥ 此值算对齐成功(by title);否则走序号回退对齐
 
+### C9 detect-agent-structure-similarity 依赖
+
+C9 把 `structure_similarity` Agent 的 `run()` 从 dummy 替换为真实三维度结构相似度(纯程序化,不调 LLM):目录结构(docx 章节标题 LCS)/ 字段结构(xlsx 列头 + bitmask + 合并单元格 Jaccard)/ 表单填充模式(xlsx cell type pattern Jaccard)。维度级提取失败 → 该维度 skip,**不做 C8 式降级**;3 维度全失败 → PairComparison.score=0.0 + evidence.participating_dimensions=[] 作 "结构缺失" 哨兵。
+
+同时延伸 C5 持久化:新增 `document_sheets` 表(`rows_json` + `merged_cells_json`)供 xlsx cell 级数据消费;C5 解析时双写 DocumentText + DocumentSheet;已有 xlsx 文档通过 `backend/scripts/backfill_document_sheets.py` 手工回填(幂等,错误隔离,`--dry-run` 预扫)。
+
+- **零新增第三方依赖**:openpyxl(C5 已)+ SQLAlchemy JSONB(C3 已);LCS/Jaccard 手写
+- **复用 C8 chapter_parser**:目录维度 import `section_sim_impl.chapter_parser.extract_chapters`(零改 C8)
+- **ProcessPoolExecutor 共享**:目录 LCS 走 C7/C8 同一 `get_cpu_executor()`;字段/填充维度 Jaccard 同步不上 executor
+- **alembic 迁移**:`0006_add_document_sheets`;部署后需手工 `uv run python -m scripts.backfill_document_sheets` 回填已有 xlsx
+
+环境变量(C9 专属,与 C7/C8 并列):
+
+- `STRUCTURE_SIM_MIN_CHAPTERS`(默认 3)— 目录维度:章节数 < 此值 → 该维度 skip
+- `STRUCTURE_SIM_MIN_SHEET_ROWS`(默认 2)— 字段/填充维度:每 sheet 非空行 < 此值 → 该 sheet 不参与配对
+- `STRUCTURE_SIM_WEIGHTS`(默认 `"0.4,0.3,0.3"`)— 三维度权重(目录/字段/填充),逗号分隔
+- `STRUCTURE_SIM_FIELD_JACCARD_SUB_WEIGHTS`(默认 `"0.4,0.3,0.3"`)— 字段维度子权重(列头/bitmask/合并单元格)
+- `STRUCTURE_SIM_MAX_ROWS_PER_SHEET`(默认 5000)— xlsx 持久化/消费时每 sheet 行数上限(超出截断 + warning)
+
+回填脚本:
+
+```bash
+uv run python -m scripts.backfill_document_sheets            # 全量回填
+uv run python -m scripts.backfill_document_sheets --dry-run  # 只扫不写
+```
+
 ## 常用命令
 
 ```bash

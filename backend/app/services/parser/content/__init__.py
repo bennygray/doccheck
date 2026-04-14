@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.bid_document import BidDocument
 from app.models.document_image import DocumentImage
 from app.models.document_metadata import DocumentMetadata
+from app.models.document_sheet import DocumentSheet
 from app.models.document_text import DocumentText
 from app.services.parser.content.docx_parser import extract_docx
 from app.services.parser.content.image_parser import extract_images_from_docx
@@ -28,6 +29,23 @@ logger = logging.getLogger(__name__)
 
 _SUPPORTED = {".docx", ".xlsx"}
 _SKIPPED = {".doc", ".xls", ".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".gif"}
+
+
+def _get_max_rows_per_sheet() -> int:
+    """C9 env:单 sheet 持久化行数上限。
+
+    读 STRUCTURE_SIM_MAX_ROWS_PER_SHEET;非法/缺失 → 5000。
+    """
+    import os
+
+    raw = os.environ.get("STRUCTURE_SIM_MAX_ROWS_PER_SHEET", "").strip()
+    if not raw:
+        return 5000
+    try:
+        v = int(raw)
+        return v if v > 0 else 5000
+    except ValueError:
+        return 5000
 
 # .jpg/.png 等图片目前作为独立文件类型标 skipped(嵌入图在 docx 内处理)
 # 图片文件独立上传的解析留 C17+;当前阶段只接受 DOCX 嵌入图
@@ -117,13 +135,37 @@ async def _extract_content_inner(
                 )
         elif ext == ".xlsx":
             result = await asyncio.to_thread(extract_xlsx, file_path)
+            # C9:xlsx 单 sheet 最多持久化 MAX_ROWS 行,env 可覆
+            max_rows = _get_max_rows_per_sheet()
             for i, sheet in enumerate(result.sheets):
+                # 保留:DocumentText 合并文本(C7/C8 相似度用)
                 session.add(
                     DocumentText(
                         bid_document_id=bid_document_id,
                         paragraph_index=i,
                         text=sheet.merged_text,
                         location="sheet",
+                    )
+                )
+                # C9 新增:DocumentSheet 整表 + 合并单元格(结构维度用)
+                rows = sheet.rows
+                if len(rows) > max_rows:
+                    logger.warning(
+                        "xlsx sheet %r truncated: %d → %d rows (doc=%d)",
+                        sheet.sheet_name,
+                        len(rows),
+                        max_rows,
+                        bid_document_id,
+                    )
+                    rows = rows[:max_rows]
+                session.add(
+                    DocumentSheet(
+                        bid_document_id=bid_document_id,
+                        sheet_index=i,
+                        sheet_name=sheet.sheet_name,
+                        hidden=sheet.hidden,
+                        rows_json=rows,
+                        merged_cells_json=list(sheet.merged_cells_ranges),
                     )
                 )
 
@@ -160,7 +202,7 @@ async def _extract_content_inner(
 async def _clean_prior_extraction(
     session: AsyncSession, bid_document_id: int
 ) -> None:
-    """清掉该文档之前的 document_texts / metadata / images(re-parse 用)。"""
+    """清掉该文档之前的 document_texts / metadata / images / sheets(re-parse 用)。"""
     await session.execute(
         delete(DocumentText).where(DocumentText.bid_document_id == bid_document_id)
     )
@@ -171,6 +213,10 @@ async def _clean_prior_extraction(
     )
     await session.execute(
         delete(DocumentImage).where(DocumentImage.bid_document_id == bid_document_id)
+    )
+    # C9:清 DocumentSheet(xlsx 结构数据)
+    await session.execute(
+        delete(DocumentSheet).where(DocumentSheet.bid_document_id == bid_document_id)
     )
     await session.commit()
 

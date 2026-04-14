@@ -22,6 +22,9 @@ class SheetData:
     merged_text: str
     # 原始矩阵:rows[row_idx][col_idx] = cell value(str | float | None)
     rows: list[list[object]]
+    # 合并单元格 ranges 字符串列表(C9 structure_similarity 字段维度消费)
+    # 如 ["A1:B2", "C3:D4"],openpyxl ws.merged_cells.ranges 的 str(r) 结果
+    merged_cells_ranges: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -55,12 +58,19 @@ def extract_xlsx(file_path: str | Path) -> XlsxExtractResult:
                 if row_text:
                     cells_text.append(row_text)
             merged = "\n".join(cells_text)
+            # 合并单元格 ranges(C9):ws.merged_cells.ranges 是 MergedCellRange 对象,
+            # str(r) → "A1:B2" 形式字符串
+            try:
+                merged_ranges = [str(r) for r in ws.merged_cells.ranges]
+            except Exception:  # pragma: no cover - openpyxl 极端兼容
+                merged_ranges = []
             sheets.append(
                 SheetData(
                     sheet_name=ws.title,
                     hidden=hidden,
                     merged_text=merged,
                     rows=rows,
+                    merged_cells_ranges=merged_ranges,
                 )
             )
         except Exception as e:  # pragma: no cover - 单 sheet 失败隔离

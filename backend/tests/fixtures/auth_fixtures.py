@@ -29,6 +29,7 @@ from app.models.pair_comparison import PairComparison
 from app.models.price_config import ProjectPriceConfig
 from app.models.document_image import DocumentImage
 from app.models.document_metadata import DocumentMetadata
+from app.models.document_sheet import DocumentSheet
 from app.models.document_text import DocumentText
 from app.models.price_item import PriceItem
 from app.models.price_parsing_rule import PriceParsingRule
@@ -56,6 +57,7 @@ async def _delete_all() -> None:
         await s.execute(delete(PriceItem))
         await s.execute(delete(DocumentImage))
         await s.execute(delete(DocumentMetadata))
+        await s.execute(delete(DocumentSheet))
         await s.execute(delete(DocumentText))
         await s.execute(delete(BidDocument))
         await s.execute(delete(Bidder))

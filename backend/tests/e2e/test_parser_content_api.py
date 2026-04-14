@@ -19,6 +19,7 @@ from app.models.bid_document import BidDocument
 from app.models.bidder import Bidder
 from app.models.document_image import DocumentImage
 from app.models.document_metadata import DocumentMetadata
+from app.models.document_sheet import DocumentSheet
 from app.models.document_text import DocumentText
 from app.models.project import Project
 from app.models.user import User
@@ -129,6 +130,71 @@ async def test_xlsx_sheet_extracted(seed_bidder_with_file, tmp_path: Path):
         assert all(b.location == "sheet" for b in blocks)
         doc = await s.get(BidDocument, doc_id)
         assert doc.parse_status == "identified"
+
+
+async def test_xlsx_persists_document_sheet(seed_bidder_with_file, tmp_path: Path):
+    """C9:xlsx 解析除写 DocumentText 外,还需写 DocumentSheet 每 sheet 一行。"""
+    path = make_real_xlsx(
+        tmp_path / "ds.xlsx",
+        sheets={
+            "S1": [["a", "b"], [1, 2]],
+            "S2": [["x"], [9]],
+        },
+    )
+    doc_id = await seed_bidder_with_file(path, ".xlsx")
+    async with async_session() as s:
+        await extract_content(s, doc_id)
+
+    async with async_session() as s:
+        # DocumentText(保留)
+        texts = (
+            await s.execute(
+                select(DocumentText).where(
+                    DocumentText.bid_document_id == doc_id
+                )
+            )
+        ).scalars().all()
+        assert len(texts) == 2
+        # DocumentSheet(新增)
+        sheets = (
+            await s.execute(
+                select(DocumentSheet)
+                .where(DocumentSheet.bid_document_id == doc_id)
+                .order_by(DocumentSheet.sheet_index)
+            )
+        ).scalars().all()
+    assert len(sheets) == 2
+    assert sheets[0].sheet_name == "S1"
+    assert sheets[0].sheet_index == 0
+    assert sheets[0].rows_json == [["a", "b"], [1, 2]]
+    assert sheets[1].sheet_name == "S2"
+    assert sheets[1].sheet_index == 1
+
+
+async def test_xlsx_truncates_oversized_sheet(
+    seed_bidder_with_file, tmp_path: Path, monkeypatch, caplog
+):
+    """C9:单 sheet 行数超过上限时截断 + warning 日志。"""
+    import logging
+
+    monkeypatch.setenv("STRUCTURE_SIM_MAX_ROWS_PER_SHEET", "5")
+    rows = [[f"row{i}", i] for i in range(12)]  # 12 行,超过 5
+    path = make_real_xlsx(tmp_path / "big.xlsx", sheets={"Big": rows})
+    doc_id = await seed_bidder_with_file(path, ".xlsx")
+    with caplog.at_level(logging.WARNING, logger="app.services.parser.content"):
+        async with async_session() as s:
+            await extract_content(s, doc_id)
+
+    async with async_session() as s:
+        sheet = (
+            await s.execute(
+                select(DocumentSheet).where(
+                    DocumentSheet.bid_document_id == doc_id
+                )
+            )
+        ).scalar_one()
+    assert len(sheet.rows_json) == 5  # 截断到 5 行
+    assert any("truncated" in rec.message for rec in caplog.records)
 
 
 async def test_pdf_marked_skipped(seed_bidder_with_file, tmp_path: Path):

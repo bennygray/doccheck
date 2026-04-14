@@ -52,4 +52,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# session-scoped event loop: 让共享的 async engine 在所有 test 间复用,避免
+# "Event loop is closed" 错。fixture 默认也随之提升到 session scope。
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]

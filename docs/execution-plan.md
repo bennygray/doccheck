@@ -76,7 +76,8 @@ M4  C15 report-export
 #### C1 `infra-base`
 
 - **对应范围**:TS-1~6(DB/异步/SSE/LLM 适配/前端基础/数据生命周期)
-- **核心能力**:DB 连接+Alembic 迁移框架、异步任务框架(asyncio + ProcessPoolExecutor)、SSE 推送基础、LLM 适配层(统一接口+配置注入)、数据生命周期清理定时任务
+- **核心能力**:DB 连接+Alembic 迁移框架、SSE 推送基础、LLM 适配层(统一接口+配置注入)、数据生命周期清理定时任务
+  > **范围调整(2026-04-14)**:异步任务框架移至 C6。理由:C1 阶段无真实消费者(Parser/Detection 都未实现),独立验证困难,避免提前做宽。
 - **验证场景**
   1. 执行 `alembic upgrade head`,所有基础表建起来
   2. 启动后 `/health` 返回 200 且能连上 DB
@@ -159,7 +160,7 @@ M4  C15 report-export
 #### C6 `detect-framework`
 
 - **对应范围**:US-5.1 ~ US-5.4
-- **核心能力**:启动检测 API、Agent 并行调度(asyncio gather + 超时 + 重试)、SSE 进度推送、综合研判骨架
+- **核心能力**:启动检测 API、**异步任务框架**(asyncio + ProcessPoolExecutor,从 C1 迁入)、Agent 并行调度(asyncio gather + 超时 + 重试)、SSE 进度推送、综合研判骨架
 - **验证场景**
   1. 用 2 个 dummy Agent 跑完整链路 → SSE 看到启动/进行中/完成
   2. 模拟一个 Agent 抛异常 → 整体不崩,该维度标"失败",其他继续
@@ -355,3 +356,4 @@ M4  C15 report-export
 | 日期 | 调整内容 | 原因 |
 |---|---|---|
 | 2026-04-14 | 首版定稿(17 change,严格串行) | 项目立项 |
+| 2026-04-14 | C1 范围收敛:异步任务框架移至 C6 | C1 阶段无真实消费者,独立验证困难,避免提前做宽 |

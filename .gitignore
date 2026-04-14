@@ -37,3 +37,14 @@ docker-compose.override.yml
 # Claude Code
 .claude/
 .mcp.json
+
+# Playwright / L3 artifacts (项目根 e2e/)
+e2e/artifacts/*
+!e2e/artifacts/c1-manual-*.md
+e2e/node_modules/
+playwright-report/
+test-results/
+/node_modules/
+
+# 临时日志 / 调试输出
+*.log

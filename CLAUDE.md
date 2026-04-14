@@ -140,3 +140,21 @@ docker compose up
 - commit message 格式: `归档 change: <change-name>(M<n>)`
 - commit 后**不 push**,push 由用户单独指示
 - commit 前检查 `git status`,确认无 `.env` 等敏感文件被纳入;若发现 → 拒绝 commit 并提示用户处理
+
+## graphify 知识图谱检索
+
+项目已接入 graphify，图数据持久化在 `graphify-out/`(已 gitignore)。
+
+### 何时查图（Claude 主动用）
+回答下列类型问题前，**必须**先 `/graphify query "..."` 或 `/graphify path A B` 或 `/graphify explain X`，不得靠直接 grep/read 盲搜：
+- 架构级 / 跨文件 / 跨层问题("X 怎么连到 Y"、"这个抽象在哪些地方被用到")
+- 某个核心概念的影响面("动 BidDocument 模型会连带影响什么")
+- 找重复实现 / 近义抽象("有没有类似 X 的 helper")
+
+### 何时刷图（用户或 Claude 触发）
+- **代码改动后**（纯 .py/.ts/.tsx 等）：`/graphify --watch` 后台监视 或 commit 时手工 `/graphify --update`；纯代码改动只跑 AST，免 LLM 免 token
+- **文档/spec/截图改动后**：必须 `/graphify --update` 完整流水线(含 LLM 语义抽取)；这属于昂贵操作，执行前要先告知用户成本
+- **重大里程碑归档后**（M1/M2... 结束）：完整 `/graphify --update` 一次，确保图与代码库同步
+
+### 词义澄清（防止"刷新"被理解成"升级"）
+用户说"刷图/刷新图"时默认 **轻量档**（只看现状或 AST-only）；说"重建/全量/完整 rebuild"才是 **完整档**（含 LLM）。不确定就问。

@@ -11,8 +11,11 @@ import type {
   BidDocument,
   Bidder,
   BidderListResponse,
+  DocumentRole,
+  DocumentRolePatchResult,
   PriceConfig,
   PriceConfigPayload,
+  PriceItem,
   PriceParsingRule,
   PriceParsingRulePayload,
   Project,
@@ -254,4 +257,51 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+
+  // ===========================================================================
+  // C5 parser-pipeline 新增
+  // ===========================================================================
+
+  /** PATCH /api/documents/{id}/role — 修改文档角色 */
+  patchDocumentRole: (
+    documentId: number | string,
+    role: DocumentRole,
+  ) =>
+    request<DocumentRolePatchResult>(`/documents/${documentId}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+
+  /** POST /api/documents/{id}/re-parse — 重新解析失败/跳过文档 */
+  reParseDocument: (documentId: number | string) =>
+    request<{ detail: string }>(`/documents/${documentId}/re-parse`, {
+      method: "POST",
+    }),
+
+  /** PUT /api/projects/{pid}/price-rules/{id} — 修正并重新回填 */
+  putPriceRuleById: (
+    projectId: number | string,
+    ruleId: number | string,
+    payload: PriceParsingRulePayload,
+  ) =>
+    request<PriceParsingRule>(
+      `/projects/${projectId}/price-rules/${ruleId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  /** GET /api/projects/{pid}/bidders/{bid}/price-items — 报价项列表 */
+  listPriceItems: (
+    projectId: number | string,
+    bidderId: number | string,
+  ) =>
+    request<PriceItem[]>(
+      `/projects/${projectId}/bidders/${bidderId}/price-items`,
+    ),
+
+  /** GET /api/projects/{pid}/parse-progress(SSE URL,EventSource 用) */
+  parseProgressUrl: (projectId: number | string) =>
+    `${API_BASE}/projects/${projectId}/parse-progress`,
 };

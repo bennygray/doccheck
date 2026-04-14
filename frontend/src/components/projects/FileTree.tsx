@@ -5,7 +5,10 @@
  * 下的文件,带状态徽章和错误原因展开。
  */
 import { useState } from "react";
-import type { BidDocument } from "../../types";
+
+import { api } from "../../services/api";
+import type { BidDocument, DocumentRole } from "../../types";
+import RoleDropdown from "./RoleDropdown";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "待解析",
@@ -15,6 +18,14 @@ const STATUS_LABEL: Record<string, string> = {
   partial: "部分成功",
   failed: "失败",
   needs_password: "需密码",
+  // C5 扩展态
+  identifying: "识别中",
+  identified: "已识别",
+  identify_failed: "识别失败",
+  pricing: "回填报价",
+  priced: "报价完成",
+  price_partial: "报价部分成功",
+  price_failed: "报价失败",
 };
 const STATUS_COLOR: Record<string, string> = {
   pending: "#888",
@@ -24,16 +35,45 @@ const STATUS_COLOR: Record<string, string> = {
   partial: "#faad14",
   failed: "#ff4d4f",
   needs_password: "#722ed1",
+  identifying: "#1677ff",
+  identified: "#52c41a",
+  identify_failed: "#ff4d4f",
+  pricing: "#1677ff",
+  priced: "#388e3c",
+  price_partial: "#faad14",
+  price_failed: "#ff4d4f",
 };
+
+const FAILURE_STATUSES = new Set([
+  "failed",
+  "identify_failed",
+  "price_failed",
+  "skipped",
+]);
 
 const ARCHIVE_TYPES = new Set([".zip", ".7z", ".rar"]);
 
 interface Props {
   documents: BidDocument[];
+  /** 角色或重试修改后触发父组件刷新(可选) */
+  onDocumentChanged?: () => void;
 }
 
-export default function FileTree({ documents }: Props) {
+export default function FileTree({ documents, onDocumentChanged }: Props) {
   const [openErrors, setOpenErrors] = useState<Record<number, boolean>>({});
+  const [retrying, setRetrying] = useState<Record<number, boolean>>({});
+
+  const handleRetry = async (docId: number) => {
+    setRetrying((p) => ({ ...p, [docId]: true }));
+    try {
+      await api.reParseDocument(docId);
+      onDocumentChanged?.();
+    } catch {
+      // 失败提示留给父组件处理或静默
+    } finally {
+      setRetrying((p) => ({ ...p, [docId]: false }));
+    }
+  };
 
   if (documents.length === 0) {
     return (
@@ -86,20 +126,49 @@ export default function FileTree({ documents }: Props) {
             </div>
           )}
           <ul style={{ margin: "4px 0 0 24px", padding: 0, listStyle: "none" }}>
-            {(childrenByArchive[arc.file_name] ?? []).map((child) => (
-              <li
-                key={child.id}
-                style={{ display: "flex", gap: 8, alignItems: "center" }}
-              >
-                <span>📄 {child.file_path}</span>
-                <Badge status={child.parse_status} />
-                {child.parse_error && (
-                  <span style={{ color: "#888", fontSize: 11 }}>
-                    {child.parse_error}
-                  </span>
-                )}
-              </li>
-            ))}
+            {(childrenByArchive[arc.file_name] ?? []).map((child) => {
+              const canEditRole =
+                child.file_type === ".docx" || child.file_type === ".xlsx";
+              const showRetry = FAILURE_STATUSES.has(child.parse_status);
+              return (
+                <li
+                  key={child.id}
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span>📄 {child.file_name}</span>
+                  <Badge status={child.parse_status} />
+                  {canEditRole && (
+                    <RoleDropdown
+                      documentId={child.id}
+                      role={child.file_role as DocumentRole | null}
+                      confidence={child.role_confidence}
+                      onChanged={() => onDocumentChanged?.()}
+                    />
+                  )}
+                  {showRetry && (
+                    <button
+                      type="button"
+                      onClick={() => void handleRetry(child.id)}
+                      disabled={!!retrying[child.id]}
+                      data-testid={`filetree-retry-${child.id}`}
+                      style={{ fontSize: 11, padding: "0 6px" }}
+                    >
+                      {retrying[child.id] ? "重试中..." : "重试"}
+                    </button>
+                  )}
+                  {child.parse_error && (
+                    <span style={{ color: "#888", fontSize: 11 }}>
+                      {child.parse_error}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       ))}

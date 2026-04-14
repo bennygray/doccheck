@@ -112,7 +112,7 @@ async def _persist_archive(
     except UnsupportedMediaType as exc:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, str(exc)) from exc
     except FileTooLarge as exc:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, str(exc)) from exc
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, str(exc)) from exc
 
     final_path, md5_hex, total_bytes = await save_archive(
         bidder.project_id, bidder.id, upload_file
@@ -182,7 +182,7 @@ async def create_bidder(
     try:
         validated = BidderCreate(name=name)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
     # 同项目活跃 name 唯一(partial unique index 兜底,但应用层先查给清晰错码)
     dup = (

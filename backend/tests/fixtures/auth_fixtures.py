@@ -22,6 +22,10 @@ from app.main import app
 from app.models.bid_document import BidDocument
 from app.models.bidder import Bidder
 from app.models.price_config import ProjectPriceConfig
+from app.models.document_image import DocumentImage
+from app.models.document_metadata import DocumentMetadata
+from app.models.document_text import DocumentText
+from app.models.price_item import PriceItem
 from app.models.price_parsing_rule import PriceParsingRule
 from app.models.project import Project
 from app.models.user import User
@@ -36,6 +40,11 @@ async def _delete_all() -> None:
             → projects → users。新表加进来必须按 FK 顺序往前插入。
     """
     async with async_session() as s:
+        # C5: 先清 price_items + document_* 三张表(都引用 bid_documents)
+        await s.execute(delete(PriceItem))
+        await s.execute(delete(DocumentImage))
+        await s.execute(delete(DocumentMetadata))
+        await s.execute(delete(DocumentText))
         await s.execute(delete(BidDocument))
         await s.execute(delete(Bidder))
         await s.execute(delete(PriceParsingRule))

@@ -163,6 +163,13 @@ async def _process_bidder(
     await _aggregate_bidder_status(session, bidder_id)
     await session.commit()
 
+    # C5: 解压成功进 extracted/partial 时触发 pipeline(内容提取 + LLM 分类 + 报价)
+    await session.refresh(bidder)
+    if bidder.parse_status in ("extracted", "partial"):
+        from app.services.parser.pipeline.trigger import trigger_pipeline
+
+        await trigger_pipeline(bidder_id)
+
 
 async def _process_one_archive(
     *,

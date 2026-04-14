@@ -46,6 +46,13 @@ class PriceParsingRule(Base):
     column_mapping: Mapped[dict[str, Any]] = mapped_column(
         _JSONB_OR_JSON, nullable=False
     )
+    # C5 新增:identifying | confirmed | failed;支撑 rule_coordinator 原子占位
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        server_default="identifying",
+        default="identifying",
+    )
     created_by_llm: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false", default=False
     )

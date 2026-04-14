@@ -1,10 +1,24 @@
-"""BidDocument Pydantic schemas (C4 file-upload §6.2)。"""
+"""BidDocument Pydantic schemas (C4 file-upload + C5 parser-pipeline)。"""
 
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
+
+# C5: 9 种文档角色枚举
+DocumentRole = Literal[
+    "technical",
+    "construction",
+    "pricing",
+    "unit_price",
+    "bid_letter",
+    "qualification",
+    "company_intro",
+    "authorization",
+    "other",
+]
 
 
 class BidDocumentResponse(BaseModel):
@@ -17,7 +31,8 @@ class BidDocumentResponse(BaseModel):
     file_size: int
     file_type: str
     md5: str
-    file_role: str | None  # C5 LLM 填,C4 阶段恒 null
+    file_role: str | None  # C5 LLM 填
+    role_confidence: str | None  # C5 新增:high / low / user / null
     parse_status: str
     parse_error: str | None
     source_archive: str
@@ -34,17 +49,14 @@ class BidDocumentSummary(BaseModel):
     file_name: str
     file_type: str
     parse_status: str
+    file_role: str | None = None  # C5 扩展
+    role_confidence: str | None = None  # C5 扩展
 
     model_config = {"from_attributes": True}
 
 
 class UploadResult(BaseModel):
-    """``POST /bidders/{bid}/upload`` 与 ``POST /bidders``(带 file)的返回体。
-
-    new_files: 新插入的归档行 ID 列表;前端可据此乐观更新文件树骨架。
-    skipped_duplicates: 因 MD5 已存在被跳过的 archive MD5 列表(D8 决策,粒度
-    = 同 bidder 内)。
-    """
+    """``POST /bidders/{bid}/upload`` 与 ``POST /bidders``(带 file)的返回体。"""
 
     bidder_id: int
     archive_filename: str | None = None
@@ -53,19 +65,46 @@ class UploadResult(BaseModel):
 
 
 class ProjectProgress(BaseModel):
-    """ProjectDetailResponse.progress 字段类型(MODIFIED Requirement)。"""
+    """ProjectDetailResponse.progress 字段类型(C5 扩展 11 字段)。"""
 
     total_bidders: int
     pending_count: int
     extracting_count: int
     extracted_count: int
-    failed_count: int
-    needs_password_count: int
+    # C5 新增阶段计数
+    identifying_count: int = 0
+    identified_count: int = 0
+    pricing_count: int = 0
+    priced_count: int = 0
+    partial_count: int = 0  # partial + price_partial 合计
+    failed_count: int = 0  # failed + identify_failed + price_failed 合计
+    needs_password_count: int = 0
+
+
+class DocumentRolePatchRequest(BaseModel):
+    """``PATCH /api/documents/{id}/role`` 请求体 (C5 US-4.3 AC-4~5)。"""
+
+    role: DocumentRole
+
+
+class DocumentRolePatchResponse(BaseModel):
+    """``PATCH /api/documents/{id}/role`` 响应体。
+
+    项目 status='completed' 时附 warn 提示(spec "修改文档角色")。
+    """
+
+    id: int
+    file_role: str
+    role_confidence: str
+    warn: str | None = None
 
 
 __all__ = [
     "BidDocumentResponse",
     "BidDocumentSummary",
+    "DocumentRole",
+    "DocumentRolePatchRequest",
+    "DocumentRolePatchResponse",
     "ProjectProgress",
     "UploadResult",
 ]

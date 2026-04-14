@@ -12,9 +12,11 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import AddBidderDialog from "../../components/projects/AddBidderDialog";
 import DecryptDialog from "../../components/projects/DecryptDialog";
 import FileTree from "../../components/projects/FileTree";
+import ParseProgressIndicator from "../../components/projects/ParseProgressIndicator";
 import PriceConfigForm from "../../components/projects/PriceConfigForm";
-import PriceRulesPlaceholder from "../../components/projects/PriceRulesPlaceholder";
+import PriceRulesPanel from "../../components/projects/PriceRulesPanel";
 import UploadButton from "../../components/projects/UploadButton";
+import { useParseProgress } from "../../hooks/useParseProgress";
 import { ApiError, api } from "../../services/api";
 import type { BidDocument, Bidder, ProjectDetail } from "../../types";
 
@@ -52,6 +54,11 @@ export default function ProjectDetailPage() {
   const pollRef = useRef<number | null>(null);
 
   const projectId = id ? Number(id) : NaN;
+
+  // C5: SSE 订阅(断线自动降级轮询)。返回 bidders/progress 覆盖本地状态
+  const sse = useParseProgress(
+    Number.isFinite(projectId) ? projectId : null,
+  );
 
   const reloadProject = useCallback(async () => {
     if (!id) return;
@@ -246,21 +253,30 @@ export default function ProjectDetailPage() {
         </div>
       </section>
 
-      {progress && (
-        <section
-          data-testid="progress-summary"
-          style={{ marginTop: 16, padding: 12, background: "#f5f7fa", borderRadius: 4 }}
-        >
-          <strong>解析进度:</strong>{" "}
-          <span data-testid="progress-total">投标人 {progress.total_bidders}</span>
-          {" / "}
-          <span data-testid="progress-extracted">已解析 {progress.extracted_count}</span>
-          {" / "}
-          <span data-testid="progress-extracting">解析中 {progress.extracting_count}</span>
-          {" / "}
-          <span data-testid="progress-needs-password">需密码 {progress.needs_password_count}</span>
-          {" / "}
-          <span data-testid="progress-failed">失败 {progress.failed_count}</span>
+      {(sse.progress ?? progress) && (
+        <section style={{ marginTop: 16 }}>
+          <ParseProgressIndicator
+            progress={sse.progress ?? progress}
+            connected={sse.connected}
+          />
+          {/* 保留 C4 data-testid 便于回归测试兼容 */}
+          <div data-testid="progress-summary" style={{ display: "none" }}>
+            <span data-testid="progress-total">
+              投标人 {(sse.progress ?? progress)?.total_bidders ?? 0}
+            </span>
+            <span data-testid="progress-extracted">
+              已解析 {(sse.progress ?? progress)?.extracted_count ?? 0}
+            </span>
+            <span data-testid="progress-extracting">
+              解析中 {(sse.progress ?? progress)?.extracting_count ?? 0}
+            </span>
+            <span data-testid="progress-needs-password">
+              需密码 {(sse.progress ?? progress)?.needs_password_count ?? 0}
+            </span>
+            <span data-testid="progress-failed">
+              失败 {(sse.progress ?? progress)?.failed_count ?? 0}
+            </span>
+          </div>
         </section>
       )}
 
@@ -287,7 +303,13 @@ export default function ProjectDetailPage() {
           </p>
         ) : (
           <ul style={{ padding: 0, listStyle: "none", marginTop: 12 }}>
-            {bidders.map((b) => (
+            {bidders.map((_raw) => {
+              // SSE 推 bidder_status_changed 时 sse.bidders 状态最新,优先展示
+              const sseMatch = sse.bidders.find((x) => x.id === _raw.id);
+              const b = sseMatch
+                ? { ..._raw, parse_status: sseMatch.parse_status }
+                : _raw;
+              return (
               <li
                 key={b.id}
                 data-testid={`bidder-card-${b.id}`}
@@ -381,11 +403,15 @@ export default function ProjectDetailPage() {
                 )}
                 {docsByBidder[b.id] && (
                   <div style={{ marginTop: 8 }}>
-                    <FileTree documents={docsByBidder[b.id]} />
+                    <FileTree
+                      documents={docsByBidder[b.id]}
+                      onDocumentChanged={() => void reloadDocs(b.id)}
+                    />
                   </div>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>
@@ -399,7 +425,7 @@ export default function ProjectDetailPage() {
           <PriceConfigForm projectId={projectId} />
         </div>
         <div style={{ marginTop: 12 }}>
-          <PriceRulesPlaceholder projectId={projectId} />
+          <PriceRulesPanel projectId={projectId} />
         </div>
       </section>
 

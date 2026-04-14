@@ -59,7 +59,7 @@ describe("FileTree", () => {
     render(<FileTree documents={docs} />);
     expect(screen.getByText("📦 main.zip")).toBeInTheDocument();
     expect(screen.getByText("📄 ok.docx")).toBeInTheDocument();
-    expect(screen.getByText("📄 dir/sub.xlsx")).toBeInTheDocument();
+    expect(screen.getByText("📄 sub.xlsx")).toBeInTheDocument();
   });
 
   it("归档行 needs_password 显示对应徽章", () => {

@@ -17,6 +17,10 @@ dependencies = [
     "pymupdf>=1.24",
     "python-docx>=1.1",
     "openpyxl>=3.1",
+    # C5 parser-pipeline: 图片指纹 + lxml 文本框 xpath
+    "Pillow>=10.0",
+    "imagehash>=4.3",
+    "lxml>=5.0",
     # C4 file-upload: 压缩包/文件类型/编码探测
     "py7zr>=0.21",
     "rarfile>=4.2",

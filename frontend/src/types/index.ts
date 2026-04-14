@@ -43,7 +43,30 @@ export type ParseStatus =
   | "skipped"
   | "partial"
   | "failed"
-  | "needs_password";
+  | "needs_password"
+  // C5 parser-pipeline 扩展(bidder 级 + 文档级部分共享)
+  | "identifying"
+  | "identified"
+  | "identify_failed"
+  | "pricing"
+  | "priced"
+  | "price_partial"
+  | "price_failed";
+
+/** C5: 9 种文档角色枚举(与后端 DocumentRole 对齐) */
+export type DocumentRole =
+  | "technical"
+  | "construction"
+  | "pricing"
+  | "unit_price"
+  | "bid_letter"
+  | "qualification"
+  | "company_intro"
+  | "authorization"
+  | "other";
+
+/** C5: LLM 置信度 / 用户修正标记 */
+export type RoleConfidence = "high" | "low" | "user";
 
 export interface Bidder {
   id: number;
@@ -77,7 +100,8 @@ export interface BidDocument {
   file_size: number;
   file_type: string;
   md5: string;
-  file_role: string | null;
+  file_role: DocumentRole | string | null;
+  role_confidence: RoleConfidence | string | null;
   parse_status: ParseStatus | string;
   parse_error: string | null;
   source_archive: string;
@@ -90,6 +114,8 @@ export interface BidDocumentSummary {
   file_name: string;
   file_type: string;
   parse_status: ParseStatus | string;
+  file_role?: DocumentRole | string | null;
+  role_confidence?: RoleConfidence | string | null;
 }
 
 export interface ProjectProgress {
@@ -97,6 +123,12 @@ export interface ProjectProgress {
   pending_count: number;
   extracting_count: number;
   extracted_count: number;
+  // C5 扩展
+  identifying_count: number;
+  identified_count: number;
+  pricing_count: number;
+  priced_count: number;
+  partial_count: number;
   failed_count: number;
   needs_password_count: number;
 }
@@ -173,4 +205,45 @@ export interface ProjectListResponse {
   total: number;
   page: number;
   size: number;
+}
+
+// =============================================================================
+// C5 parser-pipeline 类型
+// =============================================================================
+
+/** C5 报价项返回(GET /price-items) */
+export interface PriceItem {
+  id: number;
+  sheet_name: string;
+  row_index: number;
+  item_code: string | null;
+  item_name: string | null;
+  unit: string | null;
+  quantity: string | null; // Decimal 序列化为字符串
+  unit_price: string | null;
+  total_price: string | null;
+  created_at: string;
+}
+
+/** C5 SSE 事件类型(与后端 EventType 对齐) */
+export type ParseProgressEventType =
+  | "snapshot"
+  | "bidder_status_changed"
+  | "document_role_classified"
+  | "project_price_rule_ready"
+  | "bidder_price_filled"
+  | "error"
+  | "heartbeat";
+
+export interface ParseProgressEvent {
+  event_type: ParseProgressEventType;
+  data: Record<string, unknown>;
+}
+
+/** PATCH /api/documents/{id}/role 响应 */
+export interface DocumentRolePatchResult {
+  id: number;
+  file_role: DocumentRole | string;
+  role_confidence: RoleConfidence | string;
+  warn: string | null;
 }

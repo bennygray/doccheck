@@ -81,12 +81,12 @@ async def list_projects(
     # 白名单校验(越界返 422)
     if status_filter is not None and status_filter not in _ALLOWED_STATUSES:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"非法 status: {status_filter}",
         )
     if risk_level is not None and risk_level not in _ALLOWED_RISK_LEVELS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"非法 risk_level: {risk_level}",
         )
 
@@ -165,14 +165,36 @@ async def get_project(
     else:
         files_rows = []
 
+    # C5: 状态机扩展到 13 态;failed_count 聚合 failed + identify_failed + price_failed
     progress = ProjectProgress(
         total_bidders=len(bidders_rows),
         pending_count=sum(1 for b in bidders_rows if b.parse_status == "pending"),
-        extracting_count=sum(1 for b in bidders_rows if b.parse_status == "extracting"),
-        extracted_count=sum(
-            1 for b in bidders_rows if b.parse_status in {"extracted", "partial"}
+        extracting_count=sum(
+            1 for b in bidders_rows if b.parse_status == "extracting"
         ),
-        failed_count=sum(1 for b in bidders_rows if b.parse_status == "failed"),
+        extracted_count=sum(
+            1 for b in bidders_rows if b.parse_status == "extracted"
+        ),
+        identifying_count=sum(
+            1 for b in bidders_rows if b.parse_status == "identifying"
+        ),
+        identified_count=sum(
+            1 for b in bidders_rows if b.parse_status == "identified"
+        ),
+        pricing_count=sum(
+            1 for b in bidders_rows if b.parse_status == "pricing"
+        ),
+        priced_count=sum(
+            1 for b in bidders_rows if b.parse_status == "priced"
+        ),
+        partial_count=sum(
+            1 for b in bidders_rows
+            if b.parse_status in {"partial", "price_partial"}
+        ),
+        failed_count=sum(
+            1 for b in bidders_rows
+            if b.parse_status in {"failed", "identify_failed", "price_failed"}
+        ),
         needs_password_count=sum(
             1 for b in bidders_rows if b.parse_status == "needs_password"
         ),

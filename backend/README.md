@@ -33,6 +33,29 @@ C4 引入了压缩包解压链路,对宿主系统有额外要求:
 
 两个目录都已加入 `.gitignore`。
 
+### C5 parser-pipeline 依赖
+
+C5 引入文档内容提取 + LLM 解析:
+
+- **python-docx / openpyxl / Pillow / imagehash / lxml**:已在 `pyproject.toml`,`uv sync` 自动装
+  - Pillow 在 Linux 可能需要 `apt-get install libjpeg-dev` 才能解 JPG 图片
+- **LLM Provider**:通过环境变量配置(`app/services/llm/factory.py`):
+  - `LLM_PROVIDER=openai` (默认) / `dashscope` / 其他 OpenAI-compat
+  - `LLM_API_KEY=<key>`(必填,生产部署)
+  - `LLM_BASE_URL=<url>`(可选,覆盖默认 base url)
+  - `LLM_MODEL=<model name>`(默认 gpt-4o-mini,按 provider 调整)
+  - `LLM_TIMEOUT_S=30`(默认 30s)
+- **SSE 反代配置**(`/api/projects/{pid}/parse-progress`):
+  ```nginx
+  proxy_read_timeout 60s;       # >= heartbeat 间隔(15s)+ 余量
+  proxy_buffering off;          # 与响应头 X-Accel-Buffering: no 配合
+  ```
+
+### C5 运行时环境变量
+
+- `INFRA_DISABLE_PIPELINE=1`:禁用 pipeline 自动触发(L2 测试用,手动 await run_pipeline)
+- `SSE_HEARTBEAT_INTERVAL_S=15`:SSE 心跳间隔(测试可缩短到 0.2)
+
 ### 部署 — 上传大小限制
 
 `POST /api/projects/{pid}/bidders/` 与 `POST /api/projects/{pid}/bidders/{bid}/upload` 接受 ≤500MB multipart;反向代理需放开同等上限,否则 413 提前在反代层就会被拦下:
@@ -53,4 +76,5 @@ pytest tests/unit/                                  # L1 单元
 pytest tests/e2e/                                   # L2 接口 E2E
 INFRA_DISABLE_LIFECYCLE=1 uvicorn ...               # 跳过生命周期清理(测试常用)
 INFRA_DISABLE_EXTRACT=1 pytest ...                  # 跳过自动解压协程(L2 用 fixture 手动 await)
+INFRA_DISABLE_PIPELINE=1 pytest ...                 # 跳过解析流水线协程(C5 L2 用 fixture 手动 await)
 ```

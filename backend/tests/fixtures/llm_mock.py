@@ -66,3 +66,82 @@ def mock_llm_provider_timeout() -> MockLLMProvider:
 @pytest.fixture
 def mock_llm_provider_rate_limit() -> MockLLMProvider:
     return MockLLMProvider(error_kind="rate_limit", error_message="mocked 429")
+
+
+# C5 新增:parser-pipeline 专用 mock 工厂 -----------------------------------
+
+
+def make_role_classify_response(
+    doc_roles: list[tuple[int, str]],
+    identity_info: dict | None = None,
+    confidence: str = "high",
+) -> str:
+    """构造 role_classifier LLM 成功响应 JSON 文本。"""
+    import json
+
+    return json.dumps(
+        {
+            "roles": [
+                {"document_id": did, "role": r, "confidence": confidence}
+                for did, r in doc_roles
+            ],
+            "identity_info": identity_info or {},
+        }
+    )
+
+
+def make_price_rule_response(
+    sheet_name: str = "报价清单",
+    header_row: int = 2,
+    mapping: dict | None = None,
+) -> str:
+    """构造 price_rule_detector LLM 成功响应 JSON 文本。"""
+    import json
+
+    default_mapping = {
+        "code_col": "A",
+        "name_col": "B",
+        "unit_col": "C",
+        "qty_col": "D",
+        "unit_price_col": "E",
+        "total_price_col": "F",
+        "skip_cols": [],
+    }
+    return json.dumps(
+        {
+            "sheet_name": sheet_name,
+            "header_row": header_row,
+            "column_mapping": mapping or default_mapping,
+        }
+    )
+
+
+class ScriptedLLMProvider:
+    """按调用顺序依次返不同响应/错 的 provider。用于 rule_coordinator 等多次调用场景。"""
+
+    def __init__(self, scripts: list, *, loop_last: bool = True):
+        self.name = "scripted"
+        self._scripts = list(scripts)
+        self._loop_last = loop_last
+        self._cursor = 0
+        self.calls: list[list[Message]] = []
+
+    async def complete(
+        self, messages: list[Message], **kwargs
+    ) -> LLMResult:
+        self.calls.append(list(messages))
+        if self._cursor >= len(self._scripts):
+            if not self._loop_last:
+                return LLMResult(
+                    text="",
+                    error=LLMError(kind="other", message="exhausted"),
+                )
+            item = self._scripts[-1]
+        else:
+            item = self._scripts[self._cursor]
+            self._cursor += 1
+        if isinstance(item, str):
+            return LLMResult(text=item)
+        if isinstance(item, LLMError):
+            return LLMResult(text="", error=item)
+        return LLMResult(text="", error=LLMError(kind=item, message="mock"))

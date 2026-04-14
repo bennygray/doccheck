@@ -60,6 +60,11 @@ async def test_empty_project_zero_progress(
         "pending_count": 0,
         "extracting_count": 0,
         "extracted_count": 0,
+        "identifying_count": 0,
+        "identified_count": 0,
+        "pricing_count": 0,
+        "priced_count": 0,
+        "partial_count": 0,
         "failed_count": 0,
         "needs_password_count": 0,
     }

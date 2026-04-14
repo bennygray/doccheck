@@ -39,6 +39,10 @@ class BidDocument(Base):
     file_role: Mapped[str | None] = mapped_column(
         String(32), nullable=True, default=None
     )
+    # C5 新增:high / low / user / NULL;低置信度前端黄色徽章
+    role_confidence: Mapped[str | None] = mapped_column(
+        String(16), nullable=True, default=None
+    )
     parse_status: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default="pending", default="pending"
     )

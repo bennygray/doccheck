@@ -5,7 +5,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.api.routes import analysis, auth, bidders, documents, price, projects
+from app.api.routes import (
+    analysis,
+    auth,
+    bidders,
+    documents,
+    parse_progress,
+    price,
+    price_items,
+    projects,
+)
 from app.api.routes.sse_demo import router as sse_demo_router
 from app.core.config import settings
 from app.db.session import engine
@@ -53,6 +62,12 @@ app.include_router(
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 # C4 报价配置/规则 路由共用 /api/projects 前缀,与 projects 路由错开 path
 app.include_router(price.router, prefix="/api/projects", tags=["price"])
+# C5 报价项查询
+app.include_router(price_items.router, prefix="/api/projects", tags=["price-items"])
+# C5 解析进度 SSE
+app.include_router(
+    parse_progress.router, prefix="/api/projects", tags=["parse-progress"]
+)
 app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(sse_demo_router, prefix="/demo", tags=["demo"])
 

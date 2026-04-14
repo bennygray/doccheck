@@ -11,15 +11,46 @@
 
 | 项 | 值 |
 |---|---|
-| 当前里程碑 | M2 进行中(C3+C4 已实施完,2/3) |
-| 当前 change | C4 `file-upload` apply 完成,待归档 |
+| 当前里程碑 | **M2 完成(3/3)**,C3+C4+C5 全部实施完 |
+| 当前 change | C5 `parser-pipeline` apply 完成,待归档 |
 | 当前任务行 | N/A |
-| 最新 commit | 待本次 archive commit(`归档 change: file-upload(M2)`) |
-| 工作区 | C4 全量改动:backend 4 模型 + 0003 迁移 + upload/extract 服务 + 3 路由(bidders / documents / price)+ 3 schemas + auth_fixtures 扩 4 表清理 + L1×45 + L2×50;frontend 6 组件 + ProjectDetailPage 重写 + types/api 扩 ~13 方法 + L1×9;e2e 2 个 c4 spec + 加密包 fixture;`vite.config.ts` 顺手修 ts 错误;`backend/README.md` 新建,`.gitignore` 加 uploads/extracted。**测试合计 243 全绿**(L1 130 / L2 101 / L3 12)|
+| 最新 commit | 待本次 archive commit(`归档 change: parser-pipeline(M2)`) |
+| 工作区 | C5 全量改动:backend 4 模型(document_text/metadata/image + price_item)+ 0004 迁移 + parser/{content,llm,pipeline} 12 模块 + 4 端点(PATCH role / re-parse / PUT rule refill / SSE / price-items)+ projects detail progress 11 字段 + 顺手修 HTTP 413/422 deprecated 常量;frontend RoleDropdown / PriceRulesPanel / ParseProgressIndicator / useParseProgress + ProjectDetailPage SSE 集成 + types/api 扩 ~5 方法。**测试合计 296 全绿**(L1 153 / L2 143 / L3 降级手工凭证),C5 新增 53 个用例 |
 
 ---
 
-## 2. 本次 session 关键决策(2026-04-14,C4 apply 阶段)
+## 2. 本次 session 关键决策(2026-04-14,C5 apply 阶段)
+
+### propose 阶段已敲定(本次未变更)
+
+- **A1 整体做**:不拆 C5a/C5b,接受 ~14 Req / ~45 Scenario(实际 13 Req / 50 Scenario)
+- **B1 完整 SSE 事件流**:`/api/projects/{pid}/parse-progress` 推送 5 类业务事件 + heartbeat
+- **C2 + β**:LLM 识别即自动 `confirmed=true` 立即批量回填;bidder 全 sheet 成功才 priced,部分失败 → price_partial
+- **报价可选**:无报价表 bidder 终态 = identified,不必进 priced
+- **D2 人工修正 a+b 做 c 降级**:前端 RoleDropdown + PriceRulesPanel 完整;角色关键词 Python 常量,管理员后台 UI 留 C17
+- **E3 DB 原子占位**:`price_parsing_rules` partial unique index + asyncio.Event 快路径 + DB poll(3s × 5min)兜底
+
+### apply 阶段就地敲定(D 级实施细节,见 design.md 9 条)
+
+- **顺手吃 C4 follow-up**:HTTP 413/422 deprecated 常量名修(deprecation warning 清掉);C4 "event loop 重启丢任务"的报价规则那一半由 E3 DB 原子占位消化
+- **0004 迁移在 SQLite 下退化**:partial unique index 仅 PostgreSQL 原生支持,SQLite 退化为普通索引(应用层保证唯一性,不影响测试)
+- **extract → pipeline 衔接**:`extract/engine.py` 的 `_aggregate_bidder_status` 完成后 `await session.refresh(bidder)` 再 `trigger_pipeline(bidder_id)` —— 状态确实进 extracted 才触发,不会 partial / failed 时也调
+- **role_classifier 漏返兜底**:LLM 给了部分 doc,剩下的走规则兜底(覆盖 spec "LLM 漏返"场景)
+- **fill_price 数字归一化**:千分位 / 货币符号 / 科学计数 (regex `^-?\d+(\.\d+)?$`);中文大写金额本期不实现,字段写 NULL 不阻断行
+- **L2 SSE 测试避坑**:httpx ASGITransport 下 `aiter_lines` 不能可靠摘除流(server 持续推 heartbeat 永不 EOF);L2 改为分层覆盖(broker / build_snapshot / format_sse 单独验 + 端点 404 走 HTTP 客户端)
+- **L3 整体降级手工**:LLM 内部协程 Playwright 无法 page.route 拦截 + Docker Desktop kernel-lock 阻塞真启动;凭证 README 占位在 `e2e/artifacts/c5-2026-04-14/`,等 kernel-lock 解除后手工补 7 张截图
+- **clean_users fixture 扩 4 张表**:price_items / document_image / document_metadata / document_text 按 FK 顺序前置插入清理(C4 模式延伸)
+- **`bidder.parse_status` 13 态**:C4 6 态 + C5 7 态(identifying/identified/identify_failed/pricing/priced/price_partial/price_failed),应用层枚举不加 DB CHECK
+
+### 文档联动
+
+- **`backend/README.md`** 新增 "C5 parser-pipeline 依赖" 段(LLM env vars + Pillow libjpeg + nginx SSE 配置 + INFRA_DISABLE_PIPELINE 测试环境变量)
+- **`docs/handoff.md`** 即本次更新;execution-plan.md 暂未追加 §6 计划变更行(本次未调整粒度/顺序,仅落地 C5 既定计划)
+- **不修订 user-stories**:实现与 US-4.2/4.3/4.4 描述一致;US-4.3 AC-7 "管理员维护关键词"在 spec 内显式标 "C17 升级"
+
+---
+
+## 2.bak 上一 session 决策(2026-04-14,C4 apply 阶段)
 
 ### propose 阶段已敲定(本次未变更)
 
@@ -48,85 +79,49 @@
 
 ---
 
-## 2.bak 上一 session 决策(2026-04-14,C3 propose + apply 阶段)
-
-### 设计层面(propose 敲定)
-
-- **删除语义 = 软删除** `deleted_at TIMESTAMP NULL`(选项 A);与 `docs/execution-plan.md` §C3 验证场景 4 一致;同步**修订** `docs/user-stories.md` US-2.4(原"硬删")
-- **权限过滤下沉到查询层**(`get_visible_projects_stmt` helper),所有读取路径必经此函数,杜绝"忘加过滤"
-- **reviewer 访问他人项目 = 404 而非 403**(防项目存在性泄露)
-- **status 字段 = VARCHAR + 应用层枚举**(不引状态机库;C6 推进状态时只改 helper 不改字段类型)
-- **金额精度 = `Numeric(18, 2)`**(精度需求到元/2 位小数,与 C11/C12 报价分析未来对比对齐)
-- **分页 = page+size**(默认 size=12,上限 100;不上游标)
-- **不引 form 库**(列表/创建/详情全部原生 useState,与 C2 LoginPage/ChangePasswordPage 风格一致)
-- **L3 主线 = 单 spec 串联**(`c3-project-crud.spec.ts` 单文件 8 步;不拆 4 个 spec 避免状态恢复成本)
-- **同名项目 = 直接允许**(US-2.1 AC-5 明确;execution-plan "幂等"以 US 为准)
-
-### apply 阶段就地敲定
-
-- **size 上限策略锁死 = 422**(spec.md 留二选一,L2 选拒绝;FastAPI Query `le=100` 自动返 422)
-- **`clean_users` fixture 扩展清 projects**(放在 yield 前后,FK 依赖顺序 `delete projects → delete users`):C2 fixture 文件加 4 行,使所有 C2/C3/未来新表共享同一清理入口
-- **C4+ 占位字段 = ProjectDetailResponse 默认值**(`bidders=[] / files=[] / progress=null`),不在路由层手填,避免 C4 上线时遗漏更新
-- **smoke-home.spec.ts 适配新 ProjectListPage**(删 `health-status` 测点;h1 由"围标检测系统"改"项目列表"):随 C3 一起进 commit,不留出回归
-- **detail/list 共享 `_fetch_visible_project` helper**(取行后统一 404),避免 reviewer-vs-others 的判断重复实现
-
-### 实施阶段关键技术坑
-
-- **L2 第一次跑全红 = FK 违反**:`clean_users` 在 yield 后跑 `DELETE FROM users` 时,projects 表持有 FK,asyncpg 报 `ForeignKeyViolationError`。Fix:`auth_fixtures.py` 的 `clean_users` 在清 users 前先清 projects(C3 是首张子表,后续每张子表加进来都要往这里加一行 delete)
-- **删 `ProjectsPlaceholderPage` 触发 L3 smoke 回归**:`smoke-home.spec.ts` 依赖 `data-testid="health-status"` 与 `<h1>围标检测系统</h1>`。修复在同一 PR/commit 里完成:适配新 h1("项目列表")+ 移除 health-status 断言(改为只测 `/api/health` 代理可达性,不再要求前端展示)
-- **window.confirm 在 Playwright 下默认 cancel**:c3 spec 里 `beforeEach` 注册 `page.on("dialog", d => d.accept())` 一次性解决所有删除/警告对话框
-- **vite.config.ts 预存在 ts 错误**:`{ test: ... }` 不在 UserConfigExport 类型里(vitest 类型未合并);C3 范围内未触碰,留作 follow-up
-- **`mapped_column` 写错位的笔误**:第一稿在 Project 模型里把 `from sqlalchemy.orm import Mapped` 放进了类内,然后 `id: Mapped_int = None` 占位 — 立刻发现并整体重写为标准 import 顶部 + 类体只放字段定义。教训:模型类不要嵌套 import
-
-### 文档联动
-
-- **修订 `docs/user-stories.md` US-2.4**:AC-3 由"硬删除并清盘" → "软删除(`deleted_at`)+ 文件清理移交生命周期任务";新增 AC-4 "非 owner 返 404 防存在性泄露";追加 `[Change History]` 行注明 C3 修订
-- **execution-plan.md** 暂未追加 §6 计划变更行(本次未调整粒度/顺序,仅落地 C3 既定计划,无需写入)
-
----
-
 ## 3. 待确认 / 阻塞
 
-- 无硬阻塞,M2 进度 2/3。C4 已实施完,待 archive。
-- **Follow-up(C4 新增)**:`asyncio.create_task` 协程在 event loop 重启时丢任务,bidder 永久卡 `extracting`。Mitigation 留 C6 任务表上线后扫描"卡住"状态恢复。当前缺 admin 重置端点
-- **Follow-up(C4 新增)**:加密包 3 次密码错冻结(原 D2 决策推到 C17)未实现;当前可无限重试
-- **Follow-up(C4 新增)**:HTTP 413 / 422 用了 deprecated 常量名(FastAPI 警告),可 C5 顺手改 `HTTP_413_CONTENT_TOO_LARGE` / `HTTP_422_UNPROCESSABLE_CONTENT`
-- **Follow-up(C4 新增)**:`e2e/fixtures/encrypted-sample.7z`(250 字节)由 backend fixture 生成,**未入库**(在 .gitignore 兜底之外不在);CI 跑 L3 加密 spec 前需先 generate;手动命令在 c4-encrypted-archive.spec.ts 注释里
-- **Follow-up**:Docker Desktop kernel-lock 仍在;真实 `docker compose up` 验证待解决后回补
-- **Follow-up**:生产部署前必须 env 覆盖 `SECRET_KEY` / `AUTH_SEED_ADMIN_PASSWORD`(C2 已记)
-- ~~Follow-up:vite.config.ts test 字段类型错~~ 已 C4 顺手修复
-- ~~Follow-up:auth-login.spec.ts 截图路径~~ 暂未处理(本次 C4 未触及该 spec,不影响)
+- 无硬阻塞,**M2 完成(3/3)**。C5 已实施完,待 archive。M3 检测域(C6+)前置依赖均已就绪。
+- **Follow-up(C5 新增)**:**L3 整体降级手工凭证待补**:Docker Desktop kernel-lock 解除后,按 `e2e/artifacts/c5-2026-04-14/README.md` 步骤跑 demo 并补 7 张截图。本次 L1+L2 = 296 用例已覆盖所有 spec scenario,L3 凭证仅作 M2 demo 价值
+- **Follow-up(C5 新增)**:`role_keywords.py` Python 常量;C17 admin 后台搭起来后迁移到 DB + admin UI(D2 决策原约定)
+- **Follow-up(C4 留下,C5 部分消化)**:`asyncio.create_task` event loop 重启丢任务 — 报价规则识别这一半已由 E3 DB 原子占位消化(重启后协程从 DB 状态恢复);**解压阶段、内容提取阶段、LLM 分类阶段仍未消化**,留 C6 任务表统一扫描 "卡住"状态恢复
+- **Follow-up(C4 留下)**:加密包 3 次密码错冻结(原 D2 决策推到 C17)
+- **Follow-up(C4 留下)**:`e2e/fixtures/encrypted-sample.7z`(250 字节)未入库,CI 跑 L3 加密 spec 前需手动 generate
+- **Follow-up**:Docker Desktop kernel-lock — 影响 `docker compose up` 真实部署验证 + L3 命令验证(C3/C4 spec 也跑不起来,与 C5 实施无关)
+- **Follow-up**:生产部署前必须 env 覆盖 `SECRET_KEY` / `AUTH_SEED_ADMIN_PASSWORD`(C2 已记);C5 新增需配 `LLM_API_KEY` / `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_MODEL`
+- ~~Follow-up:HTTP 413/422 deprecated 常量名~~ **C5 顺手修复**(deprecation warning 已清)
+- ~~Follow-up:vite.config.ts test 字段类型错~~ C4 已修
+- ~~Follow-up:auth-login.spec.ts 截图路径~~ 暂未处理
 
 ---
 
 ## 4. 下次开工建议
 
 **一句话交接**:
-> C4 `file-upload` 已实施完,L1 130 / L2 101 / L3 12 = 243 全绿(C4 新增 L1 54 + L2 50 + L3 2 = 106 用例)。M2 进度 2/3。下一步 `/opsx:archive file-upload` 归档(自动 commit + 更新 handoff §5),然后 `/opsx:propose` 开 C5 `parser-pipeline`(LLM 文档角色识别 / 报价表识别 / 投标人身份信息提取 / SSE 进度回推)。
+> **C5 `parser-pipeline` 已实施完,M2 完成(3/3)**。L1 153 / L2 143 = 296 全绿,L3 降级手工凭证(待 Docker Desktop kernel-lock 解除后补)。下一步 `/opsx:archive parser-pipeline` 归档(自动 commit + 更新 handoff),然后进 M3 `/opsx:propose` 开 C6 `detect-framework`(异步任务框架 + Agent 并行调度 + SSE 检测推送 + 综合研判骨架)。
 
 **可直接粘贴给 AI 作为新会话起点**:
 ```
-继续 documentcheck 项目。M2 进度 2/3:C4 file-upload apply 完成,待归档。
-下一步先 /opsx:archive file-upload(commit C4 全部改动 + handoff 同步),
-然后 /opsx:propose 开 C5 parser-pipeline:
-  - LLM 调 C4 已建的 8 个解析点(身份信息 / 文档角色分类 / 报价表 sheet+列识别)
-  - 写 bid_documents.file_role / bidders.identity_info / price_parsing_rules
-  - 状态机:bidder.parse_status: extracted → identified → priced
-  - SSE 进度回推(C1 sse_demo 骨架可复用)
-对应 docs/user-stories.md US-4.1~4.3;参考 docs/execution-plan.md §3 C5 小节。
-请先读 docs/handoff.md 确认现状,然后 openspec-propose 为 C5 生成 artifacts。
+继续 documentcheck 项目。M2 完成(3/3):C5 parser-pipeline apply 完成,待归档。
+下一步先 /opsx:archive parser-pipeline(commit C5 全部改动 + handoff 同步),
+然后进 M3 /opsx:propose 开 C6 detect-framework:
+  - 异步任务框架(asyncio + ProcessPoolExecutor,从 C1 迁入)
+  - Agent 并行调度(asyncio gather + 超时 + 重试)
+  - SSE 检测进度推送(复用 C5 progress_broker,只换事件 schema)
+  - 综合研判骨架(占位 regex,Agent 结果聚合)
+  - 任务表(吃掉 C4/C5 留下的 event loop 重启丢任务剩余部分)
+对应 docs/user-stories.md US-5.1~5.4;参考 docs/execution-plan.md §3 C6 小节。
+请先读 docs/handoff.md 确认现状,然后 openspec-propose 为 C6 生成 artifacts。
 tasks.md 按 CLAUDE.md OpenSpec 集成约定打标签。
 ```
 
-**C5 前的预备条件(已就绪)**:
+**C6 前的预备条件(已就绪)**:
 
-- `bidders.identity_info` JSONB 字段就位(C5 LLM 写)
-- `bid_documents.file_role` 字段就位(C5 LLM 写;C4 阶段恒 NULL)
-- `price_parsing_rules` 表 + `column_mapping` JSONB schema(`code_col / name_col / unit_col / qty_col / unit_price_col / total_price_col`)就位;C4 PUT 端点骨架可被 C5 LLM 直接调
-- C1 LLM 适配层 `app/services/llm/` 单一接口已就位(dashscope/openai 二选一,timeout/retry 已封)
-- C1 SSE 骨架 `/demo/sse` 仍在,C5 改造为 `/api/projects/{pid}/parse-progress` 即可
-- `extract` 已写出 docx/xlsx 物理文件到 `extracted/<pid>/<bid>/<archive_hash>/`,C5 解析时直接 `Path()` 读
-- L2 fixture `clean_users` 已清 4 张 C4 新表,C5 不需要再扩(除非引新表)
+- `progress_broker` 单进程内存 broker 已建(C5),C6 只需扩展事件 schema,无需重写
+- `bidder.parse_status` 13 态 + `project.status` 5 态枚举体系已稳定
+- LLM 适配层(C1)+ Mock fixture(C5 扩 ScriptedLLMProvider)可直接复用
+- `clean_users` fixture 已清 8 张表(users / projects / 4 张 C4 表 + 4 张 C5 表),C6 不引新表的话不需扩
+- `INFRA_DISABLE_PIPELINE=1` / `INFRA_DISABLE_EXTRACT=1` / `INFRA_DISABLE_LIFECYCLE=1` 三个测试开关模式可被 C6 模仿(`INFRA_DISABLE_DETECT=1`)
 
 ---
 
@@ -134,8 +129,8 @@ tasks.md 按 CLAUDE.md OpenSpec 集成约定打标签。
 
 | 日期 | 变更 |
 |---|---|
-| 2026-04-14 | **C4 `file-upload` 实施完成(待归档,M2 进度 2/3)**:4 模型 + 0003 迁移 + upload/extract 服务 + 3 路由(bidders / documents / price)+ 6 前端组件 + ProjectDetailPage 重写;L1 130 / L2 101 / L3 12 = 243 pass;C4 新增 106 用例;关键决策:文件路径 absolute / GBK cp437 回路 / 加密包两阶段 probe |
+| 2026-04-14 | **C5 `parser-pipeline` 实施完成(待归档,M2 完成 3/3)**:4 模型 + 0004 迁移 + parser/{content,llm,pipeline} 12 模块 + 4 端点(PATCH role / re-parse / PUT rule refill / SSE)+ 4 前端组件;L1 153 / L2 143 = 296 pass;C5 新增 53 用例;关键决策:E3 DB 原子占位 / C2β 自动 confirmed + β 终态 / D2 关键词常量 / SSE 内存 broker;消化 C4 HTTP 常量 + event loop 重启丢任务的报价规则部分;L3 整体降级手工凭证 |
+| 2026-04-14 | **C4 `file-upload` 归档(M2 进度 2/3)**:4 模型 + 0003 迁移 + upload/extract 服务 + 3 路由 + 6 前端组件;L1 130 / L2 101 / L3 12 = 243 pass;C4 新增 106 用例;关键决策:文件路径 absolute / GBK cp437 回路 / 加密包两阶段 probe |
 | 2026-04-14 | **C3 `project-mgmt` 归档(M2 进度 1/3)**:Project 模型 + 软删 + 权限隔离 + 分页筛选搜索;L1 76 / L2 51 / L3 10 = 137 pass;C3 新增 72 用例;同步修订 user-stories.md US-2.4(硬删→软删)|
 | 2026-04-14 | C3 `project-mgmt` propose 完成:4 artifact,7 Requirement + 30 Scenario;软删 vs 硬删冲突由用户拍板选 A 软删 |
 | 2026-04-14 | **C2 `auth` 归档(M1 完成)**:L1/L2/L3 合计 65 pass 0 fail;JWT + 失败计数+锁定 + 强制改密(pwd_v 毫秒) + 路由守卫 + AuthContext + 前端 3 页面;M1 凭证 4 张截图 `e2e/artifacts/m1-demo-2026-04-14/` |
-| 2026-04-14 | C2 `auth` propose 完成:4 artifact,7 Requirement + 22 Scenario;pwd_v 方案替 Redis 黑名单 |

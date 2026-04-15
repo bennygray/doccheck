@@ -45,7 +45,7 @@ async def _seed(owner_id: int, n: int = 2) -> int:
 async def test_run_detection_happy_path(
     seeded_reviewer: User, reviewer_token, auth_client, monkeypatch
 ):
-    """完整跑完 10 AgentTask + 生成 AnalysisReport + project 进 completed。"""
+    """完整跑完 11 AgentTask + 生成 AnalysisReport + project 进 completed (C12)。"""
     monkeypatch.delenv("INFRA_DISABLE_DETECT", raising=False)
     # 缩短超时到秒级
     monkeypatch.setenv("AGENT_TIMEOUT_S", "5")
@@ -84,7 +84,7 @@ async def test_run_detection_happy_path(
                 select(AgentTask).where(AgentTask.project_id == pid)
             )
         ).scalars().all()
-        assert len(tasks) == 10
+        assert len(tasks) == 11
         assert all(
             t.status in ("succeeded", "failed", "timeout", "skipped")
             for t in tasks

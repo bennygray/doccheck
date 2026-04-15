@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bid_document import BidDocument
+from app.models.bidder import Bidder
 from app.models.document_image import DocumentImage
 from app.models.document_metadata import DocumentMetadata
 from app.models.price_item import PriceItem
@@ -129,6 +130,30 @@ async def bidders_share_role_with_ext(
     return bool(roles_a & roles_b)
 
 
+async def project_has_priced_bidders(
+    session: AsyncSession,
+    project_id: int,
+    min_count: int = 3,
+) -> bool:
+    """项目下"有 price_items 的 bidder"数 ≥ min_count。
+
+    C12 price_anomaly preflight 用:判断样本够不够算异常低价。
+    单次 COUNT(DISTINCT bidder_id) 查询,INNER JOIN 自动过滤无 price_items 的 bidder。
+    软删 bidder 不计入。
+    """
+    stmt = (
+        select(func.count(func.distinct(Bidder.id)))
+        .select_from(Bidder)
+        .join(PriceItem, PriceItem.bidder_id == Bidder.id)
+        .where(
+            Bidder.project_id == project_id,
+            Bidder.deleted_at.is_(None),
+        )
+    )
+    result = await session.execute(stmt)
+    return (result.scalar() or 0) >= min_count
+
+
 __all__ = [
     "bidder_has_role",
     "bidders_share_any_role",
@@ -136,4 +161,5 @@ __all__ = [
     "bidder_has_metadata",
     "bidder_has_priced",
     "bidder_has_images",
+    "project_has_priced_bidders",
 ]

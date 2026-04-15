@@ -52,17 +52,17 @@ async def _seed_project_with_bidders(
         return p.id, [b.id for b in result]
 
 
-async def test_start_2_bidders_201_10_tasks(
+async def test_start_2_bidders_201_11_tasks(
     seeded_reviewer: User, reviewer_token, auth_client
 ):
-    """2 bidders → 1 pair × 7 + 3 global = 10 AgentTask。"""
+    """2 bidders → 1 pair × 7 + 4 global = 11 AgentTask (C12 后)。"""
     pid, _ = await _seed_project_with_bidders(seeded_reviewer.id, n_bidders=2)
     client = await auth_client(reviewer_token)
     resp = await client.post(f"/api/projects/{pid}/analysis/start")
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["version"] == 1
-    assert body["agent_task_count"] == 10
+    assert body["agent_task_count"] == 11
 
     async with async_session() as s:
         rows = list(
@@ -70,7 +70,7 @@ async def test_start_2_bidders_201_10_tasks(
                 await s.execute(select(AgentTask).where(AgentTask.project_id == pid))
             ).scalars().all()
         )
-        assert len(rows) == 10
+        assert len(rows) == 11
         # 状态全 pending(INFRA_DISABLE_DETECT=1 跳过自动调度)
         assert all(r.status == "pending" for r in rows)
         # project 进 analyzing
@@ -78,15 +78,15 @@ async def test_start_2_bidders_201_10_tasks(
         assert project.status == "analyzing"
 
 
-async def test_start_3_bidders_24_tasks(
+async def test_start_3_bidders_25_tasks(
     seeded_reviewer: User, reviewer_token, auth_client
 ):
-    """3 bidders → C(3,2) × 7 + 3 = 24。"""
+    """3 bidders → C(3,2) × 7 + 4 global = 25 (C12 后)。"""
     pid, _ = await _seed_project_with_bidders(seeded_reviewer.id, n_bidders=3)
     client = await auth_client(reviewer_token)
     resp = await client.post(f"/api/projects/{pid}/analysis/start")
     assert resp.status_code == 201
-    assert resp.json()["agent_task_count"] == 24
+    assert resp.json()["agent_task_count"] == 25
 
 
 async def test_start_1_bidder_400(

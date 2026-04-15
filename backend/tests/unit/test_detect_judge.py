@@ -31,6 +31,7 @@ def test_empty_inputs_returns_zero_low():
 
 
 def test_all_dimensions_100_high():
+    """C12 后 11 维度,权重和 = 1.00,全 100 → total = 100。"""
     pcs = [
         _pc("text_similarity", 100),
         _pc("section_similarity", 100),
@@ -44,6 +45,7 @@ def test_all_dimensions_100_high():
         _oa("error_consistency", 100),
         _oa("style", 100),
         _oa("image_reuse", 100),
+        _oa("price_anomaly", 100),  # C12 新增 global 维度
     ]
     total, level = compute_report(pcs, oas)
     assert total == 100.0
@@ -51,10 +53,10 @@ def test_all_dimensions_100_high():
 
 
 def test_partial_scores_medium():
-    # 只给 2 个维度 50 分,其他 0
+    # 只给 2 个维度 50 分,其他 0(C12 后权重调整:price_consistency 0.10)
     pcs = [_pc("text_similarity", 50), _pc("price_consistency", 50)]
     total, level = compute_report(pcs, [])
-    # 0.12 * 50 + 0.15 * 50 = 13.5 → low
+    # 0.12 * 50 + 0.10 * 50 = 11.0 → low
     assert 0 < total < 15
     assert level == "low"
 
@@ -80,12 +82,13 @@ def test_max_across_pairs():
 
 
 def test_medium_threshold():
-    # 凑 40-69 分
-    pcs = [_pc("price_consistency", 100)]  # 0.15 * 100 = 15
+    # 凑 40-69 分(C12 后权重调整:price_consistency 0.10 + error_consistency 0.12
+    # + text_similarity 0.12 + metadata_author 0.10 = 0.44 * 100 = 44)
+    pcs = [_pc("price_consistency", 100)]  # 0.10 * 100 = 10
     oas = [_oa("error_consistency", 100)]  # 0.12 * 100 = 12
     pcs.append(_pc("text_similarity", 100))  # 0.12 * 100 = 12
     pcs.append(_pc("metadata_author", 100))  # 0.10 * 100 = 10
-    # 合计 ~ 49 → medium
+    # 合计 ~ 44 → medium
     total, level = compute_report(pcs, oas)
     assert 40 <= total < 70
     assert level == "medium"

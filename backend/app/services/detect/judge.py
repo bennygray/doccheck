@@ -23,7 +23,8 @@ from app.services.parser.pipeline.progress_broker import progress_broker
 logger = logging.getLogger(__name__)
 
 
-# 10 维度权重,合计 1.00(D4 占位值;C14 可调)
+# 11 维度权重,合计 1.00(D4 占位值;C14 可调)
+# C12 新增 price_anomaly(占 0.07),从 price_consistency 0.15→0.10 + image_reuse 0.07→0.05 释放
 DIMENSION_WEIGHTS: dict[str, float] = {
     "text_similarity": 0.12,
     "section_similarity": 0.10,
@@ -31,10 +32,11 @@ DIMENSION_WEIGHTS: dict[str, float] = {
     "metadata_author": 0.10,
     "metadata_time": 0.08,
     "metadata_machine": 0.10,
-    "price_consistency": 0.15,
+    "price_consistency": 0.10,  # C12 释放部分权重给 price_anomaly
+    "price_anomaly": 0.07,  # C12 新增
     "error_consistency": 0.12,  # 铁证维度,权重最高之一
     "style": 0.08,
-    "image_reuse": 0.07,
+    "image_reuse": 0.05,  # C12 释放部分权重给 price_anomaly
 }
 
 

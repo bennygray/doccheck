@@ -32,7 +32,7 @@ from app.schemas.analysis import (
     AnalysisStartResponse,
     AnalysisStatusResponse,
 )
-from app.services.detect import agents as _detect_agents  # noqa: F401 - 触发 10 Agent 注册
+from app.services.detect import agents as _detect_agents  # noqa: F401 - 触发 11 Agent 注册 (C12)
 from app.services.detect.engine import detect_disabled, run_detection
 from app.services.detect.registry import AGENT_REGISTRY
 from app.services.parser.pipeline.progress_broker import progress_broker
@@ -139,7 +139,7 @@ async def start_analysis(
     ).scalar() or 0
     version = int(max_version) + 1
 
-    # 4) 批量 INSERT AgentTask 行:C(n,2) × 7 pair + 3 global
+    # 4) 批量 INSERT AgentTask 行:C(n,2) × 7 pair + 4 global (C12 扩展)
     pair_agents = [spec for spec in AGENT_REGISTRY.values() if spec.agent_type == "pair"]
     global_agents = [spec for spec in AGENT_REGISTRY.values() if spec.agent_type == "global"]
 

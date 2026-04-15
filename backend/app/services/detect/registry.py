@@ -1,7 +1,8 @@
-"""Agent 注册表 (C6 detect-framework D2)
+"""Agent 注册表 (C6 detect-framework D2 + C12 扩展至 11)
 
-10 Agent 通过 @register_agent 装饰器注册到模块级 AGENT_REGISTRY dict。
+11 Agent 通过 @register_agent 装饰器注册到模块级 AGENT_REGISTRY dict。
 C7~C13 各 change 替换对应 run() 实现,不改 preflight / 注册 key。
+C12 新增 global 型 `price_anomaly`(11 = pair 7 + global 4)。
 """
 
 from __future__ import annotations
@@ -16,6 +17,9 @@ from app.services.detect.context import (
 
 PreflightFn = Callable[[AgentContext], Awaitable[PreflightResult]]
 RunFn = Callable[[AgentContext], Awaitable[AgentRunResult]]
+
+# C12 扩至 11;与 `len(AGENT_REGISTRY)` 一致性由 L1 test 断言
+EXPECTED_AGENT_COUNT: int = 11
 
 
 class AgentSpec(NamedTuple):
@@ -64,6 +68,7 @@ def get_all_agents() -> list[AgentSpec]:
 
 __all__ = [
     "AGENT_REGISTRY",
+    "EXPECTED_AGENT_COUNT",
     "AgentSpec",
     "PreflightFn",
     "RunFn",

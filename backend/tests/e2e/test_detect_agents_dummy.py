@@ -1,9 +1,9 @@
-"""L2: 10 Agent 骨架 dummy run (C6 §11.8)
+"""L2: 11 Agent 骨架 dummy run (C6 §11.8 + C12 扩展)
 
 验证:
 - pair 型 dummy run 写 PairComparison 行
 - global 型 dummy run 写 OverallAnalysis 行
-- 10 模块加载后注册表 size=10
+- 11 模块加载后注册表 size=11(C12 新增 price_anomaly)
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ from app.services.detect.registry import AGENT_REGISTRY
 pytestmark = pytest.mark.asyncio
 
 
-async def test_registry_size_10():
-    assert len(AGENT_REGISTRY) == 10
+async def test_registry_size_11():
+    assert len(AGENT_REGISTRY) == 11
 
 
 async def test_dummy_pair_run_writes_pair_comparison(

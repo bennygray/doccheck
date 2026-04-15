@@ -11,15 +11,56 @@
 
 | 项 | 值 |
 |---|---|
-| 当前里程碑 | **M3 进行中(6/9)**,C11 `detect-agent-price-consistency` 已 archive,待 commit |
-| 当前 change | C11 已 archive,即将随本次 commit 一起提交 |
+| 当前里程碑 | **M3 进行中(7/9)**,C12 `detect-agent-price-anomaly` 已 archive,待 commit |
+| 当前 change | C12 已 archive,即将随本次 commit 一起提交 |
 | 当前任务行 | N/A |
-| 最新 commit | C10 归档 `7573deb` — C11 archive commit 即将产生 |
-| 工作区 | C11 全量改动:**检测层(C11 主体)**:**新增 `backend/app/services/detect/agents/price_impl/` 子包 11 文件**(`__init__.py` 含 `write_pair_comparison_row` 共享 helper 复用 C10 模式 / `config.py`(13 env + 4 子检测 dataclass + scorer 配置 + load_price_config)/ `models.py` TypedDict(PriceRow / SubDimResult)/ `normalizer.py`(item_name NFKC+casefold+strip + Decimal `split_price_tail` truncate + zfill + decimal_to_float_safe)/ `extractor.py`(从 PriceItem 按 sheet_name 分组 + 预计算 tail_key/item_name_norm/total_price_float + max_rows_per_bidder 限流)/ `tail_detector.py`((tail, int_len) 组合 key 跨投标人碰撞 hit_strength=`\|∩\|/min`)/ `amount_pattern_detector.py`((item_name_norm, unit_price) 对精确匹配率 + 阈值)/ `item_list_detector.py`(两阶段对齐:1a 同模板按 row_index 位置对齐"同项同价" + 1b 非同模板按 item_name 归一精确)/ `series_relation_detector.py`(**Q5 第一性原理审新增**:同模板对齐序列 ratios 方差 < ε → 等比 + diffs CV < ε → 等差;`statistics.pvariance / pstdev` stdlib)/ `scorer.py`(4 子检测加权合成,disabled/score=None 不参与归一化))+ **重写 `agents/price_consistency.py::run()`** 4 子检测真实算法(纯程序化,零 LLM)+ preflight 代码保持不变(C6 契约锁定,复用 `bidder_has_priced`)+ 异常路径统一 catch + `evidence.error` 写入 + AgentTask.status 保持 succeeded + Agent 级 skip 用 `score=0.0` + `participating_subdims=[]` 哨兵(对齐 C10 风格)+ 子检测 flag `PRICE_CONSISTENCY_{TAIL,AMOUNT_PATTERN,ITEM_LIST,SERIES}_ENABLED` 独立开关(全 disabled → 整 Agent 早返不调 extractor)+ **L1 8 test 文件 64 用例** + **L2 1 test 文件 5 scenario**(覆盖 execution-plan §3 C11 原 4 Scenario + Q5 新增 series Scenario)+ `backend/README.md` "C11 依赖"段(13 env + 4 子检测说明 + algorithm version `price_consistency_v1`)+ `.gitignore` 加 c11-* 白名单 + `e2e/artifacts/c11-2026-04-15/README.md` L3 手工凭证占位 + `openspec/specs/detect-framework/spec.md` sync(+10 ADDED + 1 MODIFIED Req,从 42 → 52 Req)+ `docs/execution-plan.md` §6 追加 1 行(C11 scope 扩 series 子检测的路线图记录,§3 C11 原文保留)。**测试合计 694 全绿**(C11 新增 69 用例,C10 基线 625 → 694) |
+| 最新 commit | C11 归档 `94e8f18` — C12 archive commit 即将产生 |
+| 工作区 | C12 全量改动:**检测层(C12 主体)**:**新增 `backend/app/services/detect/agents/anomaly_impl/` 子包 6 文件**(`__init__.py` 含 `write_overall_analysis_row` 共享 helper 对齐 C11 的 `write_pair_comparison_row`;`config.py` 7 env + `AnomalyConfig` dataclass + 严格/宽松两类校验(关键参数抛 ValueError / 次要参数 warn fallback);`models.py` 三 TypedDict(BidderPriceSummary / AnomalyOutlier / DetectionResult);`extractor.py` 单次 SQL INNER JOIN bidders×price_items + GROUP BY 聚合 + bidder_id 升序 + max_bidders 截断 + 软删 bidder 排除;`detector.py` mean 计算 + deviation 判定 + mean==0 兜底 + direction 非 low 运行期 fallback + warn;`scorer.py` 占位公式 `min(100, N*30 + max(|dev|)*100)`)+ **新增 `agents/price_anomaly.py`**(global 型,`@register_agent("price_anomaly", "global", preflight)`,三层兜底:ENABLED=false 早返 / preflight skip 样本不足 / run 边缘 skip 哨兵 `score=0.0 + participating_subdims=[] + skip_reason='sample_size_below_min'`;异常路径统一 catch + evidence.error)+ **新增 `_preflight_helpers.project_has_priced_bidders`**(单次 COUNT(DISTINCT) + INNER JOIN 自动过滤无 price_items 的 bidder)+ **注册表扩 10→11**(registry.py 新增 `EXPECTED_AGENT_COUNT: int = 11` 导出 + agents/__init__.py 加 `price_anomaly` import)+ **judge.py DIMENSION_WEIGHTS 调整**(新增 `price_anomaly=0.07`;`price_consistency 0.15→0.10`;`image_reuse 0.07→0.05`;总和仍 = 1.00)+ **L1 6 test 文件 43 新用例**(config 10 / extractor 5 / detector 9 / scorer 5 / preflight 7 / run 7)+ **L2 1 test 文件 5 Scenario**(对应 tasks 6.1~6.5)+ 更新既有测试硬编码 10→11(test_detect_registry.py 3 处 / test_detect_agents_dummy.py 2 处 / test_analysis_start_api.py 4 处 / test_analysis_status_api.py 1 处 / test_detect_engine_orchestration.py 2 处 / test_project_detail_with_analysis.py 1 处 / test_reports_api.py 1 处 / test_detect_judge.py 2 处 — 含 `test_all_dimensions_100_high` 追加 `price_anomaly` OA 项把 total 从 93 修正到 100)+ `app/api/routes/analysis.py` 注释"10→11"更新 + `backend/README.md` 新增 "C12 detect-agent-price-anomaly 依赖" 段(Q1~Q4 决策 + 算法 + 7 env + algorithm version `price_anomaly_v1` + DIMENSION_WEIGHTS 调整说明)+ `.gitignore` 加 `c12-*` 白名单 + `e2e/artifacts/c12-2026-04-15/README.md` L3 手工凭证占位(5 张待补截图 + L1/L2 覆盖证明)+ `openspec/specs/detect-framework/spec.md` sync(+5 ADDED + 3 MODIFIED Req,从 52 → 57 Req)+ `docs/execution-plan.md` §6 追加 1 行(C12 注册表扩至 11 Agent 的第一性原理审记录)。**测试合计 743 全绿**(C12 新增 49 用例,C11 基线 694 → 743) |
 
 ---
 
-## 2. 本次 session 关键决策(2026-04-15,C11 propose+apply+archive)
+## 2. 本次 session 关键决策(2026-04-15,C12 propose+apply+archive)
+
+### propose 阶段已敲定(4 决策)
+
+- **Q1 sample_size 下限 = 3 家**(用户拍板):贴 execution-plan §3 C12 原文,覆盖 3~4 家小体量围标高发场景;拒绝 5 家(漏判小体量项目)
+- **Q2 (C) 标底本期不支持,预留 hook 留 follow-up**(用户拍板):evidence.baseline=null 占位;本期单路均值,避免 M3 scope 跨 3 层(DB+检测+UI);贴 execution-plan §3 C12 原文兜底"标底未配置 → 仅按均值判断"
+- **Q3 偏离方向 = 只抓低 + 30% 中档**(用户拍板,阈值数字自定写 design):低偏离是围标主信号;30% 抓强可疑误报可控;env 可覆盖
+- **Q4 (A) 纯程序化,LLM 解释全留 C14**(用户拍板):贴 C11 模式避免 C12/C14 重复;evidence.llm_explanation=null 占位;分层干净
+
+### propose 阶段我自己定(实施细节,写入 design D1~D9)
+
+- **D1 扩注册表至 11 Agent**(新增 global 型 `price_anomaly`):spec "10 Agent 注册表" Requirement MODIFIED;`EXPECTED_AGENT_COUNT: int = 11` 常量新增
+- **D2 子包 `anomaly_impl/` 5 文件结构** 贴 C11 `price_impl/`
+- **D3 新增 `project_has_priced_bidders` helper**(单次 COUNT(DISTINCT))
+- **D4 env 前缀 `PRICE_ANOMALY_*` 7 条**(关键参数抛 ValueError,次要参数 warn fallback)
+- **D5 样本过滤**:仅计 INNER JOIN price_items 成功的 bidder
+- **D6 项目类型不区分**(统一阈值)
+- **D7 evidence 预留 `baseline: null` + `llm_explanation: null` 两 follow-up 占位字段**
+- **D8 Agent 级 skip 哨兵** 贴 C10/C11(score=0.0 + participating_subdims=[] + skip_reason)
+- **D9 algorithm version `price_anomaly_v1`**
+
+### apply 阶段就地敲定
+
+- **现场事实修正**:spec 原文"parse_status='priced'"在 `bidders.PARSE_STATUSES = {pending, extracting, extracted, skipped, partial, failed, needs_password}` 中不存在 — 此枚举无 `priced` 值;简化为通过 INNER JOIN price_items 自动过滤(有 price_item = 已成功解析报价),语义等价
+- **`EXPECTED_AGENT_COUNT` 不在模块加载期 assert**:装饰器注册顺序不保证全部完成再 assert,改由 L1 测试断言(更干净)
+- **DIMENSION_WEIGHTS 调整**:需要新增 `price_anomaly=0.07`,从 `price_consistency 0.15→0.10` + `image_reuse 0.07→0.05` 释放,总和仍 = 1.00;既有测试 `test_all_dimensions_100_high` 需追加 `price_anomaly` OA 项(原只写 10 项导致 total=93)
+- **`test_medium_threshold` 注释修正**:原 `price_consistency 0.15*100=15`,现 `0.10*100=10`;总分从 49 → 44,仍在 medium 区间
+- **测试 seed fixture 修复**:`PriceParsingRule` 是 **project 级**(非 document 级),L1 extractor test 初版用 `bid_document_id` 字段错误,改为 `project_id`
+- **L2 Scenario 5 修改**:disabled 路径若 ctx 带 session 仍会写 OverallAnalysis 行(evidence enabled=false);"extractor 未调用"断言移到 L1(用 mock)验证
+- **前端前置扫描**:grep `analysis_reports / AGENT_REGISTRY` 前端硬编码 10 未发现,reports.py 用 `ALL_DIMENSIONS = tuple(DIMENSION_WEIGHTS.keys())` 动态取,自动适配 11
+
+### 文档联动
+
+- **`backend/README.md`** 新增 "C12 detect-agent-price-anomaly 依赖" 段:Q1~Q4 决策注释 + 算法说明 + 7 env + `algorithm=price_anomaly_v1` + DIMENSION_WEIGHTS 调整记录
+- **`openspec/specs/detect-framework/spec.md`** sync:MODIFIED 3 Requirement(10 Agent 注册表 / preflight 自检 / 10 Agent 骨架文件)+ ADDED 5 Req(preflight+helper / extractor / detector / skip+evidence / env),total 52 → 57 Req
+- **`docs/execution-plan.md`** §6 追加 1 行:`2026-04-15 | C12 Agent 注册表扩至 11 Agent | 第一性原理审:price_anomaly 是物理 global 关系...`
+- **`.gitignore`** 加 `c12-*` L3 artifacts 白名单
+- **`docs/handoff.md`** 即本次更新
+
+---
+
+## 2.bak_C11 上一 session 关键决策(2026-04-15,C11 propose+apply+archive)
 
 ### propose 阶段已敲定(5 决策,Q5 是第一性原理审新增)
 
@@ -77,7 +118,7 @@
 
 ---
 
-## 2.bak2 上上 session 关键决策(2026-04-15,C9 propose+apply+archive)
+## 2.bak_C10 上上 session 关键决策(2026-04-15,C9 propose+apply+archive)
 
 ### propose 阶段已敲定(4 决策)
 
@@ -109,7 +150,7 @@
 
 ---
 
-## 2.bak3 上上上 session 决策(2026-04-15,C8 apply+archive)
+## 2.bak_C8 上上上 session 决策(2026-04-15,C8 apply+archive)
 
 ### propose 阶段已敲定(4 决策)
 
@@ -129,7 +170,13 @@
 
 ## 3. 待确认 / 阻塞
 
-- 无硬阻塞,**M3 进度 6/9**,C11 已 archive,本次 commit 后继续 C12
+- 无硬阻塞,**M3 进度 7/9**,C12 已 archive,本次 commit 后继续 C13
+- **Follow-up(C12 新增)**:**L3 手工凭证待补**(延续 C5~C11):Docker kernel-lock 解除后,按 `e2e/artifacts/c12-2026-04-15/README.md` 步骤跑 5 张截图(启动检测 / outlier 命中 evidence 展开 / 样本不足 skip / threshold env 覆盖 / enabled=false)
+- **Follow-up(C12 新增)**:**标底路径实施**(design D7 预留 evidence.baseline=null 占位):独立 change / C17 admin 后台时一起做;数据层加字段(`ProjectPriceConfig.baseline_total` 或独立 baseline 表) + 前端配置 UI + 修改 detector 支持双路
+- **Follow-up(C12 新增)**:**direction=high/both 实施**:env 字段已预留,detector 本期 fallback + warn;实战反馈若需要陪标高价信号再开
+- **Follow-up(C12 新增)**:**C14 LLM 解释回填 `llm_explanation`**:evidence 结构已预留 null 字段,C14 综合研判时回填"低价是否合理"(如国企自产钢材 / 本地施工无差旅 → 合理低价)
+- **Follow-up(C12 新增)**:**项目类型区分阈值**(design D6 决策):本期统一 30%,实战若总包项目误报率偏高,加 `PRICE_ANOMALY_DEVIATION_THRESHOLD_<TYPE>` per-type 覆盖
+- **Follow-up(C12 新增)**:**robust 中位数 + IQR 升级**:初版用均值 + 百分比阈值,极端值(1 家报 1 元)会拉偏均值;实战若有类似干扰再升级
 - **Follow-up(C11 新增)**:**L3 手工凭证待补**(延续 C5~C10):Docker kernel-lock 解除后,按 `e2e/artifacts/c11-2026-04-15/README.md` 步骤跑 7 张截图(启动检测 / 4 子检测 evidence 展开 / series.ratio 命中可视化 / flag 单关 evidence)
 - **Follow-up(C11 新增)**:**修 spec/design 中字段路径偏差**:propose 期 design.md / spec.md 写"`price_parsing_rule.currency / tax_included`",实际字段在 `project_price_configs.currency / tax_inclusive`(项目级);代码已对(根本不读这些字段),只是文档需 cleanup;留 follow-up cleanup change(可与 C9 ruff 修复合并)
 - **Follow-up(C11 新增)**:**series 阈值实战调参**:`PRICE_CONSISTENCY_SERIES_RATIO_VARIANCE_MAX=0.001` / `DIFF_CV_MAX=0.01` 是经验值;实战数据反馈后首 PR 调参;env 覆盖即可,不动代码
@@ -155,40 +202,36 @@
 ## 4. 下次开工建议
 
 **一句话交接**:
-> **C11 `detect-agent-price-consistency` 已归档,M3 进度 6/9**。L1+L2 = **694 全绿**,C11 新增 69 用例;L3 延续手工凭证。下一步 `git push`(本次 archive commit 已产生),然后进 M3 下一个 change `/opsx:propose` 开 **C12 `detect-agent-price-anomaly`**(异常低价 Agent:相对均值/相对标底,垂直关系)。
+> **C12 `detect-agent-price-anomaly` 已归档,M3 进度 7/9**。L1+L2 = **743 全绿**,C12 新增 49 用例;L3 延续手工凭证。注册表从 10 → 11(新增 global 型 `price_anomaly`)。下一步 `git push`(本次 archive commit 已产生),然后进 M3 下一个 change `/opsx:propose` 开 **C13 `detect-agents-global`**(3 global 剩余:`error_consistency / style / image_reuse`)。
 
 **可直接粘贴给 AI 作为新会话起点**:
 ```
-继续 documentcheck 项目。M3 进度 6/9,C11 detect-agent-price-consistency 已 archive + commit。
-下一步进 C12 /opsx:propose detect-agent-price-anomaly:
-  - 替换 app/services/detect/agents/price_anomaly.py 的 dummy run()(若是 global 型则改 global agent 文件)
-  - 消费 C5 PriceItem 表(每 bidder 报价明细项)
-  - 算法(execution-plan §3 C12 原文):
-      相对均值 : 单家相对项目均值偏离 N% 触发
-      相对标底 : 单家相对配置标底偏离触发(可选标底)
-  - 兜底(execution-plan §3 C12 原文):
-      样本 < 3 家 → 保守不触发
-      标底未配置 → 仅按均值判断并说明
-  - 不动框架:registry / engine / judge / context 全锁定;只改 1 Agent 文件 + 可能新增 anomaly_impl/ 子包
-  - 可复用 C11 模式:共享 normalizer / extractor 模式 + flag 开关 + Agent 级 skip 哨兵
-  - C12 = 垂直关系(单家 vs 群体);C11 已做完水平关系(bidder 之间)
-对应 docs/execution-plan.md §3 C12 小节。
-请先读 docs/handoff.md 确认现状,然后 openspec-propose 为 C12 生成 artifacts。
-propose 阶段需用户敲定:
-  - 偏离阈值(上下浮动 N%);默认值多少;是否区分项目类型(总包/单项)
-  - 标底字段位置(目前未在 PriceItem 表;是否扩 PriceParsingRule 加 baseline_total / 走 ProjectPriceConfig 扩字段 / 走独立 baseline 表)
-  - sample_size 下限(execution-plan §3 C12 原文 "< 3 家保守不触发",是否调到 5)
-  - LLM 是否参与异常解释(如"低 30% 但是合理报价"语义判断)— 默认走 C14
-也可以检查一下memory 和 claude.md。
+继续 documentcheck 项目。M3 进度 7/9,C12 detect-agent-price-anomaly 已 archive + commit + push。
+下一步进 C13 /opsx:propose detect-agents-global:
+  - 替换 剩余 3 global Agent 的 dummy run():error_consistency / style / image_reuse
+  - execution-plan §3 C13 对应 3 小节(可能拆成 3 个 sub-change 或合并成 1 个,propose 期决策)
+  - error_consistency:LLM 语义类,消费 identity_info(bidder 级);preflight 返 downgrade 的降级路径已就绪
+  - style:格式风格类,可能是纯程序化或双轨
+  - image_reuse:图片 MD5 / 感知 hash 碰撞,消费 document_images 表
+  - 不动框架:registry / engine / judge / context 全锁定(C12 已扩至 11 Agent);只改 3 Agent 文件
+  - 可复用 C12 模式:新增 global 型 Agent 子包 + write_overall_analysis_row helper + Agent 级 skip 哨兵 + evidence.enabled/outliers 语义
+  - C13 后 M3 进度 8/9,剩 C14 LLM 综合研判作为 M3 收官
+对应 docs/execution-plan.md §3 C13 小节。
+请先读 docs/handoff.md 确认现状(M3 状态 / C12 留下的 follow-ups / 11 Agent 注册表契约已锁定),然后 openspec-propose 为 C13 生成 artifacts。
+propose 阶段需用户敲定(按"只问产品/范围级决策,一次一个"规则):
+  - 3 Agent 是合并 1 个 change 还是拆 3 个(scope 粒度决策)
+  - error_consistency 降级路径的语义(当一方 identity_info 空时,run 用哪些字段交叉)
+  - style / image_reuse 的算法档位(LLM 介入深度:纯程序 / 双轨 / 全 LLM)
+  - image_reuse 的相似度阈值与算法选型(pHash / dHash / MD5 + 二次确认)
+也可以检查一下 memory 和 claude.md。
 ```
 
-**C12 前的预备条件(已就绪)**:
+**C13 前的预备条件(已就绪)**:
 
-- **C5 `PriceItem` 表已就绪**:`bidder_id / sheet_name / row_index / item_code / item_name / unit / quantity / unit_price / total_price` 字段(注意 currency / tax_inclusive 在 `project_price_configs` 项目级,不在 PriceItem 行级)
-- **C6 `_preflight_helpers.bidder_has_priced`** 已就绪;C12 可考虑加 `project_has_priced_bidders(session, project_id, min_count=3)` helper
-- **`_dummy.py` 给剩 3 Agent 用**;C12 后剩 2 Agent dummy(error_consistency / style / image_reuse 取决于 C12 选哪个)— 注意 execution-plan §3 C12 = `price_anomaly`,但 C6 注册的 10 Agent 名字里没有 `price_anomaly`(只有 7 pair + 3 global = error_consistency / style / image_reuse),需先核对 execution-plan §3 与 C6 注册名是否对齐;若不对齐需先在 propose 阶段决策注册名扩展或 execution-plan 修正
-- **registry / engine / judge / context** 全锁定不变;C12 只改 1 Agent 文件
-- **C11 price_impl/ 模式可复用**:共享子包 + NFKC normalizer + scorer 合成 + flag 开关 + evidence.enabled/participating_subdims 哨兵语义
+- **C5/C6 底层就绪**:`document_images`(image_reuse 消费)/ `bidder.identity_info` JSONB(error_consistency 消费)/ `document_texts`(style 消费)
+- **C12 扩注册表已落地**:11 Agent 契约稳定,C13 不改注册表,只改 3 Agent 文件的 run() 实现
+- **anomaly_impl 模式可复用**:global 型子包结构 + write_overall_analysis_row helper + Agent 级 skip 哨兵(score=0.0 + participating_subdims=[] + skip_reason)
+- **`_preflight_helpers`** 已积累 7 个 helper(含 C12 新增 `project_has_priced_bidders`),C13 可能需加 `project_has_images` / `project_has_identity_info` 类似 helper
 
 ---
 
@@ -196,8 +239,8 @@ propose 阶段需用户敲定:
 
 | 日期 | 变更 |
 |---|---|
-| 2026-04-15 | **C11 `detect-agent-price-consistency` 归档(M3 进度 6/9)**:**检测层**:新增 `price_impl/` 11 文件(__init__ 含 write_pair_comparison_row 复用 C10 / config 13 env + 4 子检测 dataclass / models TypedDict / normalizer NFKC + Decimal split_price_tail truncate+zfill / extractor 按 sheet 分组+预计算 / 4 detector(tail (tail_3,int_len) 组合 key 防量级误撞 / amount_pattern (item_name,unit_price) 对精确匹配 / item_list 两阶段对齐"同项同价"+item_name 兜底 / **series_relation Q5 第一性原理审新增** 同模板对齐序列 ratios 方差+diffs CV 双路命中) / scorer 4 子检测加权合成,disabled/None 不参与归一化)+ 重写 `price_consistency.py::run()`(4 flag 全关早返;Agent 级 skip score=0.0+participating_subdims=[] 哨兵);**测试 694 全绿**(C11 新增 69 用例:L1 64 + L2 5);零 LLM 引入;**5 决策**:Q1 (B) 尾数组合 key / Q2 币种含税完全忽略 / Q3 (C) 两阶段对齐 / Q4 (A) 只走 PriceItem / **Q5 (A) 第一性原理审新增 series**;apply 意外:测试构造 bug 修一次 / 现场发现字段实际在 project_price_configs(留 cleanup) / scorer 三态 evidence(disabled/None/未执行)/ Agent 早返路径;spec sync +10 ADDED+1 MODIFIED Req(detect-framework 42→52);execution-plan §6 追加 C11 scope 扩展记录;**memory 新增 `feedback_first_principles_review.md`**(自审常驻第 3 项);L3 延续手工凭证 |
+| 2026-04-15 | **C12 `detect-agent-price-anomaly` 归档(M3 进度 7/9)**:**注册表扩 10→11**(新增 global 型 `price_anomaly`):registry.py 加 `EXPECTED_AGENT_COUNT=11` 常量 + agents/__init__.py 加 import;**检测层**:新增 `anomaly_impl/` 6 文件(__init__ 含 `write_overall_analysis_row` 对齐 C11 / config 7 env + AnomalyConfig + 严格/宽松两类校验 / models 三 TypedDict / extractor 单次 SQL INNER JOIN 聚合 + bidder_id 升序 + max_bidders 截断 + 软删排除 / detector mean 计算 + deviation 判定 + mean==0 兜底 + direction 非 low fallback+warn / scorer 占位 min(100, N*30+max(|dev|)*100))+ `price_anomaly.py` Agent 三层兜底(ENABLED=false 早返 / preflight skip / run 边缘 skip 哨兵);**`_preflight_helpers.project_has_priced_bidders`** 单次 COUNT(DISTINCT) + INNER JOIN 自动过滤;**judge.py DIMENSION_WEIGHTS** 调整(+price_anomaly=0.07 / price_consistency 0.15→0.10 / image_reuse 0.07→0.05);**测试 743 全绿**(C12 新增 49 用例:L1 43 + L2 5 + 注册表 1);**4 决策**:Q1 sample_size=3 / Q2 (C) 标底留 follow-up / Q3 只抓低+30% / Q4 (A) LLM 留 C14;apply 现场:parse_status='priced' 非 Bidder 枚举值改用 INNER JOIN 语义 / EXPECTED_AGENT_COUNT 不在模块加载期 assert 改测试断言 / test_all_dimensions_100_high 追加 price_anomaly OA 项修 93→100 / PriceParsingRule project 级非 document 级 fixture 修复 / L2 Scenario 5 disabled 路径仍写 OverallAnalysis 断言移 L1;spec sync +5 ADDED+3 MODIFIED Req(detect-framework 52→57);execution-plan §6 追加 C12 注册表扩展记录;L3 延续手工凭证 |
+| 2026-04-15 | **C11 `detect-agent-price-consistency` 归档(M3 进度 6/9,commit 94e8f18)**:**检测层**:新增 `price_impl/` 11 文件(__init__ 含 write_pair_comparison_row 复用 C10 / config 13 env + 4 子检测 dataclass / models TypedDict / normalizer NFKC + Decimal split_price_tail truncate+zfill / extractor 按 sheet 分组+预计算 / 4 detector(tail (tail_3,int_len) 组合 key 防量级误撞 / amount_pattern (item_name,unit_price) 对精确匹配 / item_list 两阶段对齐"同项同价"+item_name 兜底 / **series_relation Q5 第一性原理审新增** 同模板对齐序列 ratios 方差+diffs CV 双路命中) / scorer 4 子检测加权合成,disabled/None 不参与归一化)+ 重写 `price_consistency.py::run()`(4 flag 全关早返;Agent 级 skip score=0.0+participating_subdims=[] 哨兵);**测试 694 全绿**(C11 新增 69 用例:L1 64 + L2 5);零 LLM 引入;**5 决策**:Q1 (B) 尾数组合 key / Q2 币种含税完全忽略 / Q3 (C) 两阶段对齐 / Q4 (A) 只走 PriceItem / **Q5 (A) 第一性原理审新增 series**;apply 意外:测试构造 bug 修一次 / 现场发现字段实际在 project_price_configs(留 cleanup) / scorer 三态 evidence(disabled/None/未执行)/ Agent 早返路径;spec sync +10 ADDED+1 MODIFIED Req(detect-framework 42→52);execution-plan §6 追加 C11 scope 扩展记录;**memory 新增 `feedback_first_principles_review.md`**(自审常驻第 3 项);L3 延续手工凭证 |
 | 2026-04-15 | **C10 `detect-agents-metadata` 归档(M3 进度 5/9,commit 7573deb)**:**数据层延伸**:扩 `DocumentMetadata.template` 字段 + alembic 0007 + parser 扩 + 回填脚本;**检测层**:新增 `metadata_impl/` 9 文件 + 重写 3 Agent run()(author 三字段精确聚类 hit_strength=`|∩|/min` / time modified 5min 滑窗 + created 精确相等 / machine 三字段元组精确碰撞);**测试 625 全绿**(C10 新增 75 用例);零 LLM 引入;关键决策:合并一个 change / 扩 C5 持久化 + 回填 / 纯精确 + NFKC;spec sync +8 Req(detect-framework 34→42)+ 2 Req(parser-pipeline 15→17) |
 | 2026-04-15 | **C9 `detect-agent-structure-similarity` 归档(M3 进度 4/9,commit 8bbda15)**:**数据层延伸**:新增 `document_sheets` 表 + alembic 0006 + 回填脚本;**检测层**:新增 `structure_sim_impl/` 8 文件 + 重写 `structure_similarity.py::run()` 三维度纯程序化(目录 LCS / 字段 Jaccard / 填充 Jaccard);**测试 550 全绿**(C9 新增 103 用例);零 LLM 引入;关键决策:C 选项跨层延伸持久化;spec sync +5 Req(detect-framework)+ 3 Req(parser-pipeline) |
 | 2026-04-15 | **C8 `detect-agent-section-similarity` 归档(M3 进度 3/9,commit dae65ac)**:新增 `section_sim_impl/` 8 文件 + 重写 `section_similarity.py::run()` 章节级双轨算法(5 PATTERN 切章 → title TF-IDF 贪心对齐 + 序号回退 → 复用 C7 text_sim_impl);L1 266 / L2 182 = 448 pass;C8 新增 38 用例 |
-| 2026-04-15 | **C7 `detect-agent-text-similarity` 归档(M3 进度 2/9,commit ad7c779)**:新增 `text_sim_impl/` 7 文件 + 重写 `text_similarity.py::run()` 双轨算法(TF-IDF+cosine + LLM 定性);L1 232 / L2 178 = 410 pass;C7 新增 49 用例 |

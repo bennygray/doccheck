@@ -360,3 +360,4 @@ M4  C15 report-export
 | 2026-04-14 | 首版定稿(17 change,严格串行) | 项目立项 |
 | 2026-04-14 | C1 范围收敛:异步任务框架移至 C6 | C1 阶段无真实消费者,独立验证困难,避免提前做宽 |
 | 2026-04-15 | C11 scope 扩 series_relation 子检测 | 第一性原理审暴露遗漏(水平关系/等差等比),水平关系归 C11,垂直关系归 C12 |
+| 2026-04-15 | C12 Agent 注册表扩至 11 Agent(新增 global 型 `price_anomaly`) | 第一性原理审:`price_anomaly` 是物理 global 关系(单家 vs 群体),独立 Agent 语义清晰;C6 原 10 Agent 非物理必然,execution-plan §3 命名 `price_anomaly` 本就预期独立 Agent |

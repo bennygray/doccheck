@@ -66,6 +66,11 @@ def compute_report(
         prev = per_dim_max.get(oa.dimension, 0.0)
         if score > prev:
             per_dim_max[oa.dimension] = score
+        # C13: global 型 Agent 的铁证标记从 evidence_json["has_iron_evidence"] 读
+        # (PairComparison.is_ironclad 是 pair 型 Agent 的铁证字段;global 型走 OA)
+        ev = getattr(oa, "evidence_json", None) or {}
+        if isinstance(ev, dict) and ev.get("has_iron_evidence") is True:
+            has_ironclad = True
 
     total = sum(
         per_dim_max.get(dim, 0.0) * weight

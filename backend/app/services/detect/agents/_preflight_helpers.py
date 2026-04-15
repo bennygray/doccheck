@@ -130,6 +130,20 @@ async def bidders_share_role_with_ext(
     return bool(roles_a & roles_b)
 
 
+def bidder_has_identity_info(bidder) -> bool:
+    """检查 bidder.identity_info 字段非空且 dict 非空 (C13 error_consistency)。
+
+    None / 非 dict / 空 dict 全返 False。
+    同步函数(纯属性判断,不查 DB)。
+    """
+    info = getattr(bidder, "identity_info", None)
+    if info is None:
+        return False
+    if not isinstance(info, dict):
+        return False
+    return bool(info)
+
+
 async def project_has_priced_bidders(
     session: AsyncSession,
     project_id: int,
@@ -161,5 +175,6 @@ __all__ = [
     "bidder_has_metadata",
     "bidder_has_priced",
     "bidder_has_images",
+    "bidder_has_identity_info",
     "project_has_priced_bidders",
 ]

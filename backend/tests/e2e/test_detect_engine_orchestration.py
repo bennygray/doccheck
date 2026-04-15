@@ -97,7 +97,28 @@ async def test_run_detection_happy_path(
 async def test_run_detection_agent_timeout(
     seeded_reviewer: User, reviewer_token, auth_client, monkeypatch
 ):
-    """AGENT_TIMEOUT_S=0.05 → dummy Agent sleep 0.2-1.0s 必然超时。"""
+    """AGENT_TIMEOUT_S 极小 → 被 patch 的 Agent 超时。
+
+    C13 后全部 Agent 已替换为真实算法(dummy sleep 已不存在);
+    用 monkeypatch 把 text_similarity.run 包成 0.5s sleep 确保触发 timeout 路径。
+    """
+    import asyncio as _aio
+
+    from app.services.detect.registry import AGENT_REGISTRY as _REG
+
+    async def _slow_run(_ctx):  # noqa: ANN001
+        await _aio.sleep(0.5)
+        from app.services.detect.context import AgentRunResult
+        return AgentRunResult(score=0.0, summary="slow")
+
+    # error_consistency preflight 对 identity_info={"x":i} seed 数据不 skip,
+    # 让 run() 实际被执行,触发 timeout 路径
+    monkeypatch.setitem(
+        _REG,
+        "error_consistency",
+        _REG["error_consistency"]._replace(run=_slow_run),
+    )
+
     monkeypatch.delenv("INFRA_DISABLE_DETECT", raising=False)
     monkeypatch.setenv("AGENT_TIMEOUT_S", "0.05")
     monkeypatch.setenv("GLOBAL_TIMEOUT_S", "30")

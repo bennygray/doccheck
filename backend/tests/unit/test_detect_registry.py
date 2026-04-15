@@ -53,6 +53,24 @@ def test_price_anomaly_is_global():
     assert spec.agent_type == "global"
 
 
+def test_no_dummy_run_after_c13():
+    """C13 后 11 Agent 全部 run() 已替换为真实实现,dummy 列表清空。
+
+    验证方式:检查三 global Agent 的 run 函数源模块路径不再含 _dummy。
+    """
+    import inspect
+
+    for name in ("error_consistency", "image_reuse", "style"):
+        spec = get_agent(name)
+        assert spec is not None
+        src_module = inspect.getmodule(spec.run)
+        assert src_module is not None
+        # 真实 run 应在对应 Agent 自己的模块,不在 _dummy
+        assert "_dummy" not in src_module.__name__, (
+            f"{name} run() 仍指向 _dummy 模块"
+        )
+
+
 def test_get_agent_by_name():
     spec = get_agent("text_similarity")
     assert spec is not None

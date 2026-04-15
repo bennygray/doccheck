@@ -1,11 +1,15 @@
-"""11 Agent 骨架模块集合 (C6 detect-framework + C12 扩展)
+"""11 Agent 骨架模块集合 (C6 detect-framework + C12 + C13)
 
 import 时触发每个子模块的 @register_agent 装饰器,把 AgentSpec 写入
 `app.services.detect.registry.AGENT_REGISTRY`。
 
-C6 阶段所有 run() 均为 dummy(sleep + 随机分);
+C13 归档后,**全部 11 Agent 的 run() 均为真实算法,dummy 列表清空**。
 C7~C13 各 change 替换对应 run() 实现,保持 preflight / 注册 key / 签名不变。
-C12 扩注册表至 11(新增 global 型 `price_anomaly`)。
+- C7 text_similarity / C8 section_similarity / C9 structure_similarity
+- C10 metadata_author / metadata_time / metadata_machine
+- C11 price_consistency
+- C12 price_anomaly(新增 global,直接带真实 run)
+- C13 error_consistency / image_reuse / style(3 global 替换 dummy)
 """
 
 from app.services.detect.agents import (  # noqa: F401

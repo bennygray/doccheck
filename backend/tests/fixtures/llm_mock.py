@@ -204,6 +204,191 @@ def mock_llm_section_sim_degraded() -> ScriptedLLMProvider:
     )
 
 
+# C13 新增:error_consistency L-5 + style L-8 两阶段 mock 工厂 -----------------
+
+
+def make_l5_response(
+    *,
+    is_cross_contamination: bool = True,
+    direct_evidence: bool = True,
+    confidence: float = 0.85,
+    evidence_items: list[dict] | None = None,
+) -> str:
+    """构造 error_consistency L-5 LLM 响应 JSON。"""
+    import json
+
+    return json.dumps(
+        {
+            "is_cross_contamination": is_cross_contamination,
+            "direct_evidence": direct_evidence,
+            "confidence": confidence,
+            "evidence": evidence_items or [
+                {
+                    "type": "公司名混入",
+                    "snippet": "mock snippet",
+                    "position": "body",
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+
+@pytest.fixture
+def mock_llm_l5_iron() -> ScriptedLLMProvider:
+    """L-5 返铁证(direct_evidence=true)。"""
+    return ScriptedLLMProvider(
+        [make_l5_response(direct_evidence=True)], loop_last=True
+    )
+
+
+@pytest.fixture
+def mock_llm_l5_non_iron() -> ScriptedLLMProvider:
+    """L-5 返污染但非铁证。"""
+    return ScriptedLLMProvider(
+        [
+            make_l5_response(
+                is_cross_contamination=True,
+                direct_evidence=False,
+                confidence=0.6,
+            )
+        ],
+        loop_last=True,
+    )
+
+
+@pytest.fixture
+def mock_llm_l5_no_contamination() -> ScriptedLLMProvider:
+    """L-5 返无污染。"""
+    return ScriptedLLMProvider(
+        [
+            make_l5_response(
+                is_cross_contamination=False,
+                direct_evidence=False,
+                confidence=0.1,
+            )
+        ],
+        loop_last=True,
+    )
+
+
+@pytest.fixture
+def mock_llm_l5_failed() -> ScriptedLLMProvider:
+    """L-5 全部 timeout(触发兜底:仅程序 evidence)。"""
+    return ScriptedLLMProvider(
+        [LLMError(kind="timeout", message="mocked L-5 timeout")],
+        loop_last=True,
+    )
+
+
+@pytest.fixture
+def mock_llm_l5_bad_json() -> ScriptedLLMProvider:
+    """L-5 返非 JSON,触发解析失败兜底。"""
+    return ScriptedLLMProvider(["not json at all"], loop_last=True)
+
+
+def make_l8_stage1_response(
+    *,
+    word_pref: str = "口语化、多用'我们'",
+    sentence_style: str = "短句为主",
+    punctuation: str = "顿号偏好",
+    paragraph: str = "总分总结构",
+) -> str:
+    """构造 style L-8 Stage1 响应 JSON。"""
+    import json
+
+    return json.dumps(
+        {
+            "用词偏好": word_pref,
+            "句式特点": sentence_style,
+            "标点习惯": punctuation,
+            "段落组织": paragraph,
+        },
+        ensure_ascii=False,
+    )
+
+
+def make_l8_stage2_response(
+    consistent_groups: list[dict] | None = None,
+) -> str:
+    """构造 style L-8 Stage2 响应 JSON。
+
+    consistent_groups: [{"bidder_ids": [int], "consistency_score": float, "typical_features": str}]
+    """
+    import json
+
+    return json.dumps(
+        {
+            "consistent_groups": consistent_groups
+            or [
+                {
+                    "bidder_ids": [1, 2],
+                    "consistency_score": 0.85,
+                    "typical_features": "mock typical features",
+                }
+            ]
+        },
+        ensure_ascii=False,
+    )
+
+
+@pytest.fixture
+def mock_llm_l8_full_success() -> ScriptedLLMProvider:
+    """L-8 两阶段全成功(Stage1 多次返同一 brief + Stage2 返一致组)。
+
+    用 loop_last=True 让 Stage1 多次调用都返同一 brief;Stage2 单次。
+    实际多次调用时 Stage1 brief 会重复(测试场景默认 N 家用相同 mock brief),
+    Stage2 触发后用 stage2_response 覆盖。
+    """
+    # 注意:此 fixture 用顺序脚本 — 测试时 Stage1 调 N 次,Stage2 调 1 次
+    # ScriptedLLMProvider loop_last=True 让 Stage2 之后的调用都返 stage2 响应
+    return ScriptedLLMProvider(
+        [
+            make_l8_stage1_response(),  # 默认 Stage1 第一次
+            make_l8_stage1_response(),  # Stage1 第二次
+            make_l8_stage1_response(),  # Stage1 第三次
+            make_l8_stage2_response(),  # Stage2(loop_last 兜底)
+        ],
+        loop_last=True,
+    )
+
+
+@pytest.fixture
+def mock_llm_l8_stage1_failed() -> ScriptedLLMProvider:
+    """L-8 Stage1 全部失败 → Agent skip。"""
+    return ScriptedLLMProvider(
+        [LLMError(kind="timeout", message="mocked L-8 Stage1 timeout")],
+        loop_last=True,
+    )
+
+
+@pytest.fixture
+def mock_llm_l8_stage2_failed() -> ScriptedLLMProvider:
+    """L-8 Stage1 成功,Stage2 失败。
+
+    脚本顺序:Stage1 N 次成功 + 1 次 Stage2 失败(需要 loop_last 让后续 Stage2
+    重试也返同一 LLMError)。
+    Stage1 默认全成功(loop_last 之前 brief 多份);Stage2 失败由 ScriptedLLM 单
+    error 控制。本 fixture 无法精确控制"先 N 次成功后失败" — 调用方需自行
+    用 monkeypatch 拦截 call_l8_stage2 单独 mock 失败。
+    """
+    return ScriptedLLMProvider(
+        [
+            make_l8_stage1_response(),
+            make_l8_stage1_response(),
+            make_l8_stage1_response(),
+            LLMError(kind="timeout", message="mocked L-8 Stage2 timeout"),
+        ],
+        loop_last=True,
+    )
+
+
+@pytest.fixture
+def mock_llm_l8_bad_json_stage1() -> ScriptedLLMProvider:
+    """L-8 Stage1 返非 JSON。"""
+    return ScriptedLLMProvider(["not json"], loop_last=True)
+
+
 class ScriptedLLMProvider:
     """按调用顺序依次返不同响应/错 的 provider。
 

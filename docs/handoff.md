@@ -11,15 +11,59 @@
 
 | 项 | 值 |
 |---|---|
-| 当前里程碑 | **M3 进行中(8/9)**,C13 `detect-agents-global` 已 archive,待 commit |
-| 当前 change | C13 已 archive,即将随本次 commit 一起提交 |
-| 当前任务行 | N/A |
-| 最新 commit | C12 归档 `f04eb30` — C13 archive commit 即将产生 |
+| 当前里程碑 | **M3 完成(9/9)🎉 — M3 收官** |
+| 当前 change | C14 `detect-llm-judge` 已 apply,即将 archive + commit |
+| 当前任务行 | N/A(M3 全部完成,下一步进 M4 C15 report-export) |
+| 最新 commit | C13 归档 `74ad9c8` — C14 archive commit 即将产生 |
 | 工作区 | C13 全量改动:**检测层(C13 主体)**:**新增 3 子包共 18 文件**(`error_impl/` 7:`__init__.py` 复用 anomaly_impl write_overall_analysis_row / `config.py` 5 env / `models.py` 5 TypedDict(KeywordHit / SuspiciousSegment / LLMJudgment / PairResult / DetectionResult)/ `keyword_extractor.py` 4 类字段平铺+短词过滤+NFKC 归一+去重+downgrade 退化 bidder.name / `intersect_searcher.py` 双向跨 bidder 子串匹配+MAX_CANDIDATE_SEGMENTS 截断按 matched_keywords 倒序 / `llm_judge.py` L-5 调用+系统 prompt+JSON 解析容错+重试 / `scorer.py` pair 级+Agent 级 max 公式;`image_impl/` 5:`__init__.py` / `config.py` 5 env(PHASH 严格 0~64)/ `models.py` 3 TypedDict(MD5Match/PHashMatch/DetectionResult)/ `hamming_comparator.py` SQL 过滤小图+MD5 INNER JOIN+pHash `imagehash.hex_to_hash().__sub__`+同对图去重+MAX_PAIRS 截断 / `scorer.py`;`style_impl/` 6:`__init__.py` / `config.py` 6 env(SAMPLE 严格 5~10)/ `models.py` 4 TypedDict(StyleFeatureBrief/ConsistentGroup/GlobalComparison/DetectionResult)/ `sampler.py` technical 角色+TfidfVectorizer IDF 过滤+长度过滤 100~300+均匀抽样 / `llm_client.py` L-8 Stage1+Stage2+共享 `_call_with_retry_and_parse`(解析失败消费重试名额) / `scorer.py`+LIMITATION_NOTE 固定文案)+ **重写 3 Agent run()**(`error_consistency.py` 5 层兜底:ENABLED=false 早返 / preflight 任一缺 downgrade 标记仍调 L-5 / 无可抽关键词 skip 哨兵 / L-5 失败仅展示程序 evidence 不铁证 / L-5 direct_evidence=true → has_iron_evidence=True;遍历 C(n,2) pair 产 pair_results 列表;写 1 行 OA;`image_reuse.py` 3 层兜底:disabled 早返 / 小图过滤后 0 张 skip 哨兵 / 正常双路;`style.py` 4 层兜底:disabled / preflight skip / Stage1 失败 / Stage2 失败;>20 bidder 按 `STYLE_GROUP_THRESHOLD=20` 自动分组每组独立跑 Stage1+Stage2,组间不跨比)+ **`_preflight_helpers.bidder_has_identity_info`** 新增(同步纯属性判断,None/非 dict/空 dict 全返 False)+ **判别层**:`judge.py::compute_report` +3 行支持 global 型 Agent 铁证升级(读 `OverallAnalysis.evidence_json["has_iron_evidence"]`)+ **LLM mock 扩展**:`tests/fixtures/llm_mock.py` 扩 L-5 + L-8 两阶段 9 builder/fixture(`make_l5_response` / `mock_llm_l5_iron/non_iron/no_contamination/failed/bad_json` / `make_l8_stage1_response` / `make_l8_stage2_response` / `mock_llm_l8_full_success/stage1_failed/stage2_failed/bad_json_stage1`)+ **agents/__init__.py** 文件头注释清 dummy(dummy 列表已空)+ **L1 16 test 文件 131 新用例**(error 7:config 10 / keyword_extractor 10 / intersect_searcher 8 / llm_judge 9 / scorer 7 / preflight 8 / run 7;image 4:config 8 / hamming_comparator 10 / scorer 5 / run 6;style 5:config 10 / sampler 9 / llm_client 8 / scorer 6 / run 9)+ **L2 3 test 文件 8 Scenario**(error 4 / image 2 / style 2)+ **`test_detect_registry.py` 新增 `test_no_dummy_run_after_c13`**(inspect 三 global Agent run 模块路径无 _dummy)+ **既有测试调整 3 处**(`test_detect_judge.py` judge.py 改动后 `getattr(oa, "evidence_json", None) or {}` 兼容既有 SimpleNamespace mock;`test_run_detection_agent_timeout` monkeypatch error_consistency 为 0.5s sleep 慢 run 触发 timeout 路径,贴真实 Agent 不再 sleep 事实;`test_dummy_global_run_writes_overall_analysis` 保留 — style.run 在 `< 2 bidder` 补写 OA 让前端可见 skip_reason)+ **doc_texts 行级 SQL**:apply 现场修正 — spec 写 paragraphs/header_footer JSONB 数组,实际 DocumentText 是行级表(location 字段),intersect_searcher 用 SQL 行级查询(language 等价)+ **`imagehash.__sub__` → int(...)** cast(numpy int64 JSONB 序列化失败兜底)+ `backend/README.md` 新增"C13 detect-agents-global 依赖"完整段(Q1~Q5 决策 / apply 现场决策 / 3 Agent 算法 / 16 env / LLM mock 入口 / algorithm version 3 个)+ `.gitignore` 加 `c13-*` 白名单 + `e2e/artifacts/c13-2026-04-15/README.md` L3 手工凭证占位(6 张待补截图 + L1/L2 覆盖证明)+ `openspec/specs/detect-framework/spec.md` sync(+14 ADDED + 1 MODIFIED Req,50 → 64 Req;**sync 后修正 5 处**:AgentRunResult 仍 3 字段不扩,铁证契约改为 global 走 evidence 顶层 has_iron_evidence,pair 走 PairComparison.is_ironclad)+ `docs/execution-plan.md §6` 追加 2 行(C13 改名 detect-agents-global / C14 改名 detect-llm-judge,保留 §3 原表)。**测试合计 883 全绿**(C12 基线 743 → C13 883,净增 140 用例:L1 131 + L2 8 + 注册表 1) |
 
 ---
 
-## 2. 本次 session 关键决策(2026-04-15,C13 propose+apply+archive)
+## 2. 本次 session 关键决策(2026-04-16,C14 propose+apply+archive)
+
+### propose 阶段已敲定(5 决策)
+
+- **Q1 B 预聚合结构化摘要**(用户拍板):`judge_llm.summarize(...)` 纯函数产 11 维度 × `{max_score, ironclad_count, top_k_examples, skip_reason}` 结构,token 稳定 3~8k;拒绝 A 全量 raw evidence_json 直喂(token 爆炸)/ C 分层两跳(过度设计)/ D 每维度独立 LLM(×12 成本且丢跨维度共振)
+- **Q2 A LLM 失败保留公式兜底**(用户拍板):LLM 失败 → `total/level` 恒等于 `compute_report` 公式值,`llm_conclusion` 填降级模板;拒绝 B skip 报告(5% 失败率 = 5% 白跑,违背 M3 判据)/ C 删公式路径(单点故障 + 铁证被稀释)
+- **Q3 B LLM 只升不降 + 铁证硬下限 85 守护**(用户拍板):clamp 严格 4 步;捕获"跨维度共振"升分价值同时守护铁证不被 LLM 稀释;拒绝 A 不动分(浪费 LLM 串讲价值)/ C 可升可降(铁证稳定性差)
+- **Q4 C 不做跨项目历史共现**(用户拍板):作为独立 follow-up change 登记;拒绝 B 轻量 cooccur SQL(bidder identity 去重是硬课题,name 精确匹配假阳/假阴严重,scope 溢出 detect-llm-judge 职责)
+- **Q5 C 降级模板前缀标语 + 公式结论自然语言化**(用户拍板):前缀固定 `"AI 综合研判暂不可用"` 供前端前缀 match;拒绝 A 空串(UX 空白)/ B 单行标语(浪费公式结论)/ D 新增 `llm_status` 字段(alembic 迁移 scope 溢出)
+
+### propose 阶段我自己定(实施细节,写入 design D1~D11)
+
+- **D1 预聚合结构 schema**:`{project, formula: {total,level,has_ironclad,ironclad_dimensions}, dimensions: {<dim>: {max_score,ironclad_count,participating_bidders,top_k_examples[{bidder_a,bidder_b,score,is_ironclad,evidence_brief}],skip_reason,enabled}}}`;`top_k` 按 score 倒序 + 铁证 pair/OA 无条件入 top_k(哪怕排名在 k 之外)
+- **D2 单文件 `judge_llm.py`**:3 函数平铺(summarize / call_llm_judge / fallback_conclusion);不拆子包(L-9 单流程,无 Stage/采样等分阶段需求,对比 C13 style_impl 6 文件过度设计审通过)
+- **D3 clamp 严格 4 步**:`max(formula, llm)` → 铁证 `max(_, 85)` → `min(_, 100)` → `compute_level(final)`;铁证下限逻辑与 compute_report 完全一致(`_detect_ironclad` 共享 helper)
+- **D4 失败判据统一 `(None, None)`**:不部分接受(状态爆炸);JSON 解析失败 / 缺字段 / `suggested_total` 超界 / `conclusion` 空串 / 冒犯前缀 / 超时 统一降级
+- **D5 env 命名空间 `LLM_JUDGE_*` 5 个**:ENABLED / TIMEOUT_S / MAX_RETRY / SUMMARY_TOP_K / MODEL;宽松校验非法值 fallback + warn(贴 C11/C12 风格)
+- **D6 fallback 模板 5 段**:标语 / 总分与等级 / 铁证维度(可选) / top 3 高分维度 / 建议关注(铁证优先+top 高分 dedup);纯函数对 None/空输入不抛异常
+- **D7 `compute_report` 纯函数契约不变**:C6~C13 所有既有 test 零改动;内部抽 `_compute_dims_and_iron` / `_compute_formula_total` / `_compute_level` helper 供 `judge_and_create_report` 复用避免双重实现
+- **D8 LLM provider 注入策略**:默认从 `get_llm_provider()` factory 取;测试通过 patch `judge_llm.call_llm_judge` 旁路 provider(心智模型更简单)
+- **D9 algorithm version `llm_judge_v1`**:README 登记,不落 DB 字段
+- **D10 scope 边界**:不做跨项目 SQL / 不调 DIMENSION_WEIGHTS / 不加 `AnalysisReport.llm_status` 字段 / 不抽 L-5/L-8/L-9 共享 retry+parse helper(M4 第 4 次出现再抽,避免波及 C13 100+ 用例 mock)
+- **D11 测试计划**:L1 ~50 用例(config 7 / summarize 9 / call 9 / fallback 7 / judge clamp+ironclad helper+签名 13 / registry 契约 5)+ L2 5 Scenario + L3 手工凭证占位
+
+### apply 阶段就地敲定(重要现场决策)
+
+- **`AgentRunResult` 字段名以 `context.py` 为准**:design 写 `(dimension, score, evidence)` 错了,实际是 `(score, summary, evidence_json)`(C6 定义);`test_c14_agent_run_result_contract_unchanged` 按现值断言
+- **`e2e/conftest.py` autouse fixture `_disable_l9_llm_by_default`**:既有 217 L2 若 `LLM_JUDGE_ENABLED=true`(default)会触发真实 LLM 调用 → 慢+不稳定+依赖 `LLM_API_KEY`;加 autouse patch `judge_llm.call_llm_judge` 返 `(None, None)` 走降级,**C14 新增 5 Scenario 显式覆盖此 patch**(`monkeypatch.setattr(judge_llm, "call_llm_judge", _llm_upgrade)`);这解决了"既有 test 0 改动"目标
+- **fallback 前缀哨兵 `"AI 综合研判暂不可用"`**:LLM prompt 显式约束"不得以此前缀开头",违反则视为失败重试 `_parse_llm_judge` 返 `None`;确保降级态识别稳定
+- **summarize 铁证 pair 无条件入 top_k**:即便铁证 pair score=10 排第 7 位,仍追加到 `top_k_examples` 末尾并标 `is_ironclad=true`;避免 LLM 看不到铁证信号
+- **L2 幂等测试追加**:apply 期发现原设计 4 Scenario 漏了幂等语义 → 追加 S5 测试"已有 AnalysisReport 不覆盖"(贴 `judge_and_create_report` 早返逻辑)
+- **L3 目录名 `c14-2026-04-16`**(非 `c14-2026-04-15`):C14 apply 实际落在 2026-04-16,目录名贴日期;`.gitignore` 加 `!e2e/artifacts/c14-*/**`
+
+### 文档联动
+
+- **`backend/README.md`** 新增 "C14 detect-llm-judge 依赖" 段(5 env 表格 + Q1~Q5 决策 + clamp 4 步 + apply 现场 3 决策 + LLM 调用契约 + algorithm version `llm_judge_v1`)
+- **`docs/execution-plan.md §6`** 追加 1 行 C14 归档记录(`2026-04-16 | C14 归档 M3 收官`)
+- **`openspec/specs/detect-framework/spec.md`** 通过 archive 流程 sync(1 MODIFIED "综合研判骨架与评分公式" + 6 ADDED Req;total 64→70)
+- **`.gitignore`** 加 `!e2e/artifacts/c14-*/**` 白名单
+- **`e2e/artifacts/c14-2026-04-16/README.md`** L3 手工凭证占位(2 张待补截图 + L1/L2 覆盖证明)
+- **`docs/handoff.md`** 即本次更新
+
+---
+
+## 2.bak_C13 上一 session 关键决策(2026-04-15,C13 propose+apply+archive)
 
 ### propose 阶段已敲定(5 决策)
 
@@ -211,10 +255,15 @@
 - **Follow-up(C7 留下,C8/C9/C10/C11 继承)**:`ProcessPoolExecutor` executor cancel 无法真中断子进程任务(C6 Risk-1);用 `max_features + MAX_PAIRS + MAX_ROWS` 限时缓解
 - **Follow-up(C7 留下,C8/C9/C10/C11 继承)**:容器 `cpu_count` 验证(C6 Q3);kernel-lock 解除后跑 `docker exec backend python -c "import os; print(os.cpu_count())"`
 - **Follow-up(C6 留下,C13 消化 11/11)**:11 Agent 真实 `run()` 全部替换完毕 — text_similarity(C7)/ section_similarity(C8)/ structure_similarity(C9)/ metadata_author+time+machine(C10)/ price_consistency(C11)/ price_anomaly(C12)/ error_consistency+image_reuse+style(C13),dummy 列表清空
-- **Follow-up(C6 留下)**:`judge.py` `DIMENSION_WEIGHTS` 占位权重,C14 LLM 综合研判时可调
+- **Follow-up(C14 新增)**:**跨项目历史共现 LLM 上下文**(Q4 决策显式登记,独立 change);原 execution-plan §3 C14=history_cooccur 体量独立,需先解 bidder identity 去重(可能配合 C17 admin bidder 别名合并 UI)
+- **Follow-up(C14 新增)**:**L-5 / L-8 / L-9 三处 `retry+parse` 共享抽取**;C13 之前局部实现 2 处 + C14 新增 1 处 = 3 处相似模式;M4 出现第 4 次 L-X 时抽到 `app/services/llm/retry.py`;本期不动避免波及 C13 100+ 用例 mock
+- **Follow-up(C14 新增)**:**DIMENSION_WEIGHTS 实战调参**;C6 占位值经 C12 微调后沿用,缺实战数据反馈;M3 交付后跑样例项目收集假阳/漏判反馈后调
+- **Follow-up(C14 新增)**:**L-9 prompt N-shot examples 精调**;首版 `llm_judge_v1` 简版 system prompt;若实战假阳偏高/漏判偏多 → 补 N-shot examples + 输出格式收紧 + bump `llm_judge_v2`
+- **Follow-up(C14 新增)**:**`LLM_JUDGE_MODEL` env 接入 per-call model 切换**;本期 env 登记但不生效(factory 缓存单例限制);若需 judge 用不同模型(如 judge 用高推理模型 vs C7/C8/C13 用快速模型)→ 接入 provider 工厂 per-request 实例化
+- **Follow-up(C6 留下,C14 已部分兑现)**:`judge.py` `DIMENSION_WEIGHTS` 占位权重 — C14 保留 C12 调整后值未动,**实战调参合并到上面"DIMENSION_WEIGHTS 实战调参"follow-up**
 - **Follow-up(C4 留下)**:加密包 3 次密码错冻结(推 C17);`encrypted-sample.7z`(L3 fixture)未入库
 - **Follow-up**:Docker Desktop kernel-lock — C3~C11 L3 都跑不起来
-- **Follow-up**:生产部署前必须 env 覆盖 `SECRET_KEY` / `AUTH_SEED_ADMIN_PASSWORD` / `LLM_API_KEY`;C6 `AGENT_TIMEOUT_S` 等;C7 `TEXT_SIM_*` 3 / C8 `SECTION_SIM_*` 3 / C9 `STRUCTURE_SIM_*` 5 / C10 `METADATA_*` 6 / C11 `PRICE_CONSISTENCY_*` 13 / C12 `PRICE_ANOMALY_*` 7 / **C13 `ERROR_CONSISTENCY_*` 5 + `IMAGE_REUSE_*` 5 + `STYLE_*` 6**
+- **Follow-up**:生产部署前必须 env 覆盖 `SECRET_KEY` / `AUTH_SEED_ADMIN_PASSWORD` / `LLM_API_KEY`;C6 `AGENT_TIMEOUT_S` 等;C7 `TEXT_SIM_*` 3 / C8 `SECTION_SIM_*` 3 / C9 `STRUCTURE_SIM_*` 5 / C10 `METADATA_*` 6 / C11 `PRICE_CONSISTENCY_*` 13 / C12 `PRICE_ANOMALY_*` 7 / C13 `ERROR_CONSISTENCY_*` 5 + `IMAGE_REUSE_*` 5 + `STYLE_*` 6 / **C14 `LLM_JUDGE_*` 5**
 - **Follow-up(C5 留下)**:`role_keywords.py` Python 常量;C17 admin 后台迁 DB + UI
 - **Follow-up(C9 pre-existing 暴露,C10/C11 继承未处理)**:`backend/app/services/parser/content/__init__.py` 有 2 条 ruff 错(F401 unused `select` + 一行 E501)pre-existing,留 cleanup change(可与 C11 字段路径偏差修一起)
 
@@ -223,35 +272,35 @@
 ## 4. 下次开工建议
 
 **一句话交接**:
-> **C13 `detect-agents-global` 已归档,M3 进度 8/9**。L1+L2 = **883 全绿**,C13 新增 140 用例;L3 延续手工凭证。**11 Agent 全部替换为真实算法,dummy 列表清空**;`error_consistency` L-5 LLM 铁证能力本期兑现;`judge.py` 扩读 OverallAnalysis.evidence_json.has_iron_evidence 支持 global 型铁证升级。下一步 `git push`(本次 archive commit 已产生),然后进 **C14 `detect-llm-judge`**(M3 收官,judge 占位 regex → LLM 综合研判)。
+> **C14 `detect-llm-judge` 已 apply 待归档,M3 进度 9/9 — M3 收官 🎉**。L1+L2 = **938 全绿**,C14 新增 55 用例(L1 50 + L2 5);L3 延续手工凭证占位。**judge 层由占位公式升级为"公式 + L-9 LLM + clamp 4 步 + 失败模板兜底"**,`judge.compute_report` 纯函数契约保持(C6~C13 零改动),LLM 只升不降 + 铁证 ≥85 硬下限守护。下一步归档 + commit(本次 archive commit 即将产生),然后 `git push` 后进 **M4 C15 `report-export`**(报告总览 / 维度明细 / 人工复核 / Word 导出)。
 
 **可直接粘贴给 AI 作为新会话起点**:
 ```
-继续 documentcheck 项目。M3 进度 8/9,C13 detect-agents-global 已 archive + commit + push。
-下一步进 C14 /opsx:propose detect-llm-judge(M3 收官)
-  - 职责:judge.py 的占位 regex 综合研判 → LLM 综合研判(requirements §L-9)
-  - 输入:所有 PairComparison + OverallAnalysis(11 维度分数 + 各自 evidence_json + 铁证标记)
-  - 输出:AnalysisReport.llm_conclusion(现 "" 留空 → LLM 生成自然语言结论)+ 可选调整 total_score / risk_level
-  - 不动:11 Agent 注册表 / 3 子包(error_impl/image_impl/style_impl/price_impl/anomaly_impl/metadata_impl/structure_sim_impl/section_sim_impl/text_sim_impl)/ AgentRunResult 3 字段契约
-  - 可能动:judge.py compute_report / judge_and_create_report / judge 新增 llm_client.py 子模块 / DIMENSION_WEIGHTS 按实战调整
-  - 可复用 C13 模式:LLM mock 单一入口 llm_mock.py + JSON 解析容错 + 重试 + 失败兜底 skip 哨兵
-对应 docs/execution-plan.md §3 C14 小节(已 §6 改名为 detect-llm-judge)。
-请先读 docs/handoff.md 确认现状(M3 进度 8/9 / C13 留下的 follow-ups / 11 Agent 真实算法全就绪 / judge.py has_iron_evidence 读 OA 已扩)。
-propose 阶段需用户敲定(产品/范围级):
-  - C14 输入粒度:喂全部 11 维度 evidence_json 还是预聚合摘要(控 token)
-  - C14 LLM 失败兜底:原 regex 路径保留还是删掉
-  - LLM conclusion 是否覆盖 total_score(改评分)还是仅补 llm_conclusion 文本
-  - 是否做跨项目历史库 read(execution-plan §3 原 C14 = history_cooccur 作废,但"跨项目"作为 LLM 上下文仍可选)
+继续 documentcheck 项目。M3 完成(9/9 收官),C14 detect-llm-judge 已 archive + commit + push。
+下一步进 M4 C15 /opsx:propose report-export(M4 第一个 change)
+  - 职责:US-6.1~6.6 — 报告总览 / 维度明细 / 对比入口 / 检测日志 / 人工复核 / Word 导出
+  - 输入:已就绪的 AnalysisReport + PairComparison + OverallAnalysis + AgentTask 四表数据
+  - 输出:前端报告页 + Word 导出接口 + 人工复核 API + 操作日志
+  - 不动:C6~C14 检测层(读不写);AnalysisReport/PC/OA 数据契约
+  - 可能动:前端新增 Report/DimDetail/Compare/Audit 页;后端新增 reports 导出 endpoint + 复核 UPDATE + 操作日志表
+  - 参考:docs/execution-plan.md §3 C15 / §4 M4 判据
+对应 docs/execution-plan.md §3 C15 小节(未改名)。
+请先读 docs/handoff.md 确认现状(M3 完成 / C14 新增 5 follow-ups / L1+L2 938 / judge LLM+clamp 就绪)。
+propose 阶段需用户敲定(产品/范围级,参考 C14 风格):
+  - Word 模板:自带模板 vs 用户上传 vs 两者结合
+  - 人工复核粒度:维度级覆盖 vs 单 pair 级覆盖 vs 整报告覆盖
+  - 操作日志存储:独立 audit 表 vs 复用 async_tasks 表
+  - 导出异步:同步下载 vs 异步任务 + 预览链接
 也检查 memory 和 claude.md。
 ```
 
-**C14 前的预备条件(已就绪)**:
+**M4 前的预备条件(已就绪)**:
 
-- **11 Agent 真实算法全就绪**:text/section/structure sim + 3 metadata + 2 price + 3 global(error/style/image)
-- **判别层接口**:`judge.compute_report(pair_comparisons, overall_analyses) -> (total, level)`,C14 在此基础上叠 LLM 层
-- **铁证传递契约**:pair 走 `PairComparison.is_ironclad`,global 走 `OverallAnalysis.evidence_json["has_iron_evidence"]`(C13 已扩 judge.py 读)
-- **LLM mock 共享入口**:`tests/fixtures/llm_mock.py` 已覆盖 L-1/L-2/L-4/L-5/L-8,C14 加 L-9(综合研判)
-- **llm_conclusion 字段空位**:`AnalysisReport.llm_conclusion` 目前 `""`,C14 填
+- **检测层完备**:11 Agent 真实算法 + judge 公式+LLM 双轨 + 铁证传递链路(pair.is_ironclad / OA.evidence.has_iron_evidence)
+- **数据层完备**:`AnalysisReport` 有 total/level/llm_conclusion;`PairComparison` / `OverallAnalysis` 各维度 evidence_json;`AgentTask` 执行日志
+- **前端骨架**:C6 已建报告页 Tab1;C7~C13 按维度补了展示逻辑;C14 后 `llm_conclusion` 从占位空串切到实填(LLM 文本或降级模板)
+- **LLM mock 共享入口**:`tests/fixtures/llm_mock.py` 已覆盖 L-1/L-2/L-4/L-5/L-8/L-9
+- **前端降级 banner**:C14 定的前缀哨兵 `"AI 综合研判暂不可用"`,前端若要展示降级 banner,match 此前缀即可(可归入 C15 UI 工作)
 
 ---
 
@@ -259,8 +308,8 @@ propose 阶段需用户敲定(产品/范围级):
 
 | 日期 | 变更 |
 |---|---|
+| 2026-04-16 | **C14 `detect-llm-judge` 归档(M3 进度 9/9,M3 收官 🎉)**:**判别层升级**:`judge.compute_report` 纯函数保留(C6~C13 test 零改动)+ 新增 `judge_llm.py` 3 函数(`summarize` 预聚合 11 维度 × `{max_score,ironclad_count,top_k_examples,skip_reason}` token 稳定 3~8k + 铁证 pair 无条件入 top_k / `call_llm_judge` retry+parse 容错,5 种失败判据统一返 `(None,None)` / `fallback_conclusion` 5 段模板前缀 `"AI 综合研判暂不可用"` 前端哨兵)+ `judge_and_create_report` 集成 L-9 流水线(compute_report → summarize → call_llm_judge → clamp 严格 4 步 `max(formula,llm) → 铁证≥85 → ≤100 → level 重算` → 失败 fallback 模板);**`llm_mock.py`** 扩 L-9 `make_l9_response` + 6 fixture(ok/upgrade/clamped/failed/bad_json/disabled);**env `LLM_JUDGE_*` 5 个**(ENABLED/TIMEOUT_S/MAX_RETRY/SUMMARY_TOP_K/MODEL)宽松校验;**`e2e/conftest.py` autouse fixture `_disable_l9_llm_by_default`** 让既有 217 L2 默认走降级不触发真 LLM;**测试 938 全绿**(C13→C14 +55 用例:L1 50 + L2 5);**5 决策**:Q1 B 预聚合摘要 / Q2 A 公式兜底 / Q3 B 可升不可降+铁证 85 守护 / Q4 C 不做跨项目共现登记 follow-up / Q5 C 模板+前缀哨兵;apply 现场:`AgentRunResult` 字段名修正 `(score,summary,evidence_json)` 非 `(dimension,score,evidence)` / e2e autouse patch 避免既有 test 触发真 LLM / fallback 前缀在 LLM prompt 明文约束不得冒犯违反即重试 / summarize 铁证 pair 无条件入 top_k 即便排名后 / L2 加 S5 幂等测试贴 `judge_and_create_report` 早返;spec sync 1 MODIFIED + 6 ADDED Req(detect-framework 64→~70);execution-plan §6 追加 1 行 M3 收官记录;L3 延续手工凭证(c14-2026-04-16 占位 2 张截图 + L1/L2 覆盖证明) |
 | 2026-04-15 | **C13 `detect-agents-global` 归档(M3 进度 8/9)**:**11 Agent 真实算法全就位,dummy 列表清空**;**检测层**:新增 3 子包共 18 文件(`error_impl/` 7 + `image_impl/` 5 + `style_impl/` 6);重写 3 Agent run()(`error_consistency` 5 层兜底 + L-5 LLM 铁证;`image_reuse` MD5+pHash 双路不升铁证;`style` L-8 两阶段全 LLM,>20 bidder 自动分组);**`_preflight_helpers.bidder_has_identity_info`** 新增;**`judge.py::compute_report`** +3 行读 `OverallAnalysis.evidence_json["has_iron_evidence"]` 支持 global 型铁证升级;**`llm_mock.py`** 扩 L-5 + L-8 两阶段 9 builder/fixture;**测试 883 全绿**(C13 新增 140 用例:L1 131 + L2 8 + 注册表 1);**5 决策**:Q1 合并 / Q2 (A) L-5 铁证 / Q3 (C) MD5+pHash 双路 / Q4 (C) L-8 全 LLM / Q5 零新增依赖;apply 现场:不扩 AgentRunResult NamedTuple 改走 OA evidence 顶层 has_iron_evidence / preflight 任一缺 → downgrade 回贴 spec 原语义 / DocumentText 行级 SQL(非 JSONB) / imagehash int64 cast / 3 既有测试调整(judge evidence_json getattr 保护 / timeout test monkeypatch error_consistency slow run / dummy_global_run test 补写 OA);spec sync +14 ADDED + 1 MODIFIED Req(detect-framework 50→64)含手动修正 5 处 is_iron_evidence 契约;execution-plan §6 追加 2 行(C13/C14 改名);L3 延续手工凭证(c13-2026-04-15 占位 6 张截图) |
 | 2026-04-15 | **C12 `detect-agent-price-anomaly` 归档(M3 进度 7/9,commit f04eb30)**:**注册表扩 10→11**(新增 global 型 `price_anomaly`):registry.py 加 `EXPECTED_AGENT_COUNT=11` 常量 + agents/__init__.py 加 import;**检测层**:新增 `anomaly_impl/` 6 文件(__init__ 含 `write_overall_analysis_row` 对齐 C11 / config 7 env + AnomalyConfig + 严格/宽松两类校验 / models 三 TypedDict / extractor 单次 SQL INNER JOIN 聚合 + bidder_id 升序 + max_bidders 截断 + 软删排除 / detector mean 计算 + deviation 判定 + mean==0 兜底 + direction 非 low fallback+warn / scorer 占位 min(100, N*30+max(|dev|)*100))+ `price_anomaly.py` Agent 三层兜底(ENABLED=false 早返 / preflight skip / run 边缘 skip 哨兵);**`_preflight_helpers.project_has_priced_bidders`** 单次 COUNT(DISTINCT) + INNER JOIN 自动过滤;**judge.py DIMENSION_WEIGHTS** 调整(+price_anomaly=0.07 / price_consistency 0.15→0.10 / image_reuse 0.07→0.05);**测试 743 全绿**(C12 新增 49 用例:L1 43 + L2 5 + 注册表 1);**4 决策**:Q1 sample_size=3 / Q2 (C) 标底留 follow-up / Q3 只抓低+30% / Q4 (A) LLM 留 C14;apply 现场:parse_status='priced' 非 Bidder 枚举值改用 INNER JOIN 语义 / EXPECTED_AGENT_COUNT 不在模块加载期 assert 改测试断言 / test_all_dimensions_100_high 追加 price_anomaly OA 项修 93→100 / PriceParsingRule project 级非 document 级 fixture 修复 / L2 Scenario 5 disabled 路径仍写 OverallAnalysis 断言移 L1;spec sync +5 ADDED+3 MODIFIED Req(detect-framework 52→57);execution-plan §6 追加 C12 注册表扩展记录;L3 延续手工凭证 |
 | 2026-04-15 | **C11 `detect-agent-price-consistency` 归档(M3 进度 6/9,commit 94e8f18)**:**检测层**:新增 `price_impl/` 11 文件(__init__ 含 write_pair_comparison_row 复用 C10 / config 13 env + 4 子检测 dataclass / models TypedDict / normalizer NFKC + Decimal split_price_tail truncate+zfill / extractor 按 sheet 分组+预计算 / 4 detector(tail (tail_3,int_len) 组合 key 防量级误撞 / amount_pattern (item_name,unit_price) 对精确匹配 / item_list 两阶段对齐"同项同价"+item_name 兜底 / **series_relation Q5 第一性原理审新增** 同模板对齐序列 ratios 方差+diffs CV 双路命中) / scorer 4 子检测加权合成,disabled/None 不参与归一化)+ 重写 `price_consistency.py::run()`(4 flag 全关早返;Agent 级 skip score=0.0+participating_subdims=[] 哨兵);**测试 694 全绿**(C11 新增 69 用例:L1 64 + L2 5);零 LLM 引入;**5 决策**:Q1 (B) 尾数组合 key / Q2 币种含税完全忽略 / Q3 (C) 两阶段对齐 / Q4 (A) 只走 PriceItem / **Q5 (A) 第一性原理审新增 series**;apply 意外:测试构造 bug 修一次 / 现场发现字段实际在 project_price_configs(留 cleanup) / scorer 三态 evidence(disabled/None/未执行)/ Agent 早返路径;spec sync +10 ADDED+1 MODIFIED Req(detect-framework 42→52);execution-plan §6 追加 C11 scope 扩展记录;**memory 新增 `feedback_first_principles_review.md`**(自审常驻第 3 项);L3 延续手工凭证 |
 | 2026-04-15 | **C10 `detect-agents-metadata` 归档(M3 进度 5/9,commit 7573deb)**:**数据层延伸**:扩 `DocumentMetadata.template` 字段 + alembic 0007 + parser 扩 + 回填脚本;**检测层**:新增 `metadata_impl/` 9 文件 + 重写 3 Agent run()(author 三字段精确聚类 hit_strength=`|∩|/min` / time modified 5min 滑窗 + created 精确相等 / machine 三字段元组精确碰撞);**测试 625 全绿**(C10 新增 75 用例);零 LLM 引入;关键决策:合并一个 change / 扩 C5 持久化 + 回填 / 纯精确 + NFKC;spec sync +8 Req(detect-framework 34→42)+ 2 Req(parser-pipeline 15→17) |
-| 2026-04-15 | **C9 `detect-agent-structure-similarity` 归档(M3 进度 4/9,commit 8bbda15)**:**数据层延伸**:新增 `document_sheets` 表 + alembic 0006 + 回填脚本;**检测层**:新增 `structure_sim_impl/` 8 文件 + 重写 `structure_similarity.py::run()` 三维度纯程序化(目录 LCS / 字段 Jaccard / 填充 Jaccard);**测试 550 全绿**(C9 新增 103 用例);零 LLM 引入;关键决策:C 选项跨层延伸持久化;spec sync +5 Req(detect-framework)+ 3 Req(parser-pipeline) |

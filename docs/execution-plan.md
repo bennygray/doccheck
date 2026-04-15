@@ -363,3 +363,4 @@ M4  C15 report-export
 | 2026-04-15 | C12 Agent 注册表扩至 11 Agent(新增 global 型 `price_anomaly`) | 第一性原理审:`price_anomaly` 是物理 global 关系(单家 vs 群体),独立 Agent 语义清晰;C6 原 10 Agent 非物理必然,execution-plan §3 命名 `price_anomaly` 本就预期独立 Agent |
 | 2026-04-15 | C13 改名 `detect-agents-global`(3 global Agent 合并替换) | §3 原 `bidder-relation` 与实际 Agent 注册表不符(C6 framework 从未注册 bidder_relation Agent);实际替换对象是 `error_consistency / style / image_reuse` 3 global 型 dummy |
 | 2026-04-15 | C14 改名 `detect-llm-judge`(judge.py 占位 regex → LLM 综合研判) | §3 原 `history_cooccur` 同上;C14 真实职责是综合研判收官(judge 升级),非历史共现 Agent |
+| 2026-04-16 | C14 `detect-llm-judge` 归档(**M3 进度 9/9,M3 收官**) | judge.compute_report 保留 + 新增 judge_llm.py 3 函数(summarize / call_llm_judge / fallback_conclusion)+ clamp 严格 4 步守护(max(formula,llm) → 铁证≥85 → ≤100 → level 重算)+ 降级前缀标语哨兵;**938 全绿**(C13→C14 +55:L1 50 + L2 5);5 决策(B/A/B/C/C);跨项目历史共现作为独立 follow-up change 登记 |

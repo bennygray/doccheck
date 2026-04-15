@@ -104,3 +104,54 @@ def test_duplicate_register_raises():
 
     # 清理注册表(避免影响其他 test)
     AGENT_REGISTRY.pop("test_duplicate_x", None)
+
+
+# ============================================ C14: contract invariants
+
+
+def test_c14_agent_count_unchanged():
+    """C14 detect-llm-judge 不动注册表;11 Agent 数量保持不变"""
+    from app.services.detect.registry import EXPECTED_AGENT_COUNT
+
+    assert EXPECTED_AGENT_COUNT == 11
+    assert len(get_all_agents()) == 11
+
+
+def test_c14_agent_run_result_contract_unchanged():
+    """AgentRunResult 仍 3 字段契约,不扩字段"""
+    from app.services.detect.context import AgentRunResult
+
+    assert AgentRunResult._fields == ("score", "summary", "evidence_json")
+
+
+def test_c14_dimension_weights_sum_and_keys():
+    """DIMENSION_WEIGHTS 11 键 + 权重和 = 1.00(C12 调整值,C14 不改)"""
+    from app.services.detect.judge import DIMENSION_WEIGHTS
+
+    assert len(DIMENSION_WEIGHTS) == 11
+    assert round(sum(DIMENSION_WEIGHTS.values()), 4) == 1.0
+    expected = {
+        "text_similarity",
+        "section_similarity",
+        "structure_similarity",
+        "metadata_author",
+        "metadata_time",
+        "metadata_machine",
+        "price_consistency",
+        "price_anomaly",
+        "error_consistency",
+        "style",
+        "image_reuse",
+    }
+    assert set(DIMENSION_WEIGHTS.keys()) == expected
+
+
+def test_c14_compute_report_signature_unchanged():
+    """compute_report 纯函数签名契约不变(C6~C13 既有调用保持)"""
+    import inspect
+
+    from app.services.detect.judge import compute_report
+
+    sig = inspect.signature(compute_report)
+    params = list(sig.parameters.keys())
+    assert params == ["pair_comparisons", "overall_analyses"]

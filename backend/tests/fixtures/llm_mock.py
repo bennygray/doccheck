@@ -389,6 +389,114 @@ def mock_llm_l8_bad_json_stage1() -> ScriptedLLMProvider:
     return ScriptedLLMProvider(["not json"], loop_last=True)
 
 
+# C14 新增:judge L-9 综合研判 mock(直接 patch judge_llm.call_llm_judge,不走 provider)
+
+
+def make_l9_response(
+    *,
+    suggested_total: float = 78.0,
+    conclusion: str = "基于 11 维度证据综合研判,本项目存在中等围标嫌疑,建议重点关注文本相似度和报价一致性维度。",
+    reasoning: str = "mock reasoning",
+) -> str:
+    """构造 L-9 合法 JSON 响应字符串(仅 ScriptedLLMProvider 需要;大多数测试直接用下方 fixture)"""
+    import json
+
+    return json.dumps(
+        {
+            "suggested_total": suggested_total,
+            "conclusion": conclusion,
+            "reasoning": reasoning,
+        },
+        ensure_ascii=False,
+    )
+
+
+@pytest.fixture
+def mock_llm_l9_ok(monkeypatch):
+    """L-9 成功:直接 patch call_llm_judge 返 (conclusion, suggested)。
+
+    用法:
+        def test_foo(mock_llm_l9_ok):
+            mock_llm_l9_ok(conclusion="...", suggested_total=78.0)
+            # 之后任何调 judge_llm.call_llm_judge 的路径都返 mock 值
+    """
+    from app.services.detect import judge_llm
+
+    def _apply(
+        conclusion: str = "综合研判:中等围标嫌疑。",
+        suggested_total: float = 78.0,
+    ):
+        async def _fake(summary, formula_total, *, provider=None, cfg=None):
+            return conclusion, float(suggested_total)
+
+        monkeypatch.setattr(judge_llm, "call_llm_judge", _fake)
+
+    return _apply
+
+
+@pytest.fixture
+def mock_llm_l9_upgrade(monkeypatch):
+    """L-9 升分跨档:mock 返回一个比 formula 高的 suggested_total。
+
+    默认 suggested=75(配合 formula=65 跨档到 high)。
+    """
+    from app.services.detect import judge_llm
+
+    def _apply(suggested_total: float = 75.0):
+        async def _fake(summary, formula_total, *, provider=None, cfg=None):
+            return "综合研判:跨维度共振升分。", float(suggested_total)
+
+        monkeypatch.setattr(judge_llm, "call_llm_judge", _fake)
+
+    return _apply
+
+
+@pytest.fixture
+def mock_llm_l9_clamped(monkeypatch):
+    """L-9 试图降分被守护:mock 返回低于 formula 或低于铁证下限的 suggested_total。
+
+    默认 suggested=60(配合 formula=88+铁证,clamp 守护后 final=88)。
+    """
+    from app.services.detect import judge_llm
+
+    def _apply(suggested_total: float = 60.0):
+        async def _fake(summary, formula_total, *, provider=None, cfg=None):
+            return "综合研判(LLM 误判降分测试)。", float(suggested_total)
+
+        monkeypatch.setattr(judge_llm, "call_llm_judge", _fake)
+
+    return _apply
+
+
+@pytest.fixture
+def mock_llm_l9_failed(monkeypatch):
+    """L-9 失败:patch call_llm_judge 返 (None, None) → 上层走降级。"""
+    from app.services.detect import judge_llm
+
+    async def _fake(summary, formula_total, *, provider=None, cfg=None):
+        return None, None
+
+    monkeypatch.setattr(judge_llm, "call_llm_judge", _fake)
+    return None
+
+
+@pytest.fixture
+def mock_llm_l9_bad_json():
+    """L-9 返 bad JSON:返 ScriptedLLMProvider,测试时显式注入到 call_llm_judge 的 provider。
+
+    此 fixture 用于 **单元测试** call_llm_judge 自身的 retry+parse 逻辑,不用于
+    集成测试(集成测试用 mock_llm_l9_failed 或 mock_llm_l9_ok)。
+    """
+    return ScriptedLLMProvider(["this is not json at all"], loop_last=True)
+
+
+@pytest.fixture
+def mock_llm_l9_disabled(monkeypatch):
+    """L-9 env disabled:LLM_JUDGE_ENABLED=false → judge_and_create_report 跳过 LLM 走降级"""
+    monkeypatch.setenv("LLM_JUDGE_ENABLED", "false")
+    return None
+
+
 class ScriptedLLMProvider:
     """按调用顺序依次返不同响应/错 的 provider。
 

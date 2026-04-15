@@ -169,6 +169,39 @@ uv run python -m scripts.backfill_document_metadata_template            # 全量
 uv run python -m scripts.backfill_document_metadata_template --dry-run  # 只扫不写(显示前 5 样例)
 ```
 
+### C11 detect-agent-price-consistency 依赖
+
+C11 把 `price_consistency` Agent 的 `run()` 从 dummy 替换为真实算法(纯程序化,零 LLM,零新依赖),覆盖 4 子检测:
+
+- **tail(尾数)**:跨投标人 `total_price` 的 `(尾 N 位字符串, 整数位长)` 组合 key 碰撞;组合 key 区分 ¥100 / ¥1100(尾 3 位都是 "100" 但整数位长 3 vs 4)
+- **amount_pattern(金额模式)**:跨投标人 `(item_name 归一化, unit_price)` 对集合的精确匹配率;`>= threshold` 才计分
+- **item_list(报价表项整体相似度)**:**两阶段对齐**——同模板(sheet 集合相同 + 同名 sheet 行数相同)→ 按 `(sheet_name, row_index)` 位置对齐"同项同价";否则按 `item_name` NFKC 归一精确匹配
+- **series_relation(数列关系,Q5 第一性原理审新增)**:同模板对齐行序列,`B/A` 比值方差 < 阈值 → 等比命中 / `B-A` 差值变异系数 < 阈值 → 等差命中;**execution-plan §3 C11 原文未列**,本 change scope 扩展
+
+口径策略(Q2 决策):**完全不读** `project_price_configs.currency` 与 `tax_inclusive` 字段,直接按 `PriceItem.total_price / unit_price` 原始数值比对;真"含税口径混用导致同价不同数值"的场景留 C14 LLM 综合研判处理。
+
+数据源(Q4 决策):**只走 PriceItem 表**,不消费 `DocumentSheet`;结构信号归 C9 `structure_similarity` 专管。
+
+- **零新增第三方依赖**:`unicodedata` + `decimal` + `statistics` + `collections` 全 stdlib
+- **C6 contract 锁定**:`price_consistency` 注册 `name+agent_type+preflight` 三元组不变,仅替换 run();preflight 复用 C6 既有 `bidder_has_priced`
+- **无 schema 变更 / 无回填脚本**:纯算法层 change
+
+环境变量(统一 `PRICE_CONSISTENCY_` 前缀,共 13 条):
+
+- `PRICE_CONSISTENCY_TAIL_ENABLED` / `PRICE_CONSISTENCY_AMOUNT_PATTERN_ENABLED` / `PRICE_CONSISTENCY_ITEM_LIST_ENABLED` / `PRICE_CONSISTENCY_SERIES_ENABLED`(默认 `true`)— 4 子检测独立开关
+- `PRICE_CONSISTENCY_TAIL_N`(默认 `3`)— 尾数位数
+- `PRICE_CONSISTENCY_AMOUNT_PATTERN_THRESHOLD`(默认 `0.5`)— amount_pattern 命中阈值
+- `PRICE_CONSISTENCY_ITEM_LIST_THRESHOLD`(默认 `0.95`)— item_list 命中阈值
+- `PRICE_CONSISTENCY_SERIES_RATIO_VARIANCE_MAX`(默认 `0.001`)— 等比 ratios 方差上限
+- `PRICE_CONSISTENCY_SERIES_DIFF_CV_MAX`(默认 `0.01`)— 等差 diffs 变异系数上限
+- `PRICE_CONSISTENCY_SERIES_MIN_PAIRS`(默认 `3`)— series 子检测最低对齐样本
+- `PRICE_CONSISTENCY_SUBDIM_WEIGHTS`(默认 `"0.25,0.25,0.3,0.2"`)— 顺序 tail,amount_pattern,item_list,series
+- `PRICE_CONSISTENCY_IRONCLAD_THRESHOLD`(默认 `85.0`)— Agent score ≥ 阈值 → is_ironclad
+- `PRICE_CONSISTENCY_MAX_ROWS_PER_BIDDER`(默认 `5000`)— 单 bidder PriceItem 加载上限
+- `PRICE_CONSISTENCY_MAX_HITS_PER_SUBDIM`(默认 `20`)— 单子检测 evidence hits 截断
+
+算法 version 标识:`evidence_json["algorithm"] == "price_consistency_v1"`(区分 dummy)。
+
 ## 常用命令
 
 ```bash

@@ -25,6 +25,7 @@ from app.services.parser.content import extract_content
 from app.services.parser.llm.role_classifier import classify_bidder
 from app.services.parser.pipeline.fill_price import fill_price_from_rule
 from app.services.parser.pipeline.progress_broker import progress_broker
+from app.services.parser.pipeline.project_status_sync import try_transition_project_ready
 from app.services.parser.pipeline.rule_coordinator import acquire_or_wait_rule
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ async def run_pipeline(
             bidder_id, "identify_failed", f"内容提取异常: {e!s}"[:500]
         )
         await _publish_status(bidder_id, project_id, "identify_failed")
+        await try_transition_project_ready(project_id)
         return
 
     # --- 阶段 2: LLM 角色分类 + 身份信息 ---
@@ -82,6 +84,7 @@ async def run_pipeline(
             bidder_id, "identify_failed", f"LLM 分类异常: {e!s}"[:500]
         )
         await _publish_status(bidder_id, project_id, "identify_failed")
+        await try_transition_project_ready(project_id)
         return
 
     # 检查是否 identify_failed(内容提取全失败)
@@ -92,6 +95,7 @@ async def run_pipeline(
                 bidder.parse_status = "identify_failed"
                 await session.commit()
         await _publish_status(bidder_id, project_id, "identify_failed")
+        await try_transition_project_ready(project_id)
         return
 
     # 正常进 identified
@@ -107,6 +111,7 @@ async def run_pipeline(
     pricing_xlsx = await _find_pricing_xlsx(bidder_id)
     if not pricing_xlsx:
         # 无报价表 → identified 即终态
+        await try_transition_project_ready(project_id)
         return
 
     await _set_bidder_status(bidder_id, "pricing")
@@ -128,6 +133,7 @@ async def run_pipeline(
             "error",
             {"bidder_id": bidder_id, "stage": "price_rule", "message": "rule识别失败"},
         )
+        await try_transition_project_ready(project_id)
         return
 
     # 首发协程应推 project_price_rule_ready(仅 confirmed 后推;多次推也幂等但节省流量)
@@ -180,6 +186,7 @@ async def run_pipeline(
             "partial_failed_sheets": failed,
         },
     )
+    await try_transition_project_ready(project_id)
 
 
 async def _phase_extract_content(bidder_id: int) -> None:

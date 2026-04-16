@@ -160,6 +160,13 @@ async def _process_bidder(
     bidder.parse_error = None
     await session.commit()
 
+    # DEF-001: 首次解压时将项目状态从 draft → parsing
+    from app.services.parser.pipeline.project_status_sync import (
+        try_transition_project_parsing,
+    )
+
+    await try_transition_project_parsing(bidder.project_id)
+
     extract_root_base = Path(settings.extracted_dir) / str(bidder.project_id) / str(bidder_id)
     extract_root_base.mkdir(parents=True, exist_ok=True)
 

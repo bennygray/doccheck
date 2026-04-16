@@ -8,7 +8,10 @@ import ProjectDetailPage from "./pages/projects/ProjectDetailPage";
 import AuditLogPage from "./pages/reports/AuditLogPage";
 import ComparePage from "./pages/reports/ComparePage";
 import DimensionDetailPage from "./pages/reports/DimensionDetailPage";
+import MetaComparePage from "./pages/reports/MetaComparePage";
+import PriceComparePage from "./pages/reports/PriceComparePage";
 import ReportPage from "./pages/reports/ReportPage";
+import TextComparePage from "./pages/reports/TextComparePage";
 import SseDemoPage from "./pages/SseDemoPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
@@ -83,6 +86,30 @@ function App() {
         element={
           <ProtectedRoute>
             <ComparePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/:projectId/:version/compare/text"
+        element={
+          <ProtectedRoute>
+            <TextComparePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/:projectId/:version/compare/price"
+        element={
+          <ProtectedRoute>
+            <PriceComparePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/:projectId/:version/compare/metadata"
+        element={
+          <ProtectedRoute>
+            <MetaComparePage />
           </ProtectedRoute>
         }
       />

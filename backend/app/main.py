@@ -10,6 +10,7 @@ from app.api.routes import (
     audit,
     auth,
     bidders,
+    compare,
     documents,
     exports,
     parse_progress,
@@ -119,6 +120,8 @@ app.include_router(reviews.router, prefix="/api/projects", tags=["reviews"])
 app.include_router(exports.projects_router, prefix="/api/projects", tags=["exports"])
 # C15 Word 导出下载:/api/exports/{job_id}/download
 app.include_router(exports.exports_router, prefix="/api/exports", tags=["exports"])
+# C16 对比视图:/api/projects/{pid}/compare/{text,price,metadata}
+app.include_router(compare.router, prefix="/api/projects", tags=["compare"])
 app.include_router(sse_demo_router, prefix="/demo", tags=["demo"])
 
 

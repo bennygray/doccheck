@@ -18,8 +18,11 @@ import type {
   DocumentRolePatchResult,
   ExportStartOut,
   LogsResponse,
+  MetaCompareResponse,
   PairsResponse,
+  PriceCompareResponse,
   PriceConfig,
+  TextCompareResponse,
   PriceConfigPayload,
   PriceItem,
   PriceParsingRule,
@@ -410,4 +413,47 @@ export const api = {
   /** 下载导出文件:返回 Blob URL 以便浏览器下载 */
   downloadExportUrl: (jobId: number) =>
     `${API_BASE}/exports/${jobId}/download`,
+
+  // ---------------------------------------------------------- C16 compare-view
+
+  /** GET /compare/text — 文本对比(pair 级) */
+  getCompareText: (
+    projectId: number | string,
+    bidderA: number,
+    bidderB: number,
+    docRole?: string,
+    version?: number | string,
+  ) => {
+    const params = new URLSearchParams({
+      bidder_a: String(bidderA),
+      bidder_b: String(bidderB),
+    });
+    if (docRole) params.set("doc_role", docRole);
+    if (version !== undefined) params.set("version", String(version));
+    return request<TextCompareResponse>(
+      `/projects/${projectId}/compare/text?${params}`,
+    );
+  },
+
+  /** GET /compare/price — 报价对比(全项目级) */
+  getComparePrice: (
+    projectId: number | string,
+    version?: number | string,
+  ) => {
+    const params = version !== undefined ? `?version=${version}` : "";
+    return request<PriceCompareResponse>(
+      `/projects/${projectId}/compare/price${params}`,
+    );
+  },
+
+  /** GET /compare/metadata — 元数据对比(全项目级) */
+  getCompareMetadata: (
+    projectId: number | string,
+    version?: number | string,
+  ) => {
+    const params = version !== undefined ? `?version=${version}` : "";
+    return request<MetaCompareResponse>(
+      `/projects/${projectId}/compare/metadata${params}`,
+    );
+  },
 };

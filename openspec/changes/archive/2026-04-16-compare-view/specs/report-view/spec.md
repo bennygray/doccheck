@@ -1,6 +1,4 @@
-# report-view Specification
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: ComparePage 对比入口页
 ComparePage(`/reports/:pid/:ver/compare`)SHALL 在现有 PairComparison 列表基础上增加顶部 Tab 导航栏,支持切换到报价对比和元数据对比视图。

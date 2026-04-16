@@ -432,3 +432,80 @@ export interface DimensionReviewIn {
 export interface ExportStartOut {
   job_id: number;
 }
+
+// ── C16 compare-view ──────────────────────────────────────────────
+
+export interface TextParagraph {
+  paragraph_index: number;
+  text: string;
+}
+
+export interface TextMatch {
+  a_idx: number;
+  b_idx: number;
+  sim: number;
+  label: string | null;
+  a_text: string | null;
+  b_text: string | null;
+}
+
+export interface TextCompareResponse {
+  bidder_a_id: number;
+  bidder_b_id: number;
+  doc_role: string;
+  available_roles: string[];
+  left_paragraphs: TextParagraph[];
+  right_paragraphs: TextParagraph[];
+  matches: TextMatch[];
+  has_more: boolean;
+  total_count_left: number;
+  total_count_right: number;
+}
+
+export interface PriceBidderInfo {
+  bidder_id: number;
+  bidder_name: string;
+}
+
+export interface PriceCell {
+  bidder_id: number;
+  unit_price: number | null;
+  total_price: number | null;
+  deviation_pct: number | null;
+}
+
+export interface PriceRow {
+  item_name: string;
+  unit: string | null;
+  mean_unit_price: number | null;
+  cells: PriceCell[];
+  has_anomaly: boolean;
+}
+
+export interface PriceCompareResponse {
+  bidders: PriceBidderInfo[];
+  items: PriceRow[];
+  totals: PriceCell[];
+}
+
+export interface MetaBidderInfo {
+  bidder_id: number;
+  bidder_name: string;
+}
+
+export interface MetaCellValue {
+  value: string | null;
+  is_common: boolean;
+  color_group: number | null;
+}
+
+export interface MetaFieldRow {
+  field_name: string;
+  display_name: string;
+  values: MetaCellValue[];
+}
+
+export interface MetaCompareResponse {
+  bidders: MetaBidderInfo[];
+  fields: MetaFieldRow[];
+}

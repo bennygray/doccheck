@@ -143,3 +143,17 @@ TBD - created by archiving change infra-base. Update Purpose after archive.
 - **WHEN** Playwright 运行后在 `e2e/artifacts/` 写入截图或 trace 文件
 - **THEN** `.gitignore` SHALL 包含 `e2e/artifacts/`,`git status` SHALL NOT 显示这些文件
 
+
+## MODIFIED Requirements
+
+### Requirement: LLM HTTP 客户端 timeout 与配置一致
+
+`OpenAICompatProvider` 的 httpx 请求 timeout SHALL 使用 `self._timeout_s`（来自 `LLM_TIMEOUT_S` 配置），而非 httpx 默认值。
+
+#### Scenario: LLM 响应在配置 timeout 内返回
+- **WHEN** LLM 响应在 `LLM_TIMEOUT_S` 秒内返回
+- **THEN** 正常返回 LLMResult(text=响应内容)
+
+#### Scenario: LLM 响应超过配置 timeout
+- **WHEN** LLM 响应超过 `LLM_TIMEOUT_S` 秒
+- **THEN** 返回 LLMResult(error=LLMError(kind="timeout"))，error message 非空且包含超时描述

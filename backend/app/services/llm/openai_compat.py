@@ -76,7 +76,7 @@ class OpenAICompatProvider:
         }
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=self._timeout_s) as client:
                 resp = await asyncio.wait_for(
                     client.post(url, json=payload, headers=headers),
                     timeout=self._timeout_s,
@@ -89,7 +89,10 @@ class OpenAICompatProvider:
         except httpx.HTTPError as exc:
             return LLMResult(
                 text="",
-                error=LLMError(kind="network", message=str(exc)[:500]),
+                error=LLMError(
+                    kind="network",
+                    message=f"{type(exc).__name__}: {exc}"[:500] or type(exc).__name__,
+                ),
             )
 
         if resp.status_code == 429:

@@ -26,7 +26,7 @@ _MAX_WEIGHT = 0.7
 _MEAN_WEIGHT = 0.3
 
 # evidence_json.samples 上限
-_SAMPLES_LIMIT = 10
+_SAMPLES_LIMIT = 30
 
 
 def aggregate_pair_score(

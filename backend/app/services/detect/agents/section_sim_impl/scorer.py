@@ -33,7 +33,7 @@ from app.services.detect.engine import get_cpu_executor
 from app.services.llm.base import LLMProvider
 
 # 每章节在 evidence_json.chapter_pairs[*].samples 上限
-_CHAPTER_SAMPLES_LIMIT = 5
+_CHAPTER_SAMPLES_LIMIT = 15
 
 
 async def score_all_chapter_pairs(

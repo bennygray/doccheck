@@ -122,9 +122,9 @@ def test_evidence_json_degraded():
     assert ev["samples"][0]["label"] is None
 
 
-def test_evidence_json_samples_truncated_to_10():
-    pairs = [_pair(i, sim=0.9 - i * 0.01) for i in range(25)]
-    judgments = {i: "plagiarism" for i in range(25)}
+def test_evidence_json_samples_truncated_to_limit():
+    pairs = [_pair(i, sim=0.9 - i * 0.01) for i in range(50)]
+    judgments = {i: "plagiarism" for i in range(50)}
     ev = build_evidence_json(
         doc_role="technical",
         doc_id_a=1,
@@ -134,5 +134,5 @@ def test_evidence_json_samples_truncated_to_10():
         judgments=judgments,
         ai_meta={"overall": "", "confidence": ""},
     )
-    assert len(ev["samples"]) == 10
-    assert ev["pairs_total"] == 25
+    assert len(ev["samples"]) == 30
+    assert ev["pairs_total"] == 50

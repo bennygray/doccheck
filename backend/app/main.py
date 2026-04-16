@@ -91,6 +91,7 @@ app = FastAPI(
     description="投标文件分析与围标串标行为检测 API",
     version="0.1.0",
     lifespan=lifespan,
+    redirect_slashes=False,
 )
 
 app.add_middleware(

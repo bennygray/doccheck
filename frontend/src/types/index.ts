@@ -509,3 +509,53 @@ export interface MetaCompareResponse {
   bidders: MetaBidderInfo[];
   fields: MetaFieldRow[];
 }
+
+// ── Admin (C17) ──
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  role: string;
+  is_active: boolean;
+  must_change_password: boolean;
+  created_at: string;
+}
+
+export interface CreateUserPayload {
+  username: string;
+  password: string;
+  role: string;
+}
+
+export interface UpdateUserPayload {
+  is_active?: boolean;
+  role?: string;
+}
+
+export interface DimensionConfig {
+  enabled: boolean;
+  weight?: number;
+  llm_enabled?: boolean;
+  [key: string]: unknown;
+}
+
+export interface RiskLevels {
+  high: number;
+  medium: number;
+}
+
+export interface RulesConfig {
+  dimensions: Record<string, DimensionConfig>;
+  risk_levels: RiskLevels;
+  doc_role_keywords: Record<string, string[]>;
+  hardware_keywords: string[];
+  metadata_whitelist: string[];
+  min_paragraph_length: number;
+  file_retention_days: number;
+}
+
+export interface RulesConfigResponse {
+  config: RulesConfig;
+  updated_by: number | null;
+  updated_at: string | null;
+}

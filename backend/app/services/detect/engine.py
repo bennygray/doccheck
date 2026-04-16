@@ -116,10 +116,20 @@ async def run_detection(project_id: int, version: int) -> None:
             )
             await _mark_all_running_as_timeout(project_id, version)
 
+        # C17: 检测前读取 SystemConfig 规则配置
+        from app.services.admin.rules_mapper import config_to_engine_params
+        from app.services.admin.rules_reader import get_active_rules
+
+        async with async_session() as _rules_session:
+            rules_config = await get_active_rules(_rules_session)
+        engine_params = config_to_engine_params(rules_config)
+
         # 无论是否超时,都走研判(延迟导入避免循环依赖)
         from app.services.detect.judge import judge_and_create_report
 
-        await judge_and_create_report(project_id, version)
+        await judge_and_create_report(
+            project_id, version, rules_config=engine_params
+        )
 
     except Exception as exc:  # noqa: BLE001 - 顶层兜底
         logger.exception(

@@ -34,6 +34,7 @@ from app.models.document_text import DocumentText
 from app.models.price_item import PriceItem
 from app.models.price_parsing_rule import PriceParsingRule
 from app.models.project import Project
+from app.models.system_config import SystemConfig
 from app.models.user import User
 from app.services.auth.jwt import create_access_token
 from app.services.auth.password import hash_password
@@ -64,6 +65,7 @@ async def _delete_all() -> None:
         await s.execute(delete(PriceParsingRule))
         await s.execute(delete(ProjectPriceConfig))
         await s.execute(delete(Project))
+        await s.execute(delete(SystemConfig))
         await s.execute(delete(User))
         await s.commit()
 

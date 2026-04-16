@@ -123,8 +123,13 @@ export default function ProjectListPage() {
         }}
       >
         <h1 style={{ fontSize: 24, margin: 0 }}>项目列表</h1>
-        <div>
-          <span data-testid="welcome-user" style={{ marginRight: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {user?.role === "admin" && (
+            <Link to="/admin/users" data-testid="admin-link">
+              管理
+            </Link>
+          )}
+          <span data-testid="welcome-user">
             欢迎,{user?.username}
           </span>
           <button

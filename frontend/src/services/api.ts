@@ -8,11 +8,13 @@
  */
 import { authStorage } from "../contexts/AuthContext";
 import type {
+  AdminUser,
   AnalysisStartResponse,
   AnalysisStatusResponse,
   BidDocument,
   Bidder,
   BidderListResponse,
+  CreateUserPayload,
   DimensionReviewIn,
   DocumentRole,
   DocumentRolePatchResult,
@@ -22,6 +24,8 @@ import type {
   PairsResponse,
   PriceCompareResponse,
   PriceConfig,
+  RulesConfig,
+  RulesConfigResponse,
   TextCompareResponse,
   PriceConfigPayload,
   PriceItem,
@@ -36,6 +40,7 @@ import type {
   ReportResponse,
   ReviewIn,
   ReviewOut,
+  UpdateUserPayload,
   UploadResult,
 } from "../types";
 
@@ -456,4 +461,33 @@ export const api = {
       `/projects/${projectId}/compare/metadata${params}`,
     );
   },
+
+  // ── Admin (C17) ──
+
+  /** GET /admin/users */
+  getUsers: () => request<AdminUser[]>("/admin/users"),
+
+  /** POST /admin/users */
+  createUser: (payload: CreateUserPayload) =>
+    request<AdminUser>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /** PATCH /admin/users/:id */
+  updateUser: (id: number, payload: UpdateUserPayload) =>
+    request<AdminUser>(`/admin/users/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  /** GET /admin/rules */
+  getRules: () => request<RulesConfigResponse>("/admin/rules"),
+
+  /** PUT /admin/rules */
+  updateRules: (config: RulesConfig | { restore_defaults: true }) =>
+    request<RulesConfigResponse>("/admin/rules", {
+      method: "PUT",
+      body: JSON.stringify(config),
+    }),
 };

@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.api.routes import (
+    admin,
     analysis,
     audit,
     auth,
@@ -90,6 +91,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 # C4 投标人路由挂在 /api/projects/{project_id}/bidders 下;path param 由路由

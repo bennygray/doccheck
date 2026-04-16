@@ -83,23 +83,40 @@ def _compute_dims_and_iron(
     return per_dim_max, has_ironclad, sorted(ironclad_dim_set)
 
 
-def _compute_level(total: float) -> str:
-    """总分 → risk_level 映射(≥70 high / 40-69 medium / <40 low)"""
-    if total >= 70:
+def _compute_level(
+    total: float, risk_levels: dict[str, int] | None = None
+) -> str:
+    """总分 → risk_level 映射。
+
+    C17: risk_levels 参数可覆盖默认阈值（从 SystemConfig 传入）。
+    默认：≥70 high / 40-69 medium / <40 low
+    """
+    high_threshold = 70
+    medium_threshold = 40
+    if risk_levels:
+        high_threshold = risk_levels.get("high", 70)
+        medium_threshold = risk_levels.get("medium", 40)
+    if total >= high_threshold:
         return "high"
-    elif total >= 40:
+    elif total >= medium_threshold:
         return "medium"
     else:
         return "low"
 
 
 def _compute_formula_total(
-    per_dim_max: dict[str, float], has_ironclad: bool
+    per_dim_max: dict[str, float],
+    has_ironclad: bool,
+    weights: dict[str, float] | None = None,
 ) -> float:
-    """加权求和 + 铁证强制 ≥85 + 四舍五入 2 位。纯函数。"""
+    """加权求和 + 铁证强制 ≥85 + 四舍五入 2 位。纯函数。
+
+    C17: weights 参数可覆盖 DIMENSION_WEIGHTS（从 SystemConfig 传入）。
+    """
+    w = weights if weights is not None else DIMENSION_WEIGHTS
     total = sum(
         per_dim_max.get(dim, 0.0) * weight
-        for dim, weight in DIMENSION_WEIGHTS.items()
+        for dim, weight in w.items()
     )
     if has_ironclad:
         total = max(total, 85.0)
@@ -154,10 +171,14 @@ async def judge_and_create_report(
     version: int,
     *,
     llm_provider: LLMProvider | None = None,
+    rules_config: dict | None = None,
 ) -> None:
     """加载 pair + overall → 公式 → L-9 LLM → clamp → INSERT AnalysisReport
 
     幂等:若已有 (project_id, version) 的 AnalysisReport 行则跳过。
+
+    C17: rules_config 来自 engine.py 的 config_to_engine_params()，
+    包含 weights / risk_levels / enabled / dim_thresholds 等。
 
     LLM 注入策略:
     - 默认 llm_provider=None → 从 factory 取 default provider(生产路径)
@@ -191,12 +212,22 @@ async def judge_and_create_report(
         )
         overall_analyses = list((await session.execute(oa_stmt)).scalars().all())
 
+        # C17: 从 rules_config 提取 weights / risk_levels（若有）
+        _weights = (
+            rules_config.get("weights") if rules_config else None
+        )
+        _risk_levels = (
+            rules_config.get("risk_levels") if rules_config else None
+        )
+
         # 公式层(compute_report 逻辑展开,供 L-9 复用 per_dim_max / ironclad_dims)
         per_dim_max, has_ironclad, ironclad_dims = _compute_dims_and_iron(
             pair_comparisons, overall_analyses
         )
-        formula_total = _compute_formula_total(per_dim_max, has_ironclad)
-        formula_level = _compute_level(formula_total)
+        formula_total = _compute_formula_total(
+            per_dim_max, has_ironclad, weights=_weights
+        )
+        formula_level = _compute_level(formula_total, risk_levels=_risk_levels)
 
         # 项目元信息
         project = await session.get(Project, project_id)
@@ -236,7 +267,7 @@ async def judge_and_create_report(
             final_total = _clamp_with_llm(
                 formula_total, llm_suggested, has_ironclad
             )
-            final_level = _compute_level(final_total)
+            final_level = _compute_level(final_total, risk_levels=_risk_levels)
             final_conclusion = llm_conclusion
         else:
             final_total = formula_total

@@ -2,6 +2,8 @@ import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import LoginPage from "./pages/LoginPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
+import AdminUsersPage from "./pages/admin/AdminUsersPage";
+import AdminRulesPage from "./pages/admin/AdminRulesPage";
 import ProjectListPage from "./pages/projects/ProjectListPage";
 import ProjectCreatePage from "./pages/projects/ProjectCreatePage";
 import ProjectDetailPage from "./pages/projects/ProjectDetailPage";
@@ -14,6 +16,7 @@ import ReportPage from "./pages/reports/ReportPage";
 import TextComparePage from "./pages/reports/TextComparePage";
 import SseDemoPage from "./pages/SseDemoPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RoleGuard from "./components/RoleGuard";
 import { useAuth } from "./contexts/AuthContext";
 import { setOnUnauthorized } from "./services/api";
 
@@ -33,6 +36,26 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute>
+            <RoleGuard role="admin">
+              <AdminUsersPage />
+            </RoleGuard>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/rules"
+        element={
+          <ProtectedRoute>
+            <RoleGuard role="admin">
+              <AdminRulesPage />
+            </RoleGuard>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/change-password"
         element={

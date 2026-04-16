@@ -7,14 +7,17 @@ from sqlalchemy import text
 
 from app.api.routes import (
     analysis,
+    audit,
     auth,
     bidders,
     documents,
+    exports,
     parse_progress,
     price,
     price_items,
     projects,
     reports,
+    reviews,
 )
 from app.api.routes.sse_demo import router as sse_demo_router
 from app.core.config import settings
@@ -34,6 +37,13 @@ async def lifespan(app: FastAPI):
     if os.environ.get("INFRA_DISABLE_LIFECYCLE") != "1":
         task = lifecycle_task.start()
 
+    # C15: 导出文件 7 天过期清理(每日 02:00)
+    export_cleanup_handle = None
+    if os.environ.get("INFRA_DISABLE_EXPORT_CLEANUP") != "1":
+        from app.services.export.cleanup import export_cleanup_task
+
+        export_cleanup_handle = export_cleanup_task.start()
+
     # C6: 启动时扫描 stuck async_tasks 并回滚实体状态
     # INFRA_DISABLE_SCANNER=1 可跳过(L2 测试用)
     if os.environ.get("INFRA_DISABLE_SCANNER") != "1":
@@ -49,6 +59,11 @@ async def lifespan(app: FastAPI):
     # Shutdown
     if task is not None:
         await lifecycle_task.stop(task)
+
+    if export_cleanup_handle is not None:
+        from app.services.export.cleanup import export_cleanup_task
+
+        await export_cleanup_task.stop(export_cleanup_handle)
 
     # C6: 释放 ProcessPoolExecutor(若 C7+ 真 Agent 消费了)
     try:
@@ -96,6 +111,14 @@ app.include_router(
 app.include_router(analysis.router, prefix="/api/projects", tags=["analysis"])
 # C6 报告路由:/api/projects/{pid}/reports/{version}
 app.include_router(reports.router, prefix="/api/projects", tags=["reports"])
+# C15 审计日志查询:/api/projects/{pid}/audit_logs
+app.include_router(audit.router, prefix="/api/projects", tags=["audit"])
+# C15 人工复核:/api/projects/{pid}/reports/{version}/(review|dimensions/{dim}/review)
+app.include_router(reviews.router, prefix="/api/projects", tags=["reviews"])
+# C15 Word 导出触发:/api/projects/{pid}/reports/{version}/export
+app.include_router(exports.projects_router, prefix="/api/projects", tags=["exports"])
+# C15 Word 导出下载:/api/exports/{job_id}/download
+app.include_router(exports.exports_router, prefix="/api/exports", tags=["exports"])
 app.include_router(sse_demo_router, prefix="/demo", tags=["demo"])
 
 

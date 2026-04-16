@@ -6,12 +6,15 @@
 from app.models.agent_task import AgentTask  # noqa: F401
 from app.models.analysis_report import AnalysisReport  # noqa: F401
 from app.models.async_task import AsyncTask  # noqa: F401
+from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.bid_document import BidDocument  # noqa: F401
 from app.models.bidder import Bidder  # noqa: F401
 from app.models.document_image import DocumentImage  # noqa: F401
 from app.models.document_metadata import DocumentMetadata  # noqa: F401
 from app.models.document_sheet import DocumentSheet  # noqa: F401
 from app.models.document_text import DocumentText  # noqa: F401
+from app.models.export_job import ExportJob  # noqa: F401
+from app.models.export_template import ExportTemplate  # noqa: F401
 from app.models.overall_analysis import OverallAnalysis  # noqa: F401
 from app.models.pair_comparison import PairComparison  # noqa: F401
 from app.models.price_config import ProjectPriceConfig  # noqa: F401
@@ -24,12 +27,15 @@ __all__ = [
     "AgentTask",
     "AnalysisReport",
     "AsyncTask",
+    "AuditLog",
     "BidDocument",
     "Bidder",
     "DocumentImage",
     "DocumentMetadata",
     "DocumentSheet",
     "DocumentText",
+    "ExportJob",
+    "ExportTemplate",
     "OverallAnalysis",
     "PairComparison",
     "PriceItem",

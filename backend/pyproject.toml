@@ -17,6 +17,8 @@ dependencies = [
     "pymupdf>=1.24",
     "python-docx>=1.1",
     "openpyxl>=3.1",
+    # C15 Word 报告导出(docxtpl = jinja2 + python-docx)
+    "docxtpl>=0.16",
     # C5 parser-pipeline: 图片指纹 + lxml 文本框 xpath
     "Pillow>=10.0",
     "imagehash>=4.3",

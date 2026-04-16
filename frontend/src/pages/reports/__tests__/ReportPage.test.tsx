@@ -39,6 +39,11 @@ const mkReport = (
       summaries: [],
     },
   ],
+  // C15 新字段:默认未复核
+  manual_review_status: null,
+  manual_review_comment: null,
+  reviewer_id: null,
+  reviewed_at: null,
   ...overrides,
 });
 
@@ -64,12 +69,43 @@ describe("ReportPage", () => {
     });
   });
 
-  it("LLM 占位卡片可见", async () => {
+  it("LLM 为空时显示'尚未生成'占位", async () => {
     vi.spyOn(api, "getReport").mockResolvedValue(mkReport());
     renderAt("/reports/1/1");
     await waitFor(() => {
       expect(
-        screen.getByText(/AI 综合研判暂不可用/),
+        screen.getByText(/AI 综合研判尚未生成/),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("C15 降级 banner:llm_conclusion 以哨兵前缀开头时渲染", async () => {
+    vi.spyOn(api, "getReport").mockResolvedValue(
+      mkReport({
+        llm_conclusion: "AI 综合研判暂不可用(LLM 超时)— 以下内容基于规则公式",
+      }),
+    );
+    renderAt("/reports/1/1");
+    await waitFor(() => {
+      const banner = screen.getByTestId("llm-fallback-banner");
+      expect(banner).toBeInTheDocument();
+      expect(banner.textContent).toContain("AI 综合研判暂不可用");
+    });
+  });
+
+  it("C15 降级 banner:llm_conclusion 非哨兵时不渲染", async () => {
+    vi.spyOn(api, "getReport").mockResolvedValue(
+      mkReport({
+        llm_conclusion: "本项目围标风险较高,建议进一步审查。",
+      }),
+    );
+    renderAt("/reports/1/1");
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("llm-fallback-banner"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/本项目围标风险较高/),
       ).toBeInTheDocument();
     });
   });

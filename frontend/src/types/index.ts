@@ -351,4 +351,84 @@ export interface ReportResponse {
   llm_conclusion: string;
   created_at: string;
   dimensions: ReportDimension[];
+  // C15 新增:人工复核字段(未复核时 null)
+  manual_review_status: "confirmed" | "rejected" | "downgraded" | "upgraded" | null;
+  manual_review_comment: string | null;
+  reviewer_id: number | null;
+  reviewed_at: string | null;
+}
+
+// =============================================================================
+// C15 report-export 类型
+// =============================================================================
+
+/** GET /reports/{version}/dimensions 单行 */
+export interface ReportDimensionDetail {
+  dimension: string;
+  best_score: number;
+  is_ironclad: boolean;
+  evidence_summary: string;
+  manual_review_json: {
+    action: "confirmed" | "rejected" | "note";
+    comment: string | null;
+    reviewer_id: number;
+    at: string;
+  } | null;
+}
+
+export interface ReportDimensionsResponse {
+  dimensions: ReportDimensionDetail[];
+}
+
+/** GET /reports/{version}/pairs */
+export interface PairComparisonItem {
+  id: number;
+  dimension: string;
+  bidder_a_id: number;
+  bidder_b_id: number;
+  score: number;
+  is_ironclad: boolean;
+  evidence_summary: string | null;
+}
+
+export interface PairsResponse {
+  items: PairComparisonItem[];
+}
+
+/** GET /reports/{version}/logs 合并条目 */
+export interface LogEntry {
+  source: "agent_task" | "audit_log";
+  created_at: string;
+  payload: Record<string, unknown>;
+}
+
+export interface LogsResponse {
+  items: LogEntry[];
+}
+
+/** 复核 API body/response */
+export type ReviewStatus = "confirmed" | "rejected" | "downgraded" | "upgraded";
+
+export interface ReviewIn {
+  status: ReviewStatus;
+  comment?: string;
+}
+
+export interface ReviewOut {
+  manual_review_status: ReviewStatus;
+  manual_review_comment: string | null;
+  reviewer_id: number;
+  reviewed_at: string;
+}
+
+export type DimensionReviewAction = "confirmed" | "rejected" | "note";
+
+export interface DimensionReviewIn {
+  action: DimensionReviewAction;
+  comment?: string;
+}
+
+/** 导出 */
+export interface ExportStartOut {
+  job_id: number;
 }

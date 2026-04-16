@@ -40,6 +40,10 @@ class OverallAnalysis(Base):
     evidence_json: Mapped[dict[str, Any] | None] = mapped_column(
         _JSONB_OR_JSON, nullable=True, default=None
     )
+    # C15 维度级人工复核标记(null = 未复核;schema: {action, comment, reviewer_id, at})
+    manual_review_json: Mapped[dict[str, Any] | None] = mapped_column(
+        _JSONB_OR_JSON, nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

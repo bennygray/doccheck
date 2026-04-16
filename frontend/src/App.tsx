@@ -5,6 +5,9 @@ import ChangePasswordPage from "./pages/ChangePasswordPage";
 import ProjectListPage from "./pages/projects/ProjectListPage";
 import ProjectCreatePage from "./pages/projects/ProjectCreatePage";
 import ProjectDetailPage from "./pages/projects/ProjectDetailPage";
+import AuditLogPage from "./pages/reports/AuditLogPage";
+import ComparePage from "./pages/reports/ComparePage";
+import DimensionDetailPage from "./pages/reports/DimensionDetailPage";
 import ReportPage from "./pages/reports/ReportPage";
 import SseDemoPage from "./pages/SseDemoPage";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -64,6 +67,30 @@ function App() {
         element={
           <ProtectedRoute>
             <ReportPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/:projectId/:version/dim"
+        element={
+          <ProtectedRoute>
+            <DimensionDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/:projectId/:version/compare"
+        element={
+          <ProtectedRoute>
+            <ComparePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/:projectId/:version/logs"
+        element={
+          <ProtectedRoute>
+            <AuditLogPage />
           </ProtectedRoute>
         }
       />

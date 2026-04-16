@@ -6,11 +6,15 @@
  * - LLM 结论:占位卡片(C14 接真 LLM)
  * - 不做:雷达图 / 热力图 / Markdown / 4 Tab(留 C14)
  */
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { ExportButton } from "../../components/reports/ExportButton";
+import { ReviewPanel } from "../../components/reports/ReviewPanel";
 import { ApiError, api } from "../../services/api";
 import type { ReportResponse, RiskLevel } from "../../types";
+
+const LLM_FALLBACK_PREFIX = "AI 综合研判暂不可用";
 
 const RISK_COLORS: Record<RiskLevel, string> = {
   high: "bg-red-600 text-white",
@@ -34,7 +38,7 @@ export function ReportPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     if (!projectId || !version) return;
     setLoading(true);
     api
@@ -52,6 +56,10 @@ export function ReportPage() {
       })
       .finally(() => setLoading(false));
   }, [projectId, version]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   if (loading) {
     return <div className="p-4">加载中...</div>;
@@ -72,6 +80,8 @@ export function ReportPage() {
     );
   }
 
+  const isLlmFallback = report.llm_conclusion.startsWith(LLM_FALLBACK_PREFIX);
+
   return (
     <div className="p-4 max-w-4xl mx-auto">
       {/* 顶栏 */}
@@ -88,12 +98,68 @@ export function ReportPage() {
           <span className="text-3xl font-bold">
             {report.total_score.toFixed(1)}
           </span>
+          <ExportButton projectId={projectId!} version={version!} />
         </div>
       </div>
 
-      {/* LLM 结论占位 */}
-      <div className="mb-4 p-3 bg-gray-100 rounded text-gray-600 italic">
-        AI 综合研判暂不可用 — 将在后续版本支持
+      {/* C15:降级 banner 哨兵(C14 前缀契约) */}
+      {isLlmFallback && (
+        <div
+          role="alert"
+          className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded text-sm text-yellow-900"
+          data-testid="llm-fallback-banner"
+        >
+          ⚠ {report.llm_conclusion}
+        </div>
+      )}
+
+      {/* LLM 结论:如果非降级即渲染正文 */}
+      {!isLlmFallback && report.llm_conclusion && (
+        <div className="mb-4 p-3 bg-gray-50 rounded border text-gray-700 whitespace-pre-wrap">
+          {report.llm_conclusion}
+        </div>
+      )}
+      {!isLlmFallback && !report.llm_conclusion && (
+        <div className="mb-4 p-3 bg-gray-100 rounded text-gray-500 italic">
+          AI 综合研判尚未生成
+        </div>
+      )}
+
+      {/* 子页导航 */}
+      <div className="mb-4 flex gap-3 text-sm">
+        <Link
+          to={`/reports/${projectId}/${version}/dim`}
+          className="text-blue-600 underline"
+        >
+          维度明细
+        </Link>
+        <Link
+          to={`/reports/${projectId}/${version}/compare`}
+          className="text-blue-600 underline"
+        >
+          对比入口
+        </Link>
+        <Link
+          to={`/reports/${projectId}/${version}/logs`}
+          className="text-blue-600 underline"
+        >
+          检测日志
+        </Link>
+      </div>
+
+      {/* 人工复核 */}
+      <div className="mb-4">
+        <ReviewPanel
+          projectId={projectId!}
+          version={version!}
+          current={{
+            status: report.manual_review_status,
+            comment: report.manual_review_comment,
+            reviewer_id: report.reviewer_id,
+            reviewed_at: report.reviewed_at,
+          }}
+          onSubmitted={reload}
+        />
       </div>
 
       {/* 10 维度得分列表 */}

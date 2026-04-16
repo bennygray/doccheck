@@ -1,9 +1,9 @@
-"""Report API schemas (C6 detect-framework)。"""
+"""Report API schemas (C6 detect-framework + C15 report-export)。"""
 
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -26,11 +26,57 @@ class ReportDimension(BaseModel):
 
 
 class ReportResponse(BaseModel):
-    """GET /reports/{version} 响应(C6 骨架;详细 Tab 留 C14)。"""
+    """GET /reports/{version} 响应(C6 骨架 + C15 扩 manual_review_*)。"""
 
     version: int
     total_score: float
     risk_level: str  # high|medium|low
-    llm_conclusion: str  # C6 恒 ""
+    llm_conclusion: str
     created_at: datetime
     dimensions: list[ReportDimension]
+    # C15 新增:整报告级人工复核字段(未复核时 null)
+    manual_review_status: str | None = None
+    manual_review_comment: str | None = None
+    reviewer_id: int | None = None
+    reviewed_at: datetime | None = None
+
+
+# ================================================================= C15
+
+
+class ReportDimensionDetail(BaseModel):
+    """GET /reports/{version}/dimensions 单行。"""
+
+    dimension: str
+    best_score: float
+    is_ironclad: bool
+    evidence_summary: str
+    manual_review_json: dict[str, Any] | None = None
+
+
+class ReportDimensionsResponse(BaseModel):
+    dimensions: list[ReportDimensionDetail]
+
+
+class PairComparisonItem(BaseModel):
+    id: int
+    dimension: str
+    bidder_a_id: int
+    bidder_b_id: int
+    score: float
+    is_ironclad: bool
+    evidence_summary: str | None = None
+
+
+class PairsResponse(BaseModel):
+    items: list[PairComparisonItem]
+
+
+class LogEntry(BaseModel):
+    source: str  # 'agent_task' | 'audit_log'
+    created_at: datetime
+    payload: dict[str, Any]
+
+
+class LogsResponse(BaseModel):
+    items: list[LogEntry]

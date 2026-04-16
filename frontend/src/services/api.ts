@@ -13,8 +13,12 @@ import type {
   BidDocument,
   Bidder,
   BidderListResponse,
+  DimensionReviewIn,
   DocumentRole,
   DocumentRolePatchResult,
+  ExportStartOut,
+  LogsResponse,
+  PairsResponse,
   PriceConfig,
   PriceConfigPayload,
   PriceItem,
@@ -25,7 +29,10 @@ import type {
   ProjectDetail,
   ProjectListQuery,
   ProjectListResponse,
+  ReportDimensionsResponse,
   ReportResponse,
+  ReviewIn,
+  ReviewOut,
   UploadResult,
 } from "../types";
 
@@ -329,4 +336,78 @@ export const api = {
   /** GET /api/projects/{pid}/reports/{version} — 报告骨架 */
   getReport: (projectId: number | string, version: number | string) =>
     request<ReportResponse>(`/projects/${projectId}/reports/${version}`),
+
+  // ---------------------------------------------------------- C15
+
+  /** GET /reports/{version}/dimensions — 11 维度明细 */
+  getReportDimensions: (
+    projectId: number | string,
+    version: number | string,
+  ) =>
+    request<ReportDimensionsResponse>(
+      `/projects/${projectId}/reports/${version}/dimensions`,
+    ),
+
+  /** GET /reports/{version}/pairs — pair 摘要 */
+  getReportPairs: (
+    projectId: number | string,
+    version: number | string,
+    sort: "score_desc" | "id_asc" = "score_desc",
+    limit = 50,
+  ) =>
+    request<PairsResponse>(
+      `/projects/${projectId}/reports/${version}/pairs?sort=${sort}&limit=${limit}`,
+    ),
+
+  /** GET /reports/{version}/logs — AgentTask + AuditLog 合并 */
+  getReportLogs: (
+    projectId: number | string,
+    version: number | string,
+    source: "all" | "agent_task" | "audit_log" = "all",
+    limit = 100,
+  ) =>
+    request<LogsResponse>(
+      `/projects/${projectId}/reports/${version}/logs?source=${source}&limit=${limit}`,
+    ),
+
+  /** POST 整报告级复核 */
+  postReview: (
+    projectId: number | string,
+    version: number | string,
+    body: ReviewIn,
+  ) =>
+    request<ReviewOut>(
+      `/projects/${projectId}/reports/${version}/review`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  /** POST 维度级复核 */
+  postDimensionReview: (
+    projectId: number | string,
+    version: number | string,
+    dimension: string,
+    body: DimensionReviewIn,
+  ) =>
+    request<{ dimension: string; manual_review_json: unknown }>(
+      `/projects/${projectId}/reports/${version}/dimensions/${dimension}/review`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  /** POST 触发 Word 导出 */
+  startExport: (
+    projectId: number | string,
+    version: number | string,
+    template_id?: number,
+  ) =>
+    request<ExportStartOut>(
+      `/projects/${projectId}/reports/${version}/export`,
+      {
+        method: "POST",
+        body: JSON.stringify({ template_id: template_id ?? null }),
+      },
+    ),
+
+  /** 下载导出文件:返回 Blob URL 以便浏览器下载 */
+  downloadExportUrl: (jobId: number) =>
+    `${API_BASE}/exports/${jobId}/download`,
 };

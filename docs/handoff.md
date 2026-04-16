@@ -11,15 +11,60 @@
 
 | 项 | 值 |
 |---|---|
-| 当前里程碑 | **M3 完成(9/9)🎉 — M3 收官** |
-| 当前 change | C14 `detect-llm-judge` 已 apply,即将 archive + commit |
-| 当前任务行 | N/A(M3 全部完成,下一步进 M4 C15 report-export) |
-| 最新 commit | C13 归档 `74ad9c8` — C14 archive commit 即将产生 |
+| 当前里程碑 | **M4 起步(1/3)— C15 apply 完成,待 archive** |
+| 当前 change | C15 `report-export` apply 全绿,即将 archive + commit |
+| 当前任务行 | 10.1 汇总测试(L1+L2+L3 全部通过,L3 手工凭证占位) |
+| 最新 commit | C14 归档 `6d0bd10` — C15 archive commit 即将产生 |
 | 工作区 | C13 全量改动:**检测层(C13 主体)**:**新增 3 子包共 18 文件**(`error_impl/` 7:`__init__.py` 复用 anomaly_impl write_overall_analysis_row / `config.py` 5 env / `models.py` 5 TypedDict(KeywordHit / SuspiciousSegment / LLMJudgment / PairResult / DetectionResult)/ `keyword_extractor.py` 4 类字段平铺+短词过滤+NFKC 归一+去重+downgrade 退化 bidder.name / `intersect_searcher.py` 双向跨 bidder 子串匹配+MAX_CANDIDATE_SEGMENTS 截断按 matched_keywords 倒序 / `llm_judge.py` L-5 调用+系统 prompt+JSON 解析容错+重试 / `scorer.py` pair 级+Agent 级 max 公式;`image_impl/` 5:`__init__.py` / `config.py` 5 env(PHASH 严格 0~64)/ `models.py` 3 TypedDict(MD5Match/PHashMatch/DetectionResult)/ `hamming_comparator.py` SQL 过滤小图+MD5 INNER JOIN+pHash `imagehash.hex_to_hash().__sub__`+同对图去重+MAX_PAIRS 截断 / `scorer.py`;`style_impl/` 6:`__init__.py` / `config.py` 6 env(SAMPLE 严格 5~10)/ `models.py` 4 TypedDict(StyleFeatureBrief/ConsistentGroup/GlobalComparison/DetectionResult)/ `sampler.py` technical 角色+TfidfVectorizer IDF 过滤+长度过滤 100~300+均匀抽样 / `llm_client.py` L-8 Stage1+Stage2+共享 `_call_with_retry_and_parse`(解析失败消费重试名额) / `scorer.py`+LIMITATION_NOTE 固定文案)+ **重写 3 Agent run()**(`error_consistency.py` 5 层兜底:ENABLED=false 早返 / preflight 任一缺 downgrade 标记仍调 L-5 / 无可抽关键词 skip 哨兵 / L-5 失败仅展示程序 evidence 不铁证 / L-5 direct_evidence=true → has_iron_evidence=True;遍历 C(n,2) pair 产 pair_results 列表;写 1 行 OA;`image_reuse.py` 3 层兜底:disabled 早返 / 小图过滤后 0 张 skip 哨兵 / 正常双路;`style.py` 4 层兜底:disabled / preflight skip / Stage1 失败 / Stage2 失败;>20 bidder 按 `STYLE_GROUP_THRESHOLD=20` 自动分组每组独立跑 Stage1+Stage2,组间不跨比)+ **`_preflight_helpers.bidder_has_identity_info`** 新增(同步纯属性判断,None/非 dict/空 dict 全返 False)+ **判别层**:`judge.py::compute_report` +3 行支持 global 型 Agent 铁证升级(读 `OverallAnalysis.evidence_json["has_iron_evidence"]`)+ **LLM mock 扩展**:`tests/fixtures/llm_mock.py` 扩 L-5 + L-8 两阶段 9 builder/fixture(`make_l5_response` / `mock_llm_l5_iron/non_iron/no_contamination/failed/bad_json` / `make_l8_stage1_response` / `make_l8_stage2_response` / `mock_llm_l8_full_success/stage1_failed/stage2_failed/bad_json_stage1`)+ **agents/__init__.py** 文件头注释清 dummy(dummy 列表已空)+ **L1 16 test 文件 131 新用例**(error 7:config 10 / keyword_extractor 10 / intersect_searcher 8 / llm_judge 9 / scorer 7 / preflight 8 / run 7;image 4:config 8 / hamming_comparator 10 / scorer 5 / run 6;style 5:config 10 / sampler 9 / llm_client 8 / scorer 6 / run 9)+ **L2 3 test 文件 8 Scenario**(error 4 / image 2 / style 2)+ **`test_detect_registry.py` 新增 `test_no_dummy_run_after_c13`**(inspect 三 global Agent run 模块路径无 _dummy)+ **既有测试调整 3 处**(`test_detect_judge.py` judge.py 改动后 `getattr(oa, "evidence_json", None) or {}` 兼容既有 SimpleNamespace mock;`test_run_detection_agent_timeout` monkeypatch error_consistency 为 0.5s sleep 慢 run 触发 timeout 路径,贴真实 Agent 不再 sleep 事实;`test_dummy_global_run_writes_overall_analysis` 保留 — style.run 在 `< 2 bidder` 补写 OA 让前端可见 skip_reason)+ **doc_texts 行级 SQL**:apply 现场修正 — spec 写 paragraphs/header_footer JSONB 数组,实际 DocumentText 是行级表(location 字段),intersect_searcher 用 SQL 行级查询(language 等价)+ **`imagehash.__sub__` → int(...)** cast(numpy int64 JSONB 序列化失败兜底)+ `backend/README.md` 新增"C13 detect-agents-global 依赖"完整段(Q1~Q5 决策 / apply 现场决策 / 3 Agent 算法 / 16 env / LLM mock 入口 / algorithm version 3 个)+ `.gitignore` 加 `c13-*` 白名单 + `e2e/artifacts/c13-2026-04-15/README.md` L3 手工凭证占位(6 张待补截图 + L1/L2 覆盖证明)+ `openspec/specs/detect-framework/spec.md` sync(+14 ADDED + 1 MODIFIED Req,50 → 64 Req;**sync 后修正 5 处**:AgentRunResult 仍 3 字段不扩,铁证契约改为 global 走 evidence 顶层 has_iron_evidence,pair 走 PairComparison.is_ironclad)+ `docs/execution-plan.md §6` 追加 2 行(C13 改名 detect-agents-global / C14 改名 detect-llm-judge,保留 §3 原表)。**测试合计 883 全绿**(C12 基线 743 → C13 883,净增 140 用例:L1 131 + L2 8 + 注册表 1) |
 
 ---
 
-## 2. 本次 session 关键决策(2026-04-16,C14 propose+apply+archive)
+## 2. 本次 session 关键决策(2026-04-16,C15 `report-export` propose+apply)
+
+### propose 阶段已敲定(4 产品级决策)
+
+- **Q1 C Word 模板两者结合**(用户拍板):内置默认模板 + 用户上传可覆盖 + 上传坏掉回退内置;拒绝 A(机构定制无法满足)/ B(上传管理成本一次性拉满,M4 首 change 范围溢出)
+- **Q2 D 复核粒度组合**(用户拍板):整报告级最终结论(AR 加 4 字段,必须)+ 维度级标记(OA 加 `manual_review_json`,可选);拒绝 A(粒度粗与 11 维度结构错位)/ B(审核员 11 次点击)/ C(pair 级 5~45 对工作量爆炸)
+- **Q3 A 独立 `audit_log` 表全字段**(用户拍板):`id/project_id/report_id/actor_id/action/target_type/target_id/before/after/ip/ua/created_at`;拒绝 B(复用 async_tasks 语义错配)/ C(复用 AgentTask 纬度错位)
+- **Q4 D 异步 + 预览链接 + 三兜底**(用户拍板):生成失败 → 重试;用户模板坏 → 回退内置;7 天过期 → 410;拒绝 A(长请求阻塞 worker)/ B(缺失兜底)/ C(混合路径过度设计)
+
+### propose 阶段我自己定(实施细节,design D1~D15)
+
+- **D1 docxtpl 选型**(基于 python-docx + jinja2,模板即 .docx 用户可直接在 Word 编辑)
+- **D2 AR 加 4 字段 + OA 加 1 字段**(不新建 manual_review 表,避免过度设计)
+- **D3 audit_log action 白名单**(应用层校验非法抛 ValueError,不加 DB CHECK 约束保持跨库)
+- **D5 文件路径 `uploads/exports/{job_id}.docx`,7 天过期**
+- **D6 内置模板 docxtpl schema**(project/report/dimensions/top_pairs/review 条件段)
+- **D7 用户模板上传 UI 作为 follow-up**,本 change 只建 `export_templates` 表骨架
+- **D8 前端 `/reports/:projectId/:version/{dim|compare|logs}` 层级路由**
+- **D9 SSE 事件类型 `export_progress`**(复用既有 `progress_broker`,不新 endpoint)
+- **D11 复核不改检测原值**(`AR.total_score` / `risk_level` / `llm_conclusion` 保持)
+- **D12 audit 写入独立事务 + try/except 吞异常**
+- **D13 导出失败不自动重试**(模板问题盲重试浪费资源)
+- **D14 测试三层计划:L1 25 + 前端 Vitest 12 + L2 25**
+- **D15 follow-ups**:用户模板上传 UI / PDF 导出 / 批量导出 / audit 过滤器 / 导出历史页
+
+### apply 阶段就地敲定(重要现场决策 B2)
+
+- **design D4 改 B2**:原 design 假设 `async_tasks` 有 `payload_json` + `result_json` 字段 + 扩 `subtype='export'`,apply 读代码发现 AsyncTask 是轻量心跳追踪表(仅 subtype/entity/status/heartbeat/error,4 subtype 枚举闭合),扩字段 + 扩枚举侵入大;**就地改独立 `export_jobs` 表**:14 字段含 status/file_path/file_size/fallback_used/error/file_expired;独立表语义更干净且不污染心跳追踪
+- **AR `risk_level` 非 `level`**:spec 草稿写 `level`,实际 C6 既有字段名是 `risk_level`;spec 全部改 `risk_level`(路由/schema/测试)
+- **endpoint 用 `{version}` 非 `{rid}`**:C6 既有 `/reports/{version}` 用 `(project_id, version)` 复合键标识报告,继承该风格;audit_log 的 `report_id` FK 仍是 `AR.id`
+- **OA 无 `level`/`has_iron_evidence`/`skip_reason` 单独字段**:实际 OA 仅 `score` + `evidence_json`;`has_iron_evidence` 存 evidence_json 里;dimensions 视图从 OA+PC 聚合计算
+- **SSE 事件复用既有 `progress_broker`**(project 级),事件类型 `export_progress`;前端订阅 `/api/projects/{pid}/analysis/events` 同一 SSE 通道,按事件类型 match
+- **L3 延续手工凭证降级**(Docker kernel-lock 未解 C3~C14 共因);`e2e/artifacts/c15-2026-04-16/README.md` 记 3 条手工路径 + L1/L2 94 用例覆盖证明
+- **task 3.3 [L1] → [L2]**:reviews 测试需要 HTTP 客户端 + DB 全链路,纯 L1 无法覆盖;就地升级并注明与 task 7.5 review_flow 合并覆盖,避免重复写同一份测试
+
+### 文档联动
+
+- **`openspec/changes/report-export/tasks.md`** 所有任务标 `[x]` 含备注
+- **`docs/execution-plan.md §6`** 追加 1 行 C15 apply 记录
+- **`docs/handoff.md`** 即本次更新
+- **`e2e/artifacts/c15-2026-04-16/README.md`** L3 手工凭证占位(3 条步骤 + L1/L2 94 用例覆盖证明)
+- **`.gitignore`** 加 `!e2e/artifacts/c15-*/**` 白名单(延续 C14 pattern,archive 阶段处理)
+
+---
+
+## 2.bak_C14 上一 session 关键决策(2026-04-16,C14 propose+apply+archive)
 
 ### propose 阶段已敲定(5 决策)
 

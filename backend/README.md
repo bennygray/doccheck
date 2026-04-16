@@ -345,6 +345,61 @@ level = compute_level(final)                      # ≥70 high / 40-69 medium / 
 
 `llm_judge_v1`(首版简版 prompt;实战反馈后 N-shot examples / 输出格式精调留 follow-up)
 
+## C15 report-export 依赖
+
+### 新增 Python 依赖
+
+- `docxtpl>=0.16`(Word 模板渲染:jinja2 + python-docx)
+
+### 数据模型(alembic 0008)
+
+- `audit_logs`(独立审计日志表,12 字段 + 2 复合索引)
+- `export_jobs`(独立导出作业表,14 字段 + 3 索引)
+- `export_templates`(用户模板骨架预留,不暴露上传 endpoint)
+- `analysis_reports` 加 4 字段:`manual_review_status/comment/reviewer_id/reviewed_at`
+- `overall_analyses` 加 `manual_review_json` JSONB
+
+### 环境变量
+
+- `C15_DISABLE_EXPORT_WORKER=1`:禁用触发 endpoint 的 `asyncio.create_task(run_export)` 自动调度(L2 测试用手工调用)
+- `INFRA_DISABLE_EXPORT_CLEANUP=1`:禁用每日 02:00 的导出过期清理后台任务
+
+### 核心 endpoint
+
+- `GET /api/projects/{pid}/reports/{version}` — 总览(含 `manual_review_*` 4 新字段)
+- `GET /api/projects/{pid}/reports/{version}/dimensions` — 11 维度聚合明细
+- `GET /api/projects/{pid}/reports/{version}/pairs` — PairComparison 摘要 + sort/limit
+- `GET /api/projects/{pid}/reports/{version}/logs` — AgentTask + AuditLog 合并
+- `POST /api/projects/{pid}/reports/{version}/review` — 整报告级复核(4 状态)
+- `POST /api/projects/{pid}/reports/{version}/dimensions/{dim}/review` — 维度级复核
+- `POST /api/projects/{pid}/reports/{version}/export` — 触发 Word 导出(202 + `{job_id}`)
+- `GET /api/exports/{job_id}/download` — 下载(200 / 410 过期 / 409 未完成 / 404)
+- `GET /api/projects/{pid}/audit_logs` — 操作日志查询(支持 report_id/action 前缀/limit/offset)
+
+### 4 产品决策
+
+- **Q1 C** Word 模板:内置默认 + 用户上传可覆盖 + 上传坏回退内置(用户上传 UI 作为 follow-up)
+- **Q2 D** 复核粒度:整报告级 AR 4 字段(必)+ 维度级 OA.manual_review_json(选);**不动检测原值**
+- **Q3 A** 操作日志:独立 `audit_log` 表全字段;写入放独立事务 + try/except 吞异常
+- **Q4 D** 导出异步:独立 `export_jobs` 表(B2 apply 就地改,不复用 async_tasks);三兜底(失败重试 / 用户模板坏 fallback / 7 天过期 410)
+
+### algorithm version
+
+`report_export_v1`(首版 Word 模板 + 最小审计字段集;N-shot 模板变体 / 模板上传 UI 留 follow-up)
+
+### 手工生成内置模板(一次性)
+
+```bash
+uv run python scripts/build_default_export_template.py
+# 产出 app/services/export/templates/default.docx(已提交到 repo)
+```
+
+### LLM 降级 banner 前缀哨兵(C14 契约,C15 前端 match)
+
+后端 `judge_llm.fallback_conclusion` 固定以 `"AI 综合研判暂不可用"` 开头 →
+前端 `ReportPage.tsx` 通过 `llm_conclusion.startsWith("AI 综合研判暂不可用")` 识别降级 →
+渲染 `<div data-testid="llm-fallback-banner">` 黄色提示。
+
 ## 常用命令
 
 ```bash

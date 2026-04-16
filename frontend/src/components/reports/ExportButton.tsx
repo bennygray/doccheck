@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { ApiError, api } from "../../services/api";
+import { authStorage } from "../../contexts/AuthContext";
 
 type Phase = "idle" | "running" | "done" | "failed";
 
@@ -59,8 +60,12 @@ export function ExportButton({ projectId, version }: Props) {
   };
 
   const subscribeSse = (job_id: number) => {
-    // 复用既有 SSE endpoint
-    const url = api.analysisEventsUrl(projectId);
+    // 复用既有 SSE endpoint；EventSource 不支持自定义 header → token 通过 query 附加
+    const urlBase = api.analysisEventsUrl(projectId);
+    const token = authStorage.getToken();
+    const url = token
+      ? `${urlBase}?access_token=${encodeURIComponent(token)}`
+      : urlBase;
     const es = new EventSource(url, { withCredentials: false });
     esRef.current = es;
 

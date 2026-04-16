@@ -104,7 +104,7 @@ async def test_preflight_skip_too_short(monkeypatch):
     )
     monkeypatch.setattr(
         ss_mod.segmenter, "load_paragraphs_for_roles",
-        AsyncMock(side_effect=[_seg(total=300), _seg(total=800)]),
+        AsyncMock(side_effect=[_seg(total=200), _seg(total=800)]),
     )
     ctx = _make_ctx()
     result = await ss_mod.preflight(ctx)

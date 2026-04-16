@@ -9,11 +9,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: `http://localhost:${process.env.BACKEND_PORT ?? "8001"}`,
         changeOrigin: true,
       },
       "/demo": {
-        target: "http://localhost:8000",
+        target: `http://localhost:${process.env.BACKEND_PORT ?? "8001"}`,
         changeOrigin: true,
         // 浏览器导航(Accept: text/html)到 /demo/sse 时,让前端 React 路由处理;
         // EventSource 请求(Accept: text/event-stream)才真正代理到后端 SSE 端点。

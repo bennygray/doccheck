@@ -7,7 +7,7 @@
 
 preflight:
 - "同角色文档存在"(C6 锁定 contract) +
-- 超短文档 skip(任一侧 total_chars < MIN_DOC_CHARS,默认 500)
+- 超短文档 skip(任一侧 total_chars < MIN_DOC_CHARS,默认 300)
 """
 
 from __future__ import annotations

@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -21,15 +21,22 @@ from app.services.auth.jwt import TokenInvalid, decode_access_token
 
 async def get_current_user(
     authorization: str | None = Header(default=None),
+    access_token: str | None = Query(default=None, include_in_schema=False),
     session: AsyncSession = Depends(get_db),
 ) -> User:
-    if not authorization or not authorization.lower().startswith("bearer "):
+    # 优先从 Header 读 Bearer token；回退到 query param access_token（SSE EventSource 场景）
+    token: str | None = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    elif access_token:
+        token = access_token
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="未提供认证令牌",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = authorization.split(" ", 1)[1].strip()
     try:
         payload = decode_access_token(token)
     except TokenInvalid:

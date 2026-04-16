@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "../services/api";
+import { authStorage } from "../contexts/AuthContext";
 import type {
   AgentTask,
   AnalysisStatusResponse,
@@ -74,7 +75,13 @@ export function useDetectProgress(
       /* ignore */
     });
 
-    const es = new EventSource(api.analysisEventsUrl(projectId), {
+    // EventSource 不支持自定义 header → token 通过 query 附加
+    const sseUrlBase = api.analysisEventsUrl(projectId);
+    const sseToken = authStorage.getToken();
+    const sseUrl = sseToken
+      ? `${sseUrlBase}?access_token=${encodeURIComponent(sseToken)}`
+      : sseUrlBase;
+    const es = new EventSource(sseUrl, {
       withCredentials: false,
     });
 

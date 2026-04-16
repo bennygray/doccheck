@@ -217,7 +217,7 @@ export default function AdminRulesPage() {
                     <input
                       type="number"
                       data-testid={`dim-${dimName}-${k}`}
-                      value={v as number}
+                      value={(v as number) ?? ""}
                       step="any"
                       onChange={(e) =>
                         updateDim(dimName, k, Number(e.target.value))

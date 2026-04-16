@@ -8,7 +8,7 @@
 6. 写 PairComparison
 
 preflight:
-- 双方有同角色文档(C6 contract)+ 双方总字数 ≥ C7 TEXT_SIM_MIN_DOC_CHARS(500)
+- 双方有同角色文档(C6 contract)+ 双方总字数 ≥ C7 TEXT_SIM_MIN_DOC_CHARS(300)
 - 章节数检查不在 preflight,下放到 run() 内(切章失败走降级,不 skip)
 """
 

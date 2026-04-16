@@ -12,7 +12,7 @@
 | 项 | 值 |
 |---|---|
 | 当前里程碑 | **M4 完成 + 验收缺陷修复中** |
-| 当前 change | DEF-001 `fix-project-status-transition` 归档完成。解析完成后项目状态自动流转(draft→parsing→ready) |
+| 当前 change | DEF-003 `fix-seed-admin` 归档完成。系统启动自动 seed admin |
 | 最新 commit | C17 归档 `7d8e8be` — DEF-001 archive commit 即将产生 |
 | 工作区 | C17 全量改动:**后端**:新增 `models/system_config.py`(SystemConfig 单行 JSON)+ `services/admin/`(rules_defaults + rules_mapper + rules_reader 3 文件)+ `schemas/admin.py`(用户+规则 Pydantic)+ `routes/admin.py`(5 endpoint: GET/POST/PATCH users + GET/PUT rules)+ `main.py` 注册 admin router + Alembic 0009 migration;**引擎集成**:`engine.py` 检测前读 SystemConfig + `judge.py` 支持自定义 weights/risk_levels;**前端**:`AdminUsersPage.tsx`(用户表格+创建+启用禁用)+ `AdminRulesPage.tsx`(10 维度+全局配置+保存+恢复默认)+ `App.tsx` 新增 2 admin 路由 + `api.ts` 新增 5 API 函数 + `types/index.ts` 新增 admin 类型 + `ProjectListPage.tsx` admin 导航入口;**测试**:L1 后端 16 + L1 前端 8 + L2 3 = 27 新增用例;**spec sync**:新增 `admin-users` spec(4 Req/12 Scenario)+ `admin-rules` spec(6 Req/15 Scenario);**L3 手工凭证**:`e2e/artifacts/c17-2026-04-16/README.md` |
 
@@ -101,8 +101,8 @@
 
 | 日期 | 变更 |
 |---|---|
+| 2026-04-16 | **DEF-003 `fix-seed-admin` 归档**:系统启动自动 seed admin(users 表为空时创建 must_change_password=True 的管理员);新建 `seed.py` + main.py lifespan 挂载;3 新增用例;全量 1037 passed |
 | 2026-04-16 | **DEF-001 `fix-project-status-transition` 归档**:解析完成后项目状态自动流转(draft→parsing→ready);新建 `project_status_sync.py` + run_pipeline 6 出口挂载 + extract 入口触发 parsing;9 新增用例(L1 8 + L2 1);全量 1034 passed |
 | 2026-04-16 | **C17 `admin-users` 归档(M4 进度 3/3,M4 收官)**:**后端** SystemConfig 单行 JSON + admin 5 endpoint(users CRUD + rules GET/PUT)+ rules_defaults/mapper/reader + Alembic 0009;**引擎集成** engine.py 检测前读 SystemConfig + judge.py 自定义 weights/risk_levels;**前端** AdminUsersPage(用户表格+创建+启用禁用)+ AdminRulesPage(10 维度+全局配置+恢复默认)+ admin 路由+导航;**27 新增用例全绿**(L1 后端 16 + L1 前端 8 + L2 3);4 决策(A/A/A/A);spec sync:新建 admin-users 4 Req + admin-rules 6 Req |
 | 2026-04-16 | **C16 `compare-view` 归档(M4 进度 2/3)**:3 对比视图(文本双栏/报价矩阵/元数据矩阵);29 新增用例;4 决策 |
-| 2026-04-16 | **C15 `report-export` 归档(M4 进度 1/3)**:报告导出+人工复核+操作日志;54 新增用例;4 决策 |
 | 2026-04-16 | **C14 `detect-llm-judge` 归档(M3 收官)**:judge LLM 综合研判+clamp+降级;55 新增用例;5 决策 |

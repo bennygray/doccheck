@@ -46,6 +46,16 @@ async def lifespan(app: FastAPI):
 
         export_cleanup_handle = export_cleanup_task.start()
 
+    # DEF-003: seed admin(首次启动自动创建管理员)
+    # INFRA_DISABLE_SEED=1 可跳过(L2 测试用)
+    if os.environ.get("INFRA_DISABLE_SEED") != "1":
+        try:
+            from app.services.auth.seed import ensure_seed_admin
+
+            await ensure_seed_admin()
+        except Exception as exc:  # noqa: BLE001 - seed 异常不能阻塞启动
+            startup_logger.exception("admin seed failure: %s", exc)
+
     # C6: 启动时扫描 stuck async_tasks 并回滚实体状态
     # INFRA_DISABLE_SCANNER=1 可跳过(L2 测试用)
     if os.environ.get("INFRA_DISABLE_SCANNER") != "1":

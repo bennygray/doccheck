@@ -250,21 +250,43 @@ preflight 抛异常 → 视为 `skip "preflight 异常: <error>"`,不视为 fail
    b. `formula_total = sum(per_dim_max[dim] * DIMENSION_WEIGHTS[dim] for dim in 11 维度)`,四舍五入 2 位
    c. 铁证升级:任一 `pc.is_ironclad=true` 或任一 `oa.evidence_json["has_iron_evidence"]=true` → `formula_total = max(formula_total, 85.0)`
    d. `formula_level`:formula_total ≥ 70 → `high`;40-69 → `medium`;< 40 → `low`
-3. 构造 **L-9 LLM 综合研判** 输入:`summary = judge_llm.summarize(pcs, oas, per_dim_max, ironclad_info)`(预聚合结构化摘要,token 稳定 3~8k,见 `L-9 摘要预聚合契约`)
-4. 若 `LLM_JUDGE_ENABLED=true` → 调 `judge_llm.call_llm_judge(summary, formula_total)` 产 `(conclusion: str | None, suggested_total: float | None)`(见 `L-9 LLM 调用契约`)
-5. **clamp 守护**(见 `L-9 可升不可降 clamp 契约`):
-   a. LLM 成功:`final_total = max(formula_total, llm_suggested_total)`
-   b. 铁证命中:`final_total = max(final_total, 85.0)`
-   c. 天花板:`final_total = min(final_total, 100.0)`
-   d. `final_level` 按 `final_total` 重算(可能跨档)
-6. **失败兜底**(见 `L-9 LLM 失败兜底模板契约`):LLM 失败 / `LLM_JUDGE_ENABLED=false` / 解析失败 / 超界 → `final_total = formula_total` / `final_level = formula_level` / `llm_conclusion = judge_llm.fallback_conclusion(final_total, final_level, per_dim_max, ironclad_dims)`(前缀标语 + 公式结论模板)
-7. INSERT AnalysisReport `{project_id, version, total_score=final_total, risk_level=final_level, llm_conclusion}`
-8. UPDATE `project.status = 'completed'` / `project.risk_level = final_level`
-9. broker publish `report_ready` 事件
+3. **[新增] 补写 pair 类维度 OA 行**:对 7 个 pair 类维度(text_similarity / section_similarity / structure_similarity / metadata_author / metadata_time / metadata_machine / price_consistency),系统 MUST 在 AnalysisReport INSERT 之前写入 `overall_analyses` 行,每维度一行。OA 行内容:
+   - `score` = 该维度的 `per_dim_max[dim]`(已在步骤 2a 计算)
+   - `evidence_json` = `{"source": "pair_aggregation", "best_score": <float>, "has_iron_evidence": <bool>, "pair_count": <int>, "ironclad_pair_count": <int>}`
+   - 写入 MUST 幂等:若 `(project_id, version, dimension)` 已有 OA 行则跳过
+4. 构造 **L-9 LLM 综合研判** 输入(同原步骤 3,编号后移)
+5. LLM 调用(同原步骤 4)
+6. **clamp 守护**(同原步骤 5)
+7. **失败兜底**(同原步骤 6)
+8. INSERT AnalysisReport(同原步骤 7)
+9. UPDATE `project.status = 'completed'` / `project.risk_level`(同原步骤 8)
+10. broker publish `report_ready`(同原步骤 9)
 
-权重 `DIMENSION_WEIGHTS` 合计 = 1.00,C6 占位值由 C12 调整(`price_anomaly` 新增 0.07),本 change **不再调整**(留实战反馈 follow-up)。
+检测完成后,`overall_analyses` 表 MUST 包含该 version 的全部 11 个维度(4 global + 7 pair),使维度级复核 API 对所有维度可用。
 
-`compute_report` 保留作为 **纯函数单一事实源**,契约不变,C6~C13 既有测试全绿。
+`compute_report` 纯函数签名和语义不变。OA 写入在 `judge_and_create_report` 异步函数内完成。
+
+权重 `DIMENSION_WEIGHTS` 合计 = 1.00,本 change 不调整。
+
+#### Scenario: pair 类维度 OA 行写入
+
+- **WHEN** 2 个投标人检测完成,text_similarity agent 写了 1 行 PairComparison(score=60, is_ironclad=false)
+- **THEN** judge 阶段写入 text_similarity 的 OA 行:score=60, evidence_json.source="pair_aggregation", evidence_json.has_iron_evidence=false, evidence_json.pair_count=1
+
+#### Scenario: pair 类铁证维度 OA 行写入
+
+- **WHEN** 3 个投标人检测完成,metadata_author agent 写了 3 行 PairComparison(A-B: score=100 ironclad=true, A-C: score=80 ironclad=false, B-C: score=100 ironclad=true)
+- **THEN** judge 阶段写入 metadata_author 的 OA 行:score=100, evidence_json.has_iron_evidence=true, evidence_json.pair_count=3, evidence_json.ironclad_pair_count=2
+
+#### Scenario: OA 写入幂等
+
+- **WHEN** judge_and_create_report 被重复调用(如重试)
+- **THEN** 第二次调用不重复写入 OA 行;已有 OA 行保持不变
+
+#### Scenario: 检测完成后 OA 行总数
+
+- **WHEN** 任意检测版本完成(不论 agent 成功/失败/跳过)
+- **THEN** overall_analyses 表该 version 恰好有 11 行(每维度一行);维度级复核 API 对全部 11 维度返回 200
 
 #### Scenario: LLM 成功升分跨档
 
@@ -300,6 +322,29 @@ preflight 抛异常 → 视为 `skip "preflight 异常: <error>"`,不视为 fail
 
 - **WHEN** 所有 AgentTask 均 skipped(数据不足),formula_total=0、无铁证
 - **THEN** AnalysisReport 生成,final_total=0,final_level=`low`;若 LLM 启用且成功,conclusion 可基于"数据不足"摘要产文;若 LLM 失败,llm_conclusion=fallback_conclusion 模板明示"数据不足"
+
+---
+
+### Requirement: global 类 agent early-return 分支 MUST 写 OA 行
+
+error_consistency 和 image_reuse agent 在 early-return 分支(session=None 或 bidders<2 等数据不足场景)MUST 写入 OA 行(score=0, evidence_json 含 skip_reason),与 style agent 现有行为对齐。
+
+所有 4 个 global agent(error_consistency / image_reuse / price_anomaly / style)在任何执行路径(正常/skip/early-return)下 MUST 保证写入恰好一行 OA。
+
+#### Scenario: error_consistency 数据不足仍写 OA
+
+- **WHEN** error_consistency agent 因 bidders < 2 而 skip
+- **THEN** overall_analyses 仍有 error_consistency 行:score=0, evidence_json 含 `skip_reason`
+
+#### Scenario: image_reuse session=None 仍写 OA
+
+- **WHEN** image_reuse agent 在无 session 环境运行(如 L1 测试)
+- **THEN** 不写 OA(session=None 静默跳过,与 write_overall_analysis_row 现有契约一致)
+
+#### Scenario: image_reuse 有 session 但数据不足
+
+- **WHEN** image_reuse agent 有 session 但无图片数据
+- **THEN** overall_analyses 有 image_reuse 行:score=0, evidence_json 含 `skip_reason`
 
 ---
 

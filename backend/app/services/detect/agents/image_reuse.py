@@ -134,6 +134,11 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         evidence = _build_evidence(
             [], [], cfg, enabled=True, skip_reason="invalid_context"
         )
+        # session=None 时 write_overall_analysis_row 内部静默跳过,
+        # 但仍调用以保持代码一致性
+        await write_overall_analysis_row(
+            ctx, dimension=_DIMENSION, score=0.0, evidence=evidence
+        )
         return AgentRunResult(
             score=0.0,
             summary="image_reuse 上下文无效,跳过",

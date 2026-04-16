@@ -6,6 +6,8 @@ C12: 新增 price_anomaly global 维度(权重 0.07,从 price_consistency / imag
 C13: judge.compute_report 扩读 OverallAnalysis.evidence_json["has_iron_evidence"] 支持 global 型铁证升级。
 C14: 在 compute_report 之后插入 L-9 LLM 综合研判层(预聚合摘要 → LLM → 可升不可降 clamp →
      失败模板兜底)。compute_report 纯函数签名契约不变。
+DEF-OA: judge 阶段为 7 个 pair 维度补写 OA 聚合行,使 overall_analyses 每版本恰好 11 行,
+     维度级复核 API 对所有维度可用。
 """
 
 from __future__ import annotations
@@ -43,6 +45,14 @@ DIMENSION_WEIGHTS: dict[str, float] = {
     "error_consistency": 0.12,  # 铁证维度,权重最高之一
     "style": 0.08,
     "image_reuse": 0.05,  # C12 释放部分权重给 price_anomaly
+}
+
+# 7 个 pair 类维度(由 pair agent 写 PairComparison,judge 补写 OA 聚合行)
+PAIR_DIMENSIONS: frozenset[str] = frozenset(DIMENSION_WEIGHTS.keys()) - {
+    "error_consistency",
+    "price_anomaly",
+    "style",
+    "image_reuse",
 }
 
 
@@ -228,6 +238,31 @@ async def judge_and_create_report(
             per_dim_max, has_ironclad, weights=_weights
         )
         formula_level = _compute_level(formula_total, risk_levels=_risk_levels)
+
+        # DEF-OA: 为 pair 类维度补写 OA 聚合行
+        existing_oa_dims = {oa.dimension for oa in overall_analyses}
+        for dim in PAIR_DIMENSIONS:
+            if dim in existing_oa_dims:
+                continue  # 幂等: 已有 OA 行则跳过
+            # 从 pair_comparisons 聚合该维度的统计
+            dim_pcs = [pc for pc in pair_comparisons if pc.dimension == dim]
+            best_score = per_dim_max.get(dim, 0.0)
+            iron_pcs = [pc for pc in dim_pcs if pc.is_ironclad]
+            oa = OverallAnalysis(
+                project_id=project_id,
+                version=version,
+                dimension=dim,
+                score=Decimal(str(round(best_score, 2))),
+                evidence_json={
+                    "source": "pair_aggregation",
+                    "best_score": round(best_score, 2),
+                    "has_iron_evidence": len(iron_pcs) > 0,
+                    "pair_count": len(dim_pcs),
+                    "ironclad_pair_count": len(iron_pcs),
+                },
+            )
+            session.add(oa)
+        await session.flush()
 
         # 项目元信息
         project = await session.get(Project, project_id)

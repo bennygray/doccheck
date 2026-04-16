@@ -200,6 +200,23 @@ async def test_no_extractable_keywords_skip(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_invalid_context_writes_oa(monkeypatch) -> None:
+    """DEF-OA 3.4: bidders<2 时仍写 OA 行(score=0, skip_reason)。"""
+    monkeypatch.delenv("ERROR_CONSISTENCY_ENABLED", raising=False)
+    session = _FakeSession()
+    bidders = [_bidder(1, {"company_name": "甲建设"})]  # 只有 1 个
+    result = await error_consistency.run(_ctx(bidders, session=session))
+    assert result.score == 0.0
+    assert result.evidence_json["skip_reason"] == "invalid_context"
+    # 验证 OA 行被写入
+    from app.models.overall_analysis import OverallAnalysis
+    oa_rows = [o for o in session.added if isinstance(o, OverallAnalysis)]
+    assert len(oa_rows) == 1
+    assert oa_rows[0].dimension == "error_consistency"
+    assert float(oa_rows[0].score) == 0.0
+
+
+@pytest.mark.asyncio
 async def test_search_exception_caught(monkeypatch) -> None:
     async def fake_search(*args, **kwargs):
         raise RuntimeError("DB error")

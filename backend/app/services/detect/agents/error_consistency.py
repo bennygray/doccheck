@@ -162,6 +162,10 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             downgrade_mode=ctx.downgrade,
             skip_reason="invalid_context",
         )
+        # 仍写一行 OA 让维度级复核可见 skip 原因
+        await write_overall_analysis_row(
+            ctx, dimension=_DIMENSION, score=0.0, evidence=evidence
+        )
         return AgentRunResult(
             score=0.0,
             summary="error_consistency 上下文无效,跳过",

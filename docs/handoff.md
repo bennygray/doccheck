@@ -11,9 +11,9 @@
 
 | 项 | 值 |
 |---|---|
-| 当前里程碑 | **M4 完成 + L3 验收缺陷全部修复** |
-| 当前 change | DEF-007 `fix-l3-acceptance-bugs` 归档完成。BUG-2 阈值 + BUG-3 SSE 认证 + WARN-1 null 兜底 |
-| 最新 commit | DEF-007 归档 |
+| 当前里程碑 | **M4 完成 + V1 全量验收 + DEF-OA 修复** |
+| 当前 change | DEF-OA `fix-dimension-review-oa` 归档完成。judge 补写 pair 维度 OA 行,维度级复核 API 全 11 维度可用 |
+| 最新 commit | DEF-OA 归档 |
 | 工作区 | C17 全量改动:**后端**:新增 `models/system_config.py`(SystemConfig 单行 JSON)+ `services/admin/`(rules_defaults + rules_mapper + rules_reader 3 文件)+ `schemas/admin.py`(用户+规则 Pydantic)+ `routes/admin.py`(5 endpoint: GET/POST/PATCH users + GET/PUT rules)+ `main.py` 注册 admin router + Alembic 0009 migration;**引擎集成**:`engine.py` 检测前读 SystemConfig + `judge.py` 支持自定义 weights/risk_levels;**前端**:`AdminUsersPage.tsx`(用户表格+创建+启用禁用)+ `AdminRulesPage.tsx`(10 维度+全局配置+保存+恢复默认)+ `App.tsx` 新增 2 admin 路由 + `api.ts` 新增 5 API 函数 + `types/index.ts` 新增 admin 类型 + `ProjectListPage.tsx` admin 导航入口;**测试**:L1 后端 16 + L1 前端 8 + L2 3 = 27 新增用例;**spec sync**:新增 `admin-users` spec(4 Req/12 Scenario)+ `admin-rules` spec(6 Req/15 Scenario);**L3 手工凭证**:`e2e/artifacts/c17-2026-04-16/README.md` |
 
 ---
@@ -101,8 +101,8 @@
 
 | 日期 | 变更 |
 |---|---|
-| 2026-04-16 | **DEF-007 `fix-l3-acceptance-bugs` 归档**:BUG-2 TEXT_SIM_MIN_DOC_CHARS 500→300;BUG-3 get_current_user 支持 query param token + ExportButton/useDetectProgress SSE URL 追加 token;WARN-1 AdminRulesPage input null→"";L3 11/11 全绿;L1 1044 + L1 前端 92 + L2 全绿 |
+| 2026-04-16 | **DEF-OA `fix-dimension-review-oa` 归档**:judge.py 补写 7 pair 维度 OA 聚合行;error_consistency/image_reuse early-return 补 OA;维度级复核 API 全 11 维度可用;L1 801 + L2 250 全绿 |
+| 2026-04-16 | **V1 全量验收测试**:`docs/v1-acceptance-test-report.md` 55/66 通过(96.5% 可执行通过率);2 失败(AT-7.7 LLM 降级 UI / AT-9.2 维度复核);9 阻塞(fixture 不足) |
+| 2026-04-16 | **DEF-007 `fix-l3-acceptance-bugs` 归档**:BUG-2 TEXT_SIM_MIN_DOC_CHARS 500→300;BUG-3 get_current_user 支持 query param token + ExportButton/useDetectProgress SSE URL 追加 token;WARN-1 AdminRulesPage input null→"";L3 11/11 全绿 |
 | 2026-04-16 | **DEF-006 `fix-silent-project-transition-failure` 归档**:run_pipeline 6 处 try_transition_project_ready 加异常保护;trigger.py task 引用持有+done callback 异常日志;4 新增 L1 用例 |
 | 2026-04-16 | **DEF-004 `increase-samples-limit` 归档**:text_similarity samples 10→30, section_similarity 5→15 |
-| 2026-04-16 | **DEF-005 `fix-api-trailing-slash` 归档**:FastAPI redirect_slashes=False 消除 307 重定向 |
-| 2026-04-16 | **DEF-002 `fix-llm-httpx-timeout` 归档**:httpx.AsyncClient 未设 timeout 导致 LLM 调用 5s 即超时 |

@@ -147,3 +147,39 @@ async def test_compare_exception_caught(monkeypatch) -> None:
     result = await image_reuse.run(_ctx(session=_FakeSession()))
     assert result.score == 0.0
     assert "RuntimeError" in result.evidence_json["error"]
+
+
+@pytest.mark.asyncio
+async def test_invalid_context_session_none_no_oa(monkeypatch) -> None:
+    """DEF-OA 3.5: session=None 时 write_overall_analysis_row 静默跳过。"""
+    monkeypatch.delenv("IMAGE_REUSE_ENABLED", raising=False)
+    result = await image_reuse.run(_ctx(session=None))
+    assert result.score == 0.0
+    assert result.evidence_json["skip_reason"] == "invalid_context"
+
+
+@pytest.mark.asyncio
+async def test_invalid_context_with_session_writes_oa(monkeypatch) -> None:
+    """DEF-OA 3.5: 有 session 但 compare 返回 0 候选时写 OA(skip)。"""
+    monkeypatch.delenv("IMAGE_REUSE_ENABLED", raising=False)
+
+    async def fake_compare(*args, **kwargs):
+        return {
+            "md5_matches": [],
+            "phash_matches": [],
+            "truncated": False,
+            "original_count": 0,
+        }
+
+    monkeypatch.setattr(
+        "app.services.detect.agents.image_reuse.compare", fake_compare
+    )
+    session = _FakeSession()
+    result = await image_reuse.run(_ctx(session=session))
+    assert result.score == 0.0
+    assert result.evidence_json["skip_reason"] == "no_comparable_images_after_size_filter"
+    # OA 行已写入
+    from app.models.overall_analysis import OverallAnalysis
+    oa_rows = [o for o in session.added if isinstance(o, OverallAnalysis)]
+    assert len(oa_rows) == 1
+    assert oa_rows[0].dimension == "image_reuse"

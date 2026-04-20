@@ -145,3 +145,73 @@ class RulesConfigResponse(BaseModel):
     config: dict[str, Any]
     updated_by: int | None = None
     updated_at: datetime | None = None
+
+
+# ── LLM 配置(admin-llm-config) ──
+
+_VALID_LLM_PROVIDERS = {"dashscope", "openai", "custom"}
+
+
+class LLMConfigResponse(BaseModel):
+    """读取 LLM 配置,api_key 脱敏。"""
+
+    provider: str
+    api_key_masked: str  # eg. "sk-****abc1";完全为空时 ""
+    model: str
+    base_url: str | None
+    timeout_s: int
+    # 配置来源:"db" / "env" / "default",用于前端提示
+    source: str
+
+
+class LLMConfigUpdate(BaseModel):
+    """更新 LLM 配置;api_key 空字符串 or None 时保持旧值不变(Req-3 场景 2)。"""
+
+    provider: str
+    api_key: str | None = None
+    model: str = Field(..., min_length=1, max_length=200)
+    base_url: str | None = None
+    timeout_s: int = Field(default=30, ge=1, le=300)
+
+    @field_validator("provider")
+    @classmethod
+    def _validate_provider(cls, v: str) -> str:
+        if v not in _VALID_LLM_PROVIDERS:
+            raise ValueError(
+                f"provider 必须是以下之一:{sorted(_VALID_LLM_PROVIDERS)}"
+            )
+        return v
+
+    @field_validator("base_url")
+    @classmethod
+    def _validate_base_url(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return None
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError("base_url 必须以 http:// 或 https:// 开头")
+        return v.rstrip("/")
+
+
+class LLMTestRequest(BaseModel):
+    """测试连接请求;字段缺省时用 DB 当前配置。"""
+
+    provider: str | None = None
+    api_key: str | None = None
+    model: str | None = None
+    base_url: str | None = None
+    timeout_s: int | None = Field(default=None, ge=1, le=30)
+
+    @field_validator("provider")
+    @classmethod
+    def _validate_provider(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_LLM_PROVIDERS:
+            raise ValueError(
+                f"provider 必须是以下之一:{sorted(_VALID_LLM_PROVIDERS)}"
+            )
+        return v
+
+
+class LLMTestResponse(BaseModel):
+    ok: bool
+    latency_ms: int
+    error: str | None = None

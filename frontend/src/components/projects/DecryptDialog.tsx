@@ -1,10 +1,11 @@
 /**
  * 加密包密码重试弹窗 (D2, C4 file-upload §8.4)。
  *
- * 调 api.decryptDocument(documentId, password) → 后端 202 → 由父组件继续轮询
- * documents 列表观察 status 转换。
+ * antd 化:Modal + Form + Input.Password
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Alert, Button, Form, Input, Modal, Typography } from "antd";
+import { LockOutlined } from "@ant-design/icons";
 import { ApiError, api } from "../../services/api";
 
 interface Props {
@@ -24,15 +25,7 @@ export default function DecryptDialog({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     if (!password) {
@@ -57,72 +50,68 @@ export default function DecryptDialog({
   }
 
   return (
-    <div
-      data-testid="decrypt-dialog"
-      role="dialog"
-      aria-modal="true"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.4)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      title="解密压缩包"
+      onCancel={onClose}
+      footer={null}
+      destroyOnHidden
+      width={440}
+      wrapProps={{ "data-testid": "decrypt-dialog" }}
     >
-      <form
-        onSubmit={submit}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "#fff",
-          padding: 24,
-          borderRadius: 8,
-          minWidth: 360,
-        }}
+      <Typography.Paragraph
+        type="secondary"
+        style={{ fontSize: 13, margin: "0 0 16px" }}
       >
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>解密压缩包</h2>
-        <p style={{ color: "#666" }}>{fileName}</p>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          data-testid="decrypt-password"
-          autoFocus
-          style={{
-            display: "block",
-            width: "100%",
-            padding: 8,
-            marginTop: 8,
-            boxSizing: "border-box",
-          }}
-          placeholder="输入密码"
-        />
+        {fileName}
+      </Typography.Paragraph>
+      <Form
+        layout="vertical"
+        component="form"
+        onSubmitCapture={submit}
+        requiredMark={false}
+      >
+        <Form.Item label="密码" required>
+          <Input.Password
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            data-testid="decrypt-password"
+            autoFocus
+            placeholder="输入解压密码"
+            prefix={<LockOutlined style={{ color: "#8a919d" }} />}
+          />
+        </Form.Item>
+
         {error && (
-          <p
+          <Alert
+            type="error"
+            message={error}
+            showIcon
             data-testid="decrypt-error"
-            style={{ color: "#c00", marginTop: 8 }}
-          >
-            {error}
-          </p>
+            style={{ marginBottom: 12 }}
+          />
         )}
+
         <div
-          style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}
+          style={{
+            display: "flex",
+            gap: 8,
+            justifyContent: "flex-end",
+          }}
         >
-          <button type="button" onClick={onClose} disabled={submitting}>
+          <Button onClick={onClose} disabled={submitting}>
             取消
-          </button>
-          <button
-            type="submit"
+          </Button>
+          <Button
+            type="primary"
+            htmlType="submit"
+            loading={submitting}
             data-testid="decrypt-submit"
-            disabled={submitting}
-            style={{ background: "#1677ff", color: "#fff", border: 0, padding: "4px 16px" }}
           >
-            {submitting ? "提交中..." : "提交"}
-          </button>
+            {submitting ? "提交中" : "提交"}
+          </Button>
         </div>
-      </form>
-    </div>
+      </Form>
+    </Modal>
   );
 }

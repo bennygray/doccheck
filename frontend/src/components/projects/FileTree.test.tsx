@@ -57,9 +57,11 @@ describe("FileTree", () => {
       }),
     ];
     render(<FileTree documents={docs} />);
-    expect(screen.getByText("📦 main.zip")).toBeInTheDocument();
-    expect(screen.getByText("📄 ok.docx")).toBeInTheDocument();
-    expect(screen.getByText("📄 sub.xlsx")).toBeInTheDocument();
+    // 重设计后:图标用 antd Icon(FolderOpenOutlined/FileOutlined)替代 emoji;
+    // 文件名以纯文本形式出现
+    expect(screen.getByText("main.zip")).toBeInTheDocument();
+    expect(screen.getByText("ok.docx")).toBeInTheDocument();
+    expect(screen.getByText("sub.xlsx")).toBeInTheDocument();
   });
 
   it("归档行 needs_password 显示对应徽章", () => {

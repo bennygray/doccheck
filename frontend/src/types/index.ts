@@ -559,3 +559,39 @@ export interface RulesConfigResponse {
   updated_by: number | null;
   updated_at: string | null;
 }
+
+// ── LLM 配置 (admin-llm-config) ──
+
+export type LLMProvider = "dashscope" | "openai" | "custom";
+export type LLMSource = "db" | "env" | "default";
+
+export interface LLMConfigResponse {
+  provider: LLMProvider | string;
+  api_key_masked: string;
+  model: string;
+  base_url: string | null;
+  timeout_s: number;
+  source: LLMSource | string;
+}
+
+export interface LLMConfigUpdate {
+  provider: LLMProvider | string;
+  api_key?: string;
+  model: string;
+  base_url?: string | null;
+  timeout_s: number;
+}
+
+export interface LLMTestRequest {
+  provider?: string;
+  api_key?: string;
+  model?: string;
+  base_url?: string | null;
+  timeout_s?: number;
+}
+
+export interface LLMTestResponse {
+  ok: boolean;
+  latency_ms: number;
+  error: string | null;
+}

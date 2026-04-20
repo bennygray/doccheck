@@ -11,33 +11,47 @@
 
 | 项 | 值 |
 |---|---|
-| 当前里程碑 | **M4 完成 + V1 全量验收 + DEF-OA 修复** |
-| 当前 change | DEF-OA `fix-dimension-review-oa` 归档完成。judge 补写 pair 维度 OA 行,维度级复核 API 全 11 维度可用 |
-| 最新 commit | DEF-OA 归档 |
-| 工作区 | C17 全量改动:**后端**:新增 `models/system_config.py`(SystemConfig 单行 JSON)+ `services/admin/`(rules_defaults + rules_mapper + rules_reader 3 文件)+ `schemas/admin.py`(用户+规则 Pydantic)+ `routes/admin.py`(5 endpoint: GET/POST/PATCH users + GET/PUT rules)+ `main.py` 注册 admin router + Alembic 0009 migration;**引擎集成**:`engine.py` 检测前读 SystemConfig + `judge.py` 支持自定义 weights/risk_levels;**前端**:`AdminUsersPage.tsx`(用户表格+创建+启用禁用)+ `AdminRulesPage.tsx`(10 维度+全局配置+保存+恢复默认)+ `App.tsx` 新增 2 admin 路由 + `api.ts` 新增 5 API 函数 + `types/index.ts` 新增 admin 类型 + `ProjectListPage.tsx` admin 导航入口;**测试**:L1 后端 16 + L1 前端 8 + L2 3 = 27 新增用例;**spec sync**:新增 `admin-users` spec(4 Req/12 Scenario)+ `admin-rules` spec(6 Req/15 Scenario);**L3 手工凭证**:`e2e/artifacts/c17-2026-04-16/README.md` |
+| 当前里程碑 | **M4 完成 + V1 全量验收 + admin-llm-config** |
+| 当前 change | `admin-llm-config` 归档完成。Admin 可在 Web UI 配置 LLM provider / api_key / model / base_url / timeout,保存即时生效,无需重启 |
+| 最新 commit | admin-llm-config 归档 |
+| 工作区 | admin-llm-config 全量改动:**后端**:`schemas/admin.py` 扩 `LLMConfigResponse/LLMConfigUpdate/LLMTestRequest/LLMTestResponse` + 新 `services/admin/llm_reader.py`(DB>env>默认 三层 fallback + `mask_api_key` 脱敏末 4 位)+ 新 `services/llm/tester.py`(test_connection 发 ping + max_tokens=1)+ 改 `services/llm/factory.py`(`@lru_cache` → 指纹哈希 dict cache + `invalidate_provider_cache` + 新增 `get_llm_provider_db` 异步 DB 路径)+ `routes/admin.py` 扩 `GET/PUT/POST test` 3 endpoint + Alembic 0010(SystemConfig.config.llm 默认值补写);**前端**:新 `AdminLLMPage.tsx`(provider Select / api_key Password / model / base_url / timeout InputNumber + 测试连接 + 保存 + 恢复默认)+ `App.tsx` 新 `/admin/llm` 路由 + `AppLayout.tsx` 管理子菜单加项 + `api.ts` 新增 3 API 函数 + `types/index.ts` 新增 LLM 类型;**测试**:L1 后端 11 + L1 前端 5 + L2 后端 8 = 24 新增用例,后端全量 1070/1070 绿,前端全量 97/97 绿;**spec sync**:新增 `admin-llm` spec(6 Req/14 Scenario);**L3 手工凭证**:`e2e/artifacts/admin-llm-2026-04-20/README.md` |
 
 ---
 
-## 2. 本次 session 关键决策(2026-04-16,C17 `admin-users` propose+apply)
+## 2. 本次 session 关键决策(2026-04-20,`admin-llm-config` propose+apply+archive)
 
-### propose 阶段已敲定(4 产品级决策)
+### propose 阶段已敲定(5 产品级决策)
 
-- **Q1 A 仅全局级**:单行 SystemConfig，GET/PUT 读写；不做项目级覆盖
-- **Q2 A 仅最新值 + 恢复默认**:PUT 覆盖写入，不做版本号/回滚
-- **Q3 A 仅 admin 手动创建**:POST /api/admin/users 由 admin 调用，无公开注册
-- **Q4 A requirements.md §8 最小集**:10 维度 enabled/weight/llm_enabled + 特有阈值 + 全局参数，不暴露全部 ~50 个 agent env var
+- **Q1 B dashscope + openai + custom**:白名单 3 种,custom = OpenAI 兼容端点
+- **Q2 B 末 4 位保留**:`sk-****abc1`;短于 8 位固定 `sk-****` 占位
+- **Q3 B 做测试连接按钮**:发 `"ping"` + max_tokens=1,最省 token
+- **Q4 B 三层优先级**:DB > env > 代码默认;保持旧部署兼容
+- **Q5 B 指纹哈希 cache + PUT 失效**:(provider, key, model, base, timeout) 作 key,PUT 后清空
+
+### apply 现场决策
+
+- **audit_log 暂不写 admin-llm 更新**:`AuditLog.project_id` 非空,系统级配置不挂项目;Follow-up 改 project_id nullable 或新建 SystemAuditLog
+- **factory `get_llm_provider()` 保持同步签名 + env 路径**:11 个 Agent / judge / pipeline 现有调用零改动;新增 `get_llm_provider_db(session)` 异步路径供后续逐步切换
+- **`@lru_cache` 换成 dict 指纹缓存**:上限 3,FIFO 淘汰,防病态输入撑爆
+- **Tester `max_tokens=1` + timeout 强制 ≤10s**:防 UI 卡死
+- **前端 api_key 空白不传**:占位符显示脱敏值,空白提交 → 后端保持旧值
 
 ### 文档联动
 
-- **`openspec/specs/admin-users/spec.md`** 新建:4 Req / 12 Scenario
-- **`openspec/specs/admin-rules/spec.md`** 新建:6 Req / 15 Scenario
-- **`docs/execution-plan.md §6`** 追加 1 行 C17 归档记录
-- **`e2e/artifacts/c17-2026-04-16/README.md`** L3 手工凭证占位
+- **`openspec/specs/admin-llm/spec.md`** 新建:6 Req / 14 Scenario
+- **`e2e/artifacts/admin-llm-2026-04-20/README.md`** L3 手工凭证
 - **`docs/handoff.md`** 即本次更新
 
 ---
 
-## 2.bak_C15 上一 session 关键决策(2026-04-16,C15 `report-export` propose+apply)
+## 2.bak_C17 上一 session 关键决策(2026-04-16,C17 `admin-users` propose+apply)
+
+- Q1 A 仅全局级 SystemConfig / Q2 A 覆盖写 + 恢复默认 / Q3 A admin 手动创建 / Q4 A §8 最小集
+- L3 手工凭证:`e2e/artifacts/c17-2026-04-16/README.md`
+
+---
+
+## 2.bak_C15 上上一 session 关键决策(2026-04-16,C15 `report-export` propose+apply)
 
 ### propose 阶段已敲定(4 产品级决策)
 

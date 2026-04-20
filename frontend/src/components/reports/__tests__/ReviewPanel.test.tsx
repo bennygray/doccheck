@@ -4,6 +4,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import ReviewPanel from "../ReviewPanel";
 import { api } from "../../../services/api";
 
+async function pickAntdSelect(optionText: string) {
+  const combobox = screen.getByRole("combobox");
+  const wrapper = combobox.closest(".ant-select") as HTMLElement;
+  const selector = wrapper.querySelector(".ant-select-selector")!;
+  fireEvent.mouseDown(selector);
+  const option = await screen.findByText(optionText);
+  fireEvent.click(option);
+}
+
 describe("ReviewPanel", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -23,10 +32,10 @@ describe("ReviewPanel", () => {
         }}
       />,
     );
-    // 直接提交(status 未选)
+    // 直接提交(status 未选)→ Alert 显示"请选择复核结论后再提交"
     fireEvent.click(screen.getByRole("button", { name: /提交复核/ }));
     await waitFor(() => {
-      expect(screen.getByText(/请选择复核结论/)).toBeInTheDocument();
+      expect(screen.getByText(/请选择复核结论后再提交/)).toBeInTheDocument();
     });
     expect(spy).not.toHaveBeenCalled();
   });
@@ -52,9 +61,10 @@ describe("ReviewPanel", () => {
         onSubmitted={onSubmitted}
       />,
     );
-    fireEvent.change(screen.getByRole("combobox"), {
-      target: { value: "confirmed" },
-    });
+
+    // antd Select:通过 mouseDown 打开下拉,点 "确认围标"
+    await pickAntdSelect("确认围标");
+    // antd Input.TextArea:role="textbox"
     fireEvent.change(screen.getByRole("textbox"), {
       target: { value: "证据充分" },
     });
@@ -81,9 +91,7 @@ describe("ReviewPanel", () => {
     );
     expect(screen.getByText(/降级风险/)).toBeInTheDocument();
     expect(screen.getByText(/重新评估/)).toBeInTheDocument();
-    // 修改按钮存在
     fireEvent.click(screen.getByRole("button", { name: /修改/ }));
-    // 进入编辑态 → textarea 可见
     await waitFor(() => {
       expect(screen.getByRole("textbox")).toBeInTheDocument();
     });

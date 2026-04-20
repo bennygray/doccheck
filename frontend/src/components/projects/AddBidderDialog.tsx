@@ -1,12 +1,13 @@
 /**
  * 添加投标人弹窗 (US-3.1, C4 file-upload §8.1)。
  *
- * - name 输入(必填、≤200)
- * - file 选填:原生 file input + drag-drop 双入口(D10)
- * - 前端校验:扩展名 + 大小 ≤500MB
- * - 提交后调 `api.createBidder(projectId, name, file?)`,失败弹错码
+ * antd 化:Modal + Form + 拖拽上传区(保留 drag/drop 原生逻辑);
+ * data-testid 保留:add-bidder-dialog / bidder-name-input / bidder-file-zone /
+ *   bidder-file-input / bidder-file-name / bidder-form-error / bidder-submit
  */
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { Alert, Button, Form, Input, Modal, Typography } from "antd";
+import { InboxOutlined } from "@ant-design/icons";
 import { ApiError, api } from "../../services/api";
 import type { Bidder } from "../../types";
 
@@ -32,15 +33,6 @@ export default function AddBidderDialog({ projectId, onClose, onCreated }: Props
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ESC 关闭(键盘可达)
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   function pickFile(f: File | null) {
     setError(null);
     if (!f) {
@@ -59,7 +51,7 @@ export default function AddBidderDialog({ projectId, onClose, onCreated }: Props
     setFile(f);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
     const trimmed = name.trim();
@@ -93,135 +85,131 @@ export default function AddBidderDialog({ projectId, onClose, onCreated }: Props
   }
 
   return (
-    <div
-      data-testid="add-bidder-dialog"
-      role="dialog"
-      aria-modal="true"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.4)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
+    <Modal
+      open
+      title="添加投标人"
+      onCancel={onClose}
+      footer={null}
+      destroyOnHidden
+      width={520}
+      // 外层 div 挂 data-testid,与旧版契约保持一致
+      wrapProps={{
+        "data-testid": "add-bidder-dialog",
       }}
-      onClick={onClose}
     >
-      <form
-        onSubmit={handleSubmit}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "#fff",
-          padding: 24,
-          borderRadius: 8,
-          minWidth: 420,
-          maxWidth: "90vw",
-        }}
+      <Form
+        layout="vertical"
+        component="form"
+        onSubmitCapture={handleSubmit}
+        requiredMark={false}
       >
-        <h2 style={{ marginTop: 0, fontSize: 18 }}>添加投标人</h2>
-
-        <label style={{ display: "block", marginTop: 12 }}>
-          投标人名称 *
-          <input
-            type="text"
+        <Form.Item label="投标人名称" required>
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             data-testid="bidder-name-input"
             maxLength={200}
             autoFocus
-            style={{
-              display: "block",
-              width: "100%",
-              padding: 8,
-              marginTop: 4,
-              boxSizing: "border-box",
-            }}
+            placeholder="如:XX 建筑工程有限公司"
           />
-        </label>
+        </Form.Item>
 
-        <div
-          data-testid="bidder-file-zone"
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragActive(true);
-          }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragActive(false);
-            pickFile(e.dataTransfer.files?.[0] ?? null);
-          }}
-          style={{
-            border: "2px dashed",
-            borderColor: dragActive ? "#1677ff" : "#ccc",
-            borderRadius: 4,
-            padding: 16,
-            marginTop: 12,
-            textAlign: "center",
-            cursor: "pointer",
-          }}
-          onClick={() => inputRef.current?.click()}
+        <Form.Item
+          label="压缩包(可选)"
+          extra="支持 .zip / .7z / .rar,最大 500MB"
         >
-          {file ? (
-            <span data-testid="bidder-file-name">
-              {file.name} ({Math.round(file.size / 1024)} KB)
-            </span>
-          ) : (
-            <span style={{ color: "#888" }}>
-              拖拽或点击选择压缩包(.zip / .7z / .rar,可选)
-            </span>
-          )}
-          <input
-            ref={inputRef}
-            type="file"
-            data-testid="bidder-file-input"
-            accept=".zip,.7z,.rar"
-            onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-            style={{ display: "none" }}
-          />
-        </div>
+          <div
+            data-testid="bidder-file-zone"
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+              pickFile(e.dataTransfer.files?.[0] ?? null);
+            }}
+            onClick={() => inputRef.current?.click()}
+            style={{
+              border: "2px dashed",
+              borderColor: dragActive ? "#1d4584" : "#d5dae2",
+              borderRadius: 8,
+              padding: 20,
+              textAlign: "center",
+              cursor: "pointer",
+              background: dragActive ? "#eef3fb" : "#fafbfc",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <InboxOutlined
+              style={{
+                fontSize: 32,
+                color: dragActive ? "#1d4584" : "#8a919d",
+                marginBottom: 8,
+              }}
+            />
+            {file ? (
+              <div>
+                <Typography.Text strong data-testid="bidder-file-name">
+                  {file.name}
+                </Typography.Text>
+                <div style={{ fontSize: 12, color: "#8a919d", marginTop: 2 }}>
+                  {Math.round(file.size / 1024)} KB
+                </div>
+              </div>
+            ) : (
+              <div>
+                <Typography.Text style={{ fontSize: 13 }}>
+                  点击或拖拽文件到此处
+                </Typography.Text>
+                <div style={{ fontSize: 12, color: "#8a919d", marginTop: 2 }}>
+                  .zip / .7z / .rar,最大 500MB
+                </div>
+              </div>
+            )}
+            <input
+              ref={inputRef}
+              type="file"
+              data-testid="bidder-file-input"
+              accept=".zip,.7z,.rar"
+              onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+              style={{ display: "none" }}
+            />
+          </div>
+        </Form.Item>
 
         {error && (
-          <p
+          <Alert
+            type="error"
+            message={error}
+            showIcon
             data-testid="bidder-form-error"
-            style={{ color: "#c00", marginTop: 12 }}
-          >
-            {error}
-          </p>
+            style={{ marginBottom: 12 }}
+          />
         )}
 
         <div
           style={{
-            marginTop: 16,
             display: "flex",
             gap: 8,
             justifyContent: "flex-end",
+            marginTop: 8,
           }}
         >
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            style={{ padding: "6px 16px" }}
-          >
+          <Button onClick={onClose} disabled={submitting}>
             取消
-          </button>
-          <button
-            type="submit"
+          </Button>
+          <Button
+            type="primary"
+            htmlType="submit"
+            loading={submitting}
             data-testid="bidder-submit"
-            disabled={submitting}
-            style={{
-              padding: "6px 16px",
-              background: "#1677ff",
-              color: "#fff",
-              border: 0,
-            }}
           >
-            {submitting ? "创建中..." : "创建"}
-          </button>
+            {submitting ? "创建中" : "创建"}
+          </Button>
         </div>
-      </form>
-    </div>
+      </Form>
+    </Modal>
   );
 }

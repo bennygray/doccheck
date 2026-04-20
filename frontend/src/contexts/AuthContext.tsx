@@ -2,8 +2,12 @@
  * AuthContext (C2 auth)
  *
  * 职责:
- * - 持有 token / user 状态,并与 localStorage 同步(刷新页面后恢复)
+ * - 持有 token / user 状态,并与 local/sessionStorage 同步
  * - 提供 login / logout / updateUser 原子操作
+ * - 支持 "记住我":login(token, user, { remember: true })→ localStorage(跨标签持久)
+ *   否则 → sessionStorage(关标签页即失效)
+ *
+ * 恢复顺序:localStorage 优先,其次 sessionStorage(默认行为兼容旧数据)。
  *
  * design.md D7 决定:只用 React Context,不引入 zustand/redux。
  */
@@ -30,11 +34,16 @@ interface AuthState {
   user: AuthUser | null;
 }
 
+interface AuthLoginOptions {
+  /** true(默认)→ localStorage 持久;false → sessionStorage(关标签即失效) */
+  remember?: boolean;
+}
+
 interface AuthContextValue extends AuthState {
-  login: (token: string, user: AuthUser) => void;
+  login: (token: string, user: AuthUser, opts?: AuthLoginOptions) => void;
   logout: () => void;
   updateUser: (user: AuthUser) => void;
-  /** 是否已从 localStorage 恢复完毕。用于初次渲染防止未登录跳转闪烁。 */
+  /** 是否已从 storage 恢复完毕。用于初次渲染防止未登录跳转闪烁。 */
   hydrated: boolean;
 }
 
@@ -43,46 +52,99 @@ const STORAGE_USER_KEY = "auth:user";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function safeGet(store: Storage, key: string): string | null {
+  try {
+    return store.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeRemoveBoth(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
 function readInitial(): AuthState {
   if (typeof window === "undefined") return { token: null, user: null };
-  try {
-    const token = window.localStorage.getItem(STORAGE_TOKEN_KEY);
-    const userRaw = window.localStorage.getItem(STORAGE_USER_KEY);
-    const user = userRaw ? (JSON.parse(userRaw) as AuthUser) : null;
-    if (token && user) return { token, user };
-  } catch {
-    // localStorage 不可用或 JSON 坏 → 重置
+  // 先 local,再 session
+  for (const store of [window.localStorage, window.sessionStorage]) {
+    const token = safeGet(store, STORAGE_TOKEN_KEY);
+    const userRaw = safeGet(store, STORAGE_USER_KEY);
+    if (token && userRaw) {
+      try {
+        return { token, user: JSON.parse(userRaw) as AuthUser };
+      } catch {
+        // JSON 坏 → 继续试 session
+      }
+    }
   }
   return { token: null, user: null };
+}
+
+function pickStore(remember: boolean): Storage {
+  return remember ? window.localStorage : window.sessionStorage;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ token: null, user: null });
   const [hydrated, setHydrated] = useState(false);
 
-  // 首次 mount 时从 localStorage 恢复(避免 SSR 不一致)
   useEffect(() => {
     setState(readInitial());
     setHydrated(true);
   }, []);
 
-  const login = useCallback((token: string, user: AuthUser) => {
-    setState({ token, user });
-    window.localStorage.setItem(STORAGE_TOKEN_KEY, token);
-    window.localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(user));
-  }, []);
+  const login = useCallback(
+    (token: string, user: AuthUser, opts?: AuthLoginOptions) => {
+      const remember = opts?.remember ?? true;
+      setState({ token, user });
+      // 先把另一处清掉,避免残留
+      safeRemoveBoth(STORAGE_TOKEN_KEY);
+      safeRemoveBoth(STORAGE_USER_KEY);
+      const store = pickStore(remember);
+      try {
+        store.setItem(STORAGE_TOKEN_KEY, token);
+        store.setItem(STORAGE_USER_KEY, JSON.stringify(user));
+      } catch {
+        // storage 满 / 禁用 → 静默
+      }
+    },
+    [],
+  );
 
   const logout = useCallback(() => {
     setState({ token: null, user: null });
-    window.localStorage.removeItem(STORAGE_TOKEN_KEY);
-    window.localStorage.removeItem(STORAGE_USER_KEY);
-    // 显式登出时清 pendingPath:用户主动结束会话,无需"登录后恢复原页"
-    window.localStorage.removeItem("auth:pendingPath");
+    safeRemoveBoth(STORAGE_TOKEN_KEY);
+    safeRemoveBoth(STORAGE_USER_KEY);
+    safeRemoveBoth("auth:pendingPath");
   }, []);
 
   const updateUser = useCallback((user: AuthUser) => {
     setState((prev) => ({ ...prev, user }));
-    window.localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(user));
+    // 写回当前用户所在的那个 store(二选一)
+    const userRaw = JSON.stringify(user);
+    if (safeGet(window.localStorage, STORAGE_TOKEN_KEY)) {
+      try {
+        window.localStorage.setItem(STORAGE_USER_KEY, userRaw);
+      } catch {
+        // ignore
+      }
+    } else if (safeGet(window.sessionStorage, STORAGE_TOKEN_KEY)) {
+      try {
+        window.sessionStorage.setItem(STORAGE_USER_KEY, userRaw);
+      } catch {
+        // ignore
+      }
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -99,22 +161,17 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-/** 给 api.ts 的 interceptor 用 — 提供一个 getter,避免循环 import。 */
+/** 给 api.ts 的 interceptor 用 — 避免循环 import;local 优先 session 兜底。 */
 export const authStorage = {
   getToken(): string | null {
-    try {
-      return window.localStorage.getItem(STORAGE_TOKEN_KEY);
-    } catch {
-      return null;
-    }
+    return (
+      safeGet(window.localStorage, STORAGE_TOKEN_KEY) ??
+      safeGet(window.sessionStorage, STORAGE_TOKEN_KEY)
+    );
   },
   clear(): void {
-    try {
-      window.localStorage.removeItem(STORAGE_TOKEN_KEY);
-      window.localStorage.removeItem(STORAGE_USER_KEY);
-    } catch {
-      // ignore
-    }
+    safeRemoveBoth(STORAGE_TOKEN_KEY);
+    safeRemoveBoth(STORAGE_USER_KEY);
   },
   setPendingPath(path: string): void {
     try {

@@ -1,17 +1,38 @@
 /**
- * 规则配置页 (C17 admin-users, US-9.1)
+ * 规则配置页 (C17 admin-rules, US-9.1)
  *
- * 最简表单（不按维度分 Tab）：
- * - 10 维度各一组字段（enabled / weight / llm_enabled / 特有阈值）
- * - 全局配置区（risk_levels / keywords / whitelist / retention）
- * - 保存 + 恢复默认
+ * 视觉重设:
+ *  - Breadcrumb + 标题 + 副标题
+ *  - 维度配置:每维度一张 Card(enabled Switch / 权重 InputNumber / LLM Switch / 特有阈值)
+ *  - 全局配置:独立 Card,Descriptions 风格分组
+ *  - 底部操作条:保存(主)+ 恢复默认(次)
+ *
+ * 契约 0 变动:所有 data-testid 原样保留
+ *   - error-msg / success-msg / dimensions-section / dim-<name> / dim-<name>-enabled
+ *   - dim-<name>-weight / dim-<name>-llm / dim-<name>-<threshold>
+ *   - global-section / risk-high / risk-medium / metadata-whitelist / hardware-keywords
+ *   - min-paragraph-length / file-retention-days / save-btn / restore-btn
  */
 import { useCallback, useEffect, useState } from "react";
+import {
+  Alert,
+  App,
+  Breadcrumb,
+  Button,
+  Card,
+  Col,
+  InputNumber,
+  Row,
+  Space,
+  Spin,
+  Switch,
+  Typography,
+} from "antd";
+import { SaveOutlined, UndoOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../../services/api";
 import type { RulesConfig } from "../../types";
 
-/** 维度显示名称 */
 const DIM_LABELS: Record<string, string> = {
   hardware_fingerprint: "硬件指纹",
   error_consistency: "错误一致性",
@@ -25,7 +46,6 @@ const DIM_LABELS: Record<string, string> = {
   operation_time: "操作时间",
 };
 
-/** 维度特有阈值字段的显示名 */
 const THRESHOLD_LABELS: Record<string, string> = {
   threshold: "阈值",
   phash_distance: "pHash 距离",
@@ -41,6 +61,7 @@ const THRESHOLD_LABELS: Record<string, string> = {
 const KNOWN_FIELDS = new Set(["enabled", "weight", "llm_enabled"]);
 
 export default function AdminRulesPage() {
+  const { message } = App.useApp();
   const [config, setConfig] = useState<RulesConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,6 +115,7 @@ export default function AdminRulesPage() {
       const res = await api.updateRules(config);
       setConfig(res.config);
       setSuccess("保存成功");
+      void message.success("保存成功");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "保存失败");
     } finally {
@@ -109,6 +131,7 @@ export default function AdminRulesPage() {
       const res = await api.updateRules({ restore_defaults: true });
       setConfig(res.config);
       setSuccess("已恢复默认配置");
+      void message.success("已恢复默认配置");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "恢复默认失败");
     } finally {
@@ -116,258 +139,343 @@ export default function AdminRulesPage() {
     }
   }
 
-  if (loading) return <p style={{ padding: 32 }}>加载中...</p>;
-  if (!config) return <p style={{ padding: 32 }}>无法加载配置</p>;
+  if (loading) {
+    return (
+      <div style={{ padding: 48, textAlign: "center" }}>
+        <Spin tip="加载中..." />
+      </div>
+    );
+  }
+  if (!config) return <p>无法加载配置</p>;
 
   return (
-    <main style={{ padding: 32, fontFamily: "system-ui, sans-serif" }}>
-      <header
+    <div>
+      <Breadcrumb
+        items={[
+          { title: <Link to="/projects">首页</Link> },
+          { title: "管理" },
+          { title: "规则配置" },
+        ]}
+        style={{ marginBottom: 12 }}
+      />
+      <div
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 24,
+          alignItems: "flex-end",
+          marginBottom: 20,
+          gap: 12,
+          flexWrap: "wrap",
         }}
       >
-        <h1 style={{ fontSize: 24, margin: 0 }}>规则配置</h1>
-        <nav style={{ display: "flex", gap: 12 }}>
-          <Link to="/admin/users">用户管理</Link>
-          <Link to="/projects">返回项目</Link>
-        </nav>
-      </header>
+        <div>
+          <Typography.Title level={3} style={{ margin: 0, fontWeight: 600 }}>
+            规则配置
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ margin: "4px 0 0" }}>
+            调整 10 维度开关、权重和阈值,以及全局参数
+          </Typography.Paragraph>
+        </div>
+        <Space>
+          <Button
+            icon={<UndoOutlined />}
+            onClick={handleRestore}
+            disabled={saving}
+            data-testid="restore-btn"
+          >
+            恢复默认
+          </Button>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            onClick={handleSave}
+            loading={saving}
+            data-testid="save-btn"
+          >
+            保存
+          </Button>
+        </Space>
+      </div>
 
       {error && (
-        <div data-testid="error-msg" style={{ color: "red", marginBottom: 16 }}>
-          {error}
-        </div>
+        <Alert
+          type="error"
+          message={error}
+          data-testid="error-msg"
+          showIcon
+          closable
+          onClose={() => setError("")}
+          style={{ marginBottom: 16 }}
+        />
       )}
       {success && (
-        <div
+        <Alert
+          type="success"
+          message={success}
           data-testid="success-msg"
-          style={{ color: "#2ecc71", marginBottom: 16 }}
-        >
-          {success}
-        </div>
+          showIcon
+          closable
+          onClose={() => setSuccess("")}
+          style={{ marginBottom: 16 }}
+        />
       )}
 
       {/* 维度配置 */}
-      <h2 style={{ fontSize: 18, marginBottom: 12 }}>维度配置</h2>
+      <Typography.Title level={5} style={{ fontWeight: 600, margin: "8px 0 12px" }}>
+        维度配置
+      </Typography.Title>
       <div data-testid="dimensions-section">
-        {Object.entries(config.dimensions).map(([dimName, dimCfg]) => (
-          <fieldset
-            key={dimName}
-            data-testid={`dim-${dimName}`}
-            style={{
-              marginBottom: 16,
-              padding: 12,
-              border: "1px solid #ddd",
-              borderRadius: 4,
-            }}
-          >
-            <legend style={{ fontWeight: 600 }}>
-              {DIM_LABELS[dimName] || dimName}
-            </legend>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-              <label>
-                <input
-                  type="checkbox"
-                  data-testid={`dim-${dimName}-enabled`}
-                  checked={dimCfg.enabled}
-                  onChange={(e) =>
-                    updateDim(dimName, "enabled", e.target.checked)
-                  }
-                />{" "}
-                启用
-              </label>
-              {dimCfg.weight !== undefined && (
-                <label>
-                  权重：
-                  <input
-                    type="number"
-                    data-testid={`dim-${dimName}-weight`}
-                    value={dimCfg.weight}
-                    min={0}
-                    step={1}
-                    onChange={(e) =>
-                      updateDim(dimName, "weight", Number(e.target.value))
-                    }
-                    style={{ width: 60, marginLeft: 4 }}
+        <Row gutter={[12, 12]}>
+          {Object.entries(config.dimensions).map(([dimName, dimCfg]) => (
+            <Col key={dimName} xs={24} lg={12}>
+              <Card
+                variant="outlined"
+                data-testid={`dim-${dimName}`}
+                styles={{ body: { padding: 16 } }}
+                title={
+                  <Space size={10}>
+                    <span style={{ fontWeight: 600 }}>
+                      {DIM_LABELS[dimName] || dimName}
+                    </span>
+                    <Typography.Text
+                      type="secondary"
+                      style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 400 }}
+                    >
+                      {dimName}
+                    </Typography.Text>
+                  </Space>
+                }
+                extra={
+                  <Switch
+                    checked={dimCfg.enabled}
+                    onChange={(v) => updateDim(dimName, "enabled", v)}
+                    data-testid={`dim-${dimName}-enabled`}
+                    size="small"
                   />
-                </label>
-              )}
-              {dimCfg.llm_enabled !== undefined && (
-                <label>
-                  <input
-                    type="checkbox"
-                    data-testid={`dim-${dimName}-llm`}
-                    checked={dimCfg.llm_enabled}
-                    onChange={(e) =>
-                      updateDim(dimName, "llm_enabled", e.target.checked)
-                    }
-                  />{" "}
-                  LLM
-                </label>
-              )}
-              {/* 维度特有阈值 */}
-              {Object.entries(dimCfg)
-                .filter(([k]) => !KNOWN_FIELDS.has(k))
-                .map(([k, v]) => (
-                  <label key={k}>
-                    {THRESHOLD_LABELS[k] || k}：
-                    <input
-                      type="number"
-                      data-testid={`dim-${dimName}-${k}`}
-                      value={(v as number) ?? ""}
-                      step="any"
-                      onChange={(e) =>
-                        updateDim(dimName, k, Number(e.target.value))
-                      }
-                      style={{ width: 80, marginLeft: 4 }}
-                    />
-                  </label>
-                ))}
-            </div>
-          </fieldset>
-        ))}
+                }
+              >
+                <Space wrap size={[24, 12]} style={{ width: "100%" }}>
+                  {dimCfg.weight !== undefined && (
+                    <span>
+                      <Typography.Text
+                        type="secondary"
+                        style={{ fontSize: 12, marginRight: 6 }}
+                      >
+                        权重
+                      </Typography.Text>
+                      <InputNumber
+                        value={dimCfg.weight}
+                        min={0}
+                        step={1}
+                        size="small"
+                        onChange={(v) => updateDim(dimName, "weight", Number(v))}
+                        data-testid={`dim-${dimName}-weight`}
+                        style={{ width: 76 }}
+                      />
+                    </span>
+                  )}
+                  {dimCfg.llm_enabled !== undefined && (
+                    <span>
+                      <Typography.Text
+                        type="secondary"
+                        style={{ fontSize: 12, marginRight: 6 }}
+                      >
+                        LLM
+                      </Typography.Text>
+                      <Switch
+                        checked={dimCfg.llm_enabled}
+                        onChange={(v) => updateDim(dimName, "llm_enabled", v)}
+                        data-testid={`dim-${dimName}-llm`}
+                        size="small"
+                      />
+                    </span>
+                  )}
+                  {Object.entries(dimCfg)
+                    .filter(([k]) => !KNOWN_FIELDS.has(k))
+                    .map(([k, v]) => (
+                      <span key={k}>
+                        <Typography.Text
+                          type="secondary"
+                          style={{ fontSize: 12, marginRight: 6 }}
+                        >
+                          {THRESHOLD_LABELS[k] || k}
+                        </Typography.Text>
+                        <InputNumber
+                          value={(v as number) ?? undefined}
+                          step="any"
+                          size="small"
+                          onChange={(val) =>
+                            updateDim(dimName, k, Number(val))
+                          }
+                          data-testid={`dim-${dimName}-${k}`}
+                          style={{ width: 96 }}
+                        />
+                      </span>
+                    ))}
+                </Space>
+              </Card>
+            </Col>
+          ))}
+        </Row>
       </div>
 
       {/* 全局配置 */}
-      <h2 style={{ fontSize: 18, marginTop: 24, marginBottom: 12 }}>
+      <Typography.Title level={5} style={{ fontWeight: 600, margin: "24px 0 12px" }}>
         全局配置
-      </h2>
-      <div
+      </Typography.Title>
+      <Card
+        variant="outlined"
         data-testid="global-section"
-        style={{
-          padding: 16,
-          border: "1px solid #ddd",
-          borderRadius: 4,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
+        styles={{ body: { padding: 20 } }}
       >
-        <div style={{ display: "flex", gap: 16 }}>
-          <label>
-            高风险阈值（&ge;）：
-            <input
-              type="number"
-              data-testid="risk-high"
-              value={config.risk_levels.high}
-              min={1}
-              max={100}
-              onChange={(e) =>
-                updateGlobal("risk_levels", {
-                  ...config.risk_levels,
-                  high: Number(e.target.value),
-                })
-              }
-              style={{ width: 60, marginLeft: 4 }}
-            />
-          </label>
-          <label>
-            中风险阈值（&ge;）：
-            <input
-              type="number"
-              data-testid="risk-medium"
-              value={config.risk_levels.medium}
-              min={1}
-              max={100}
-              onChange={(e) =>
-                updateGlobal("risk_levels", {
-                  ...config.risk_levels,
-                  medium: Number(e.target.value),
-                })
-              }
-              style={{ width: 60, marginLeft: 4 }}
-            />
-          </label>
-        </div>
+        <Space direction="vertical" size={20} style={{ width: "100%" }}>
+          <div>
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 12, letterSpacing: 0.3, display: "block", marginBottom: 8 }}
+            >
+              风险等级阈值
+            </Typography.Text>
+            <Space size={20} wrap>
+              <span>
+                <span style={{ fontSize: 13, marginRight: 6 }}>高风险 ≥</span>
+                <InputNumber
+                  value={config.risk_levels.high}
+                  min={1}
+                  max={100}
+                  size="middle"
+                  onChange={(v) =>
+                    updateGlobal("risk_levels", {
+                      ...config.risk_levels,
+                      high: Number(v),
+                    })
+                  }
+                  data-testid="risk-high"
+                  style={{ width: 80 }}
+                />
+              </span>
+              <span>
+                <span style={{ fontSize: 13, marginRight: 6 }}>中风险 ≥</span>
+                <InputNumber
+                  value={config.risk_levels.medium}
+                  min={1}
+                  max={100}
+                  size="middle"
+                  onChange={(v) =>
+                    updateGlobal("risk_levels", {
+                      ...config.risk_levels,
+                      medium: Number(v),
+                    })
+                  }
+                  data-testid="risk-medium"
+                  style={{ width: 80 }}
+                />
+              </span>
+            </Space>
+          </div>
 
-        <label>
-          元数据白名单（每行一个）：
-          <textarea
-            data-testid="metadata-whitelist"
-            value={config.metadata_whitelist.join("\n")}
-            onChange={(e) =>
-              updateGlobal(
-                "metadata_whitelist",
-                e.target.value.split("\n").filter(Boolean),
-              )
-            }
-            rows={4}
-            style={{ display: "block", width: "100%", marginTop: 4 }}
-          />
-        </label>
-
-        <label>
-          硬件关键词（每行一个）：
-          <textarea
-            data-testid="hardware-keywords"
-            value={config.hardware_keywords.join("\n")}
-            onChange={(e) =>
-              updateGlobal(
-                "hardware_keywords",
-                e.target.value.split("\n").filter(Boolean),
-              )
-            }
-            rows={3}
-            style={{ display: "block", width: "100%", marginTop: 4 }}
-          />
-        </label>
-
-        <div style={{ display: "flex", gap: 16 }}>
-          <label>
-            短段落过滤阈值：
-            <input
-              type="number"
-              data-testid="min-paragraph-length"
-              value={config.min_paragraph_length}
-              min={1}
+          <div>
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 12, letterSpacing: 0.3, display: "block", marginBottom: 8 }}
+            >
+              元数据白名单(每行一个)
+            </Typography.Text>
+            <textarea
+              data-testid="metadata-whitelist"
+              value={config.metadata_whitelist.join("\n")}
               onChange={(e) =>
-                updateGlobal("min_paragraph_length", Number(e.target.value))
+                updateGlobal(
+                  "metadata_whitelist",
+                  e.target.value.split("\n").filter(Boolean),
+                )
               }
-              style={{ width: 60, marginLeft: 4 }}
+              rows={4}
+              style={{
+                display: "block",
+                width: "100%",
+                padding: "8px 11px",
+                border: "1px solid #e4e7ed",
+                borderRadius: 6,
+                fontFamily: "monospace",
+                fontSize: 12.5,
+                resize: "vertical",
+                color: "#1f2328",
+                outline: "none",
+              }}
             />
-          </label>
-          <label>
-            文件保留天数：
-            <input
-              type="number"
-              data-testid="file-retention-days"
-              value={config.file_retention_days}
-              min={1}
-              onChange={(e) =>
-                updateGlobal("file_retention_days", Number(e.target.value))
-              }
-              style={{ width: 60, marginLeft: 4 }}
-            />
-          </label>
-        </div>
-      </div>
+          </div>
 
-      {/* 操作按钮 */}
-      <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
-        <button
-          data-testid="save-btn"
-          onClick={handleSave}
-          disabled={saving}
-          style={{
-            padding: "8px 24px",
-            cursor: "pointer",
-            fontWeight: 600,
-          }}
-        >
-          {saving ? "保存中..." : "保存"}
-        </button>
-        <button
-          data-testid="restore-btn"
-          onClick={handleRestore}
-          disabled={saving}
-          style={{ padding: "8px 24px", cursor: "pointer" }}
-        >
-          恢复默认
-        </button>
-      </div>
-    </main>
+          <div>
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 12, letterSpacing: 0.3, display: "block", marginBottom: 8 }}
+            >
+              硬件关键词(每行一个)
+            </Typography.Text>
+            <textarea
+              data-testid="hardware-keywords"
+              value={config.hardware_keywords.join("\n")}
+              onChange={(e) =>
+                updateGlobal(
+                  "hardware_keywords",
+                  e.target.value.split("\n").filter(Boolean),
+                )
+              }
+              rows={3}
+              style={{
+                display: "block",
+                width: "100%",
+                padding: "8px 11px",
+                border: "1px solid #e4e7ed",
+                borderRadius: 6,
+                fontFamily: "monospace",
+                fontSize: 12.5,
+                resize: "vertical",
+                color: "#1f2328",
+                outline: "none",
+              }}
+            />
+          </div>
+
+          <div>
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 12, letterSpacing: 0.3, display: "block", marginBottom: 8 }}
+            >
+              其他参数
+            </Typography.Text>
+            <Space size={20} wrap>
+              <span>
+                <span style={{ fontSize: 13, marginRight: 6 }}>短段落过滤阈值</span>
+                <InputNumber
+                  value={config.min_paragraph_length}
+                  min={1}
+                  size="middle"
+                  onChange={(v) =>
+                    updateGlobal("min_paragraph_length", Number(v))
+                  }
+                  data-testid="min-paragraph-length"
+                  style={{ width: 80 }}
+                />
+              </span>
+              <span>
+                <span style={{ fontSize: 13, marginRight: 6 }}>文件保留(天)</span>
+                <InputNumber
+                  value={config.file_retention_days}
+                  min={1}
+                  size="middle"
+                  onChange={(v) =>
+                    updateGlobal("file_retention_days", Number(v))
+                  }
+                  data-testid="file-retention-days"
+                  style={{ width: 80 }}
+                />
+              </span>
+            </Space>
+          </div>
+        </Space>
+      </Card>
+    </div>
   );
 }

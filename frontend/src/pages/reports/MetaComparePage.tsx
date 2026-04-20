@@ -4,25 +4,30 @@
  * - 行=字段 列=投标人
  * - 相同值按 color_group 着色
  * - is_common 标灰 + tooltip
- * - 模板/指纹匹配红色标记
- * - 时间格式化
+ * - 高敏字段(template)匹配红色强调
+ * - 时间字段格式化
+ *
+ * data-testid 保留:meta-table / common-cell
  */
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { Card, Empty, Spin, Typography } from "antd";
 
+import CompareSubTabs from "../../components/reports/CompareSubTabs";
+import ReportNavBar from "../../components/reports/ReportNavBar";
 import { ApiError, api } from "../../services/api";
 import type { MetaCompareResponse } from "../../types";
 
-// color_group → 前端颜色
+/** color_group → 颜色(克制,不霓虹) */
 const GROUP_COLORS = [
-  "rgba(59,130,246,0.2)",   // blue
-  "rgba(234,179,8,0.2)",    // yellow
-  "rgba(16,185,129,0.2)",   // green
-  "rgba(244,63,94,0.2)",    // rose
-  "rgba(168,85,247,0.2)",   // purple
-  "rgba(249,115,22,0.2)",   // orange
-  "rgba(6,182,212,0.2)",    // cyan
-  "rgba(236,72,153,0.2)",   // pink
+  "rgba(29, 69, 132, 0.12)",   // 品牌蓝
+  "rgba(194, 124, 14, 0.12)",  // 琥珀
+  "rgba(45, 122, 74, 0.12)",   // 墨绿
+  "rgba(136, 58, 109, 0.12)",  // 酒红
+  "rgba(90, 87, 163, 0.12)",   // 靛青
+  "rgba(170, 108, 57, 0.12)",  // 铜
+  "rgba(39, 124, 140, 0.12)",  // 青灰
+  "rgba(166, 83, 117, 0.12)",  // 豆沙红
 ];
 
 function groupBgColor(group: number | null): string | undefined {
@@ -30,7 +35,6 @@ function groupBgColor(group: number | null): string | undefined {
   return GROUP_COLORS[group % GROUP_COLORS.length];
 }
 
-// 高敏字段:template 匹配用红色
 const HIGH_SENSITIVITY_FIELDS = new Set(["template"]);
 
 function formatValue(fieldName: string, value: string | null): string {
@@ -82,92 +86,142 @@ export function MetaComparePage() {
       .finally(() => setLoading(false));
   }, [projectId, version]);
 
-  const basePath = `/reports/${projectId}/${version}/compare`;
-
-  if (loading) return <div className="p-4">加载中...</div>;
-  if (error) return <div className="p-4 text-red-600">{error}</div>;
-  if (!data) return null;
-
   return (
-    <div className="p-4 max-w-7xl mx-auto">
-      {/* Tab 栏 */}
-      <div className="flex gap-2 mb-4 border-b pb-2">
-        <Link
-          to={basePath}
-          className="px-3 py-1 text-gray-600 hover:text-blue-600 text-sm"
-        >
-          对比总览
-        </Link>
-        <Link
-          to={`${basePath}/price`}
-          className="px-3 py-1 text-gray-600 hover:text-blue-600 text-sm"
-        >
-          报价对比
-        </Link>
-        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-t font-medium text-sm">
-          元数据对比
-        </span>
-      </div>
+    <div>
+      <ReportNavBar
+        projectId={projectId ?? ""}
+        version={version ?? ""}
+        title="元数据对比"
+        subtitle="跨投标人的文档元数据矩阵,同色表示值相同,高敏字段冲突会用红色加粗强调"
+        tabKey="compare"
+      />
 
-      <h1 className="text-xl font-bold mb-4">元数据对比</h1>
+      <Card variant="outlined" styles={{ body: { padding: 0 } }}>
+        <CompareSubTabs
+          projectId={projectId ?? ""}
+          version={version ?? ""}
+          activeKey="metadata"
+        />
 
-      {data.bidders.length === 0 ? (
-        <div className="text-gray-500 p-8 text-center border rounded">
-          无元数据
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border" data-testid="meta-table">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2 text-left">字段</th>
-                {data.bidders.map((b) => (
-                  <th key={b.bidder_id} className="p-2 text-left">
-                    {b.bidder_name}
+        {loading ? (
+          <div style={{ padding: 48, textAlign: "center" }}>
+            <Spin tip="加载中..." />
+          </div>
+        ) : error ? (
+          <div style={{ padding: 32 }}>
+            <Empty description={<span style={{ color: "#c53030" }}>{error}</span>} />
+          </div>
+        ) : !data || data.bidders.length === 0 ? (
+          <div style={{ padding: 32 }}>
+            <Empty description="无元数据" />
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              data-testid="meta-table"
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 13,
+              }}
+            >
+              <thead>
+                <tr>
+                  <th
+                    style={{
+                      padding: "10px 16px",
+                      textAlign: "left",
+                      background: "#fafbfc",
+                      color: "#5c6370",
+                      fontWeight: 500,
+                      borderBottom: "1px solid #e4e7ed",
+                      letterSpacing: 0.3,
+                    }}
+                  >
+                    字段
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.fields.map((field) => (
-                <tr key={field.field_name}>
-                  <td className="p-2 font-medium">{field.display_name}</td>
-                  {field.values.map((cell, i) => {
-                    const isHighSensitivity =
-                      HIGH_SENSITIVITY_FIELDS.has(field.field_name) &&
-                      !cell.is_common &&
-                      cell.color_group !== null;
-
-                    return (
-                      <td
-                        key={data.bidders[i].bidder_id}
-                        className={`p-2 ${cell.is_common ? "text-gray-400" : ""} ${isHighSensitivity ? "font-semibold" : ""}`}
-                        style={{
-                          backgroundColor: isHighSensitivity
-                            ? "rgba(239,68,68,0.2)"
-                            : cell.is_common
-                              ? undefined
-                              : groupBgColor(cell.color_group),
-                        }}
-                        title={
-                          cell.is_common
-                            ? "通用值,已过滤"
-                            : undefined
-                        }
-                        data-testid={
-                          cell.is_common ? "common-cell" : undefined
-                        }
-                      >
-                        {formatValue(field.field_name, cell.value)}
-                      </td>
-                    );
-                  })}
+                  {data.bidders.map((b) => (
+                    <th
+                      key={b.bidder_id}
+                      style={{
+                        padding: "10px 16px",
+                        textAlign: "left",
+                        background: "#fafbfc",
+                        color: "#5c6370",
+                        fontWeight: 500,
+                        borderBottom: "1px solid #e4e7ed",
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      {b.bidder_name}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {data.fields.map((field, rowIdx) => (
+                  <tr
+                    key={field.field_name}
+                    style={{
+                      borderBottom: "1px solid #f0f2f5",
+                      background: rowIdx % 2 === 1 ? "#fafbfc" : undefined,
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: "10px 16px",
+                        fontWeight: 500,
+                        color: "#1f2328",
+                      }}
+                    >
+                      {field.display_name}
+                    </td>
+                    {field.values.map((cell, i) => {
+                      const isHighSensitivity =
+                        HIGH_SENSITIVITY_FIELDS.has(field.field_name) &&
+                        !cell.is_common &&
+                        cell.color_group !== null;
+                      const bg = isHighSensitivity
+                        ? "#fdecec"
+                        : cell.is_common
+                          ? undefined
+                          : groupBgColor(cell.color_group);
+                      return (
+                        <td
+                          key={data.bidders[i].bidder_id}
+                          style={{
+                            padding: "10px 16px",
+                            color: cell.is_common ? "#b1b6bf" : "#1f2328",
+                            fontWeight: isHighSensitivity ? 600 : 400,
+                            background: bg,
+                          }}
+                          title={cell.is_common ? "通用值,已过滤" : undefined}
+                          data-testid={cell.is_common ? "common-cell" : undefined}
+                        >
+                          {formatValue(field.field_name, cell.value)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div
+              style={{
+                padding: "12px 16px",
+                borderTop: "1px solid #f0f2f5",
+                fontSize: 11.5,
+                color: "#8a919d",
+                background: "#fafbfc",
+              }}
+            >
+              <Typography.Text type="secondary" style={{ fontSize: 11.5 }}>
+                图例:同色 = 同组相同值;灰字 = 通用值(已过滤);红底加粗 = 高敏字段冲突(如模板)
+              </Typography.Text>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

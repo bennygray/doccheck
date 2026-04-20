@@ -19,6 +19,10 @@ import type {
   DocumentRole,
   DocumentRolePatchResult,
   ExportStartOut,
+  LLMConfigResponse,
+  LLMConfigUpdate,
+  LLMTestRequest,
+  LLMTestResponse,
   LogsResponse,
   MetaCompareResponse,
   PairsResponse,
@@ -489,5 +493,22 @@ export const api = {
     request<RulesConfigResponse>("/admin/rules", {
       method: "PUT",
       body: JSON.stringify(config),
+    }),
+
+  /** GET /admin/llm (admin-llm-config) */
+  getLLMConfig: () => request<LLMConfigResponse>("/admin/llm"),
+
+  /** PUT /admin/llm */
+  updateLLMConfig: (payload: LLMConfigUpdate) =>
+    request<LLMConfigResponse>("/admin/llm", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  /** POST /admin/llm/test */
+  testLLMConnection: (payload: LLMTestRequest) =>
+    request<LLMTestResponse>("/admin/llm/test", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 };

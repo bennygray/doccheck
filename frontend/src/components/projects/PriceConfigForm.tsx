@@ -1,9 +1,14 @@
 /**
- * 项目报价元配置表单 (US-4.4, C4 file-upload §8.5)。
+ * 项目报价元配置表单 (US-4.4, C4 file-upload §8.5)
  *
  * GET → 回显;PUT → 创建或更新。首次 GET 返 null 时显示默认值占位。
+ *
+ * antd 化:Select / Checkbox / Button;data-testid 保留在 wrapper 上,
+ * 测试里用 wrapper.querySelector('.ant-select-selector') 打开下拉。
  */
 import { useEffect, useState } from "react";
+import { Button, Checkbox, Select, Space, Typography } from "antd";
+import { CheckOutlined } from "@ant-design/icons";
 import { api } from "../../services/api";
 import type { Currency, PriceConfig, UnitScale } from "../../types";
 
@@ -41,7 +46,7 @@ export default function PriceConfigForm({ projectId }: Props) {
           setTaxInclusive(resp.tax_inclusive);
           setUnitScale(resp.unit_scale as UnitScale);
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) setError("加载失败");
       } finally {
         if (!cancelled) setLoading(false);
@@ -63,7 +68,7 @@ export default function PriceConfigForm({ projectId }: Props) {
       });
       setCfg(updated);
       setSavedAt(new Date().toLocaleTimeString());
-    } catch (err) {
+    } catch {
       setError("保存失败");
     } finally {
       setSaving(false);
@@ -71,63 +76,74 @@ export default function PriceConfigForm({ projectId }: Props) {
   }
 
   if (loading) {
-    return <p data-testid="price-config-loading">加载中...</p>;
+    return (
+      <Typography.Text data-testid="price-config-loading" type="secondary">
+        加载中...
+      </Typography.Text>
+    );
   }
 
   return (
-    <div data-testid="price-config-form" style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-      <label>
-        币种
-        <select
-          value={currency}
-          onChange={(e) => setCurrency(e.target.value as Currency)}
-          data-testid="price-config-currency"
-          style={{ marginLeft: 4 }}
+    <div data-testid="price-config-form">
+      <Space size={20} wrap align="center">
+        <span>
+          <Typography.Text type="secondary" style={{ fontSize: 13, marginRight: 8 }}>
+            币种
+          </Typography.Text>
+          <span data-testid="price-config-currency">
+            <Select
+              value={currency}
+              onChange={(v) => setCurrency(v as Currency)}
+              style={{ width: 96 }}
+              options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+            />
+          </span>
+        </span>
+
+        <span data-testid="price-config-tax">
+          <Checkbox
+            checked={taxInclusive}
+            onChange={(e) => setTaxInclusive(e.target.checked)}
+          >
+            含税
+          </Checkbox>
+        </span>
+
+        <span>
+          <Typography.Text type="secondary" style={{ fontSize: 13, marginRight: 8 }}>
+            单位
+          </Typography.Text>
+          <span data-testid="price-config-unit">
+            <Select
+              value={unitScale}
+              onChange={(v) => setUnitScale(v as UnitScale)}
+              style={{ width: 110 }}
+              options={UNIT_SCALES.map((u) => ({ value: u, label: UNIT_LABEL[u] }))}
+            />
+          </span>
+        </span>
+
+        <Button
+          type="primary"
+          icon={<CheckOutlined />}
+          onClick={save}
+          loading={saving}
+          data-testid="price-config-save"
         >
-          {CURRENCIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        含税
-        <input
-          type="checkbox"
-          checked={taxInclusive}
-          onChange={(e) => setTaxInclusive(e.target.checked)}
-          data-testid="price-config-tax"
-          style={{ marginLeft: 4 }}
-        />
-      </label>
-      <label>
-        单位
-        <select
-          value={unitScale}
-          onChange={(e) => setUnitScale(e.target.value as UnitScale)}
-          data-testid="price-config-unit"
-          style={{ marginLeft: 4 }}
-        >
-          {UNIT_SCALES.map((u) => (
-            <option key={u} value={u}>
-              {UNIT_LABEL[u]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        onClick={save}
-        disabled={saving}
-        data-testid="price-config-save"
-        style={{ padding: "4px 16px" }}
-      >
-        {saving ? "保存中..." : cfg ? "更新" : "保存"}
-      </button>
-      {savedAt && (
-        <span style={{ color: "#52c41a", fontSize: 12 }}>已保存 {savedAt}</span>
-      )}
-      {error && <span style={{ color: "#c00", fontSize: 12 }}>{error}</span>}
+          {saving ? "保存中" : cfg ? "更新" : "保存"}
+        </Button>
+
+        {savedAt && (
+          <Typography.Text type="success" style={{ fontSize: 12 }}>
+            已保存 {savedAt}
+          </Typography.Text>
+        )}
+        {error && (
+          <Typography.Text type="danger" style={{ fontSize: 12 }}>
+            {error}
+          </Typography.Text>
+        )}
+      </Space>
     </div>
   );
 }

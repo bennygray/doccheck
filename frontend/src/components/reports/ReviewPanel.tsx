@@ -1,27 +1,38 @@
 /**
- * C15 ReviewPanel — 整报告级人工复核表单
+ * C15 ReviewPanel — 整报告级人工复核表单(antd 化)
  *
- * - 未复核:显示 status 选择 + comment + 提交按钮
- * - 已复核:显示当前复核结论,允许点击"修改"再次复核
- * - 表单校验:status 必选,comment 可空
- *
- * 注意:复核成功后不改 total_score / risk_level(D11)
+ * - 未复核:显示 status Select + comment TextArea + 提交
+ * - 已复核:显示结论 + 修改按钮
+ * - 复核不改 total_score / risk_level(D11)
  */
 import { useState } from "react";
+import {
+  Alert,
+  Button,
+  Form,
+  Input,
+  Select,
+  Space,
+  Tag,
+  Typography,
+} from "antd";
+import { EditOutlined } from "@ant-design/icons";
 
 import { ApiError, api } from "../../services/api";
 import type { ReviewStatus } from "../../types";
 
-const STATUS_OPTIONS: Array<{ value: ReviewStatus; label: string }> = [
-  { value: "confirmed", label: "确认围标" },
-  { value: "rejected", label: "排除围标" },
-  { value: "downgraded", label: "降级风险" },
-  { value: "upgraded", label: "升级风险" },
+const STATUS_OPTIONS: Array<{ value: ReviewStatus; label: string; color: string }> = [
+  { value: "confirmed", label: "确认围标", color: "error" },
+  { value: "rejected", label: "排除围标", color: "default" },
+  { value: "downgraded", label: "降级风险", color: "warning" },
+  { value: "upgraded", label: "升级风险", color: "error" },
 ];
 
-const STATUS_LABELS: Record<ReviewStatus, string> = Object.fromEntries(
-  STATUS_OPTIONS.map((o) => [o.value, o.label]),
-) as Record<ReviewStatus, string>;
+const STATUS_META: Record<ReviewStatus, { label: string; color: string }> =
+  Object.fromEntries(STATUS_OPTIONS.map((o) => [o.value, { label: o.label, color: o.color }])) as Record<
+    ReviewStatus,
+    { label: string; color: string }
+  >;
 
 interface Props {
   projectId: number | string;
@@ -37,17 +48,15 @@ interface Props {
 
 export function ReviewPanel({ projectId, version, current, onSubmitted }: Props) {
   const [editing, setEditing] = useState(current.status === null);
-  const [status, setStatus] = useState<ReviewStatus | "">(
-    current.status ?? "",
-  );
+  const [status, setStatus] = useState<ReviewStatus | "">(current.status ?? "");
   const [comment, setComment] = useState(current.comment ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!status) {
-      setError("请选择复核结论");
+      setError("请选择复核结论后再提交");
       return;
     }
     setSubmitting(true);
@@ -69,85 +78,98 @@ export function ReviewPanel({ projectId, version, current, onSubmitted }: Props)
   };
 
   if (!editing && current.status) {
+    const meta = STATUS_META[current.status];
     return (
-      <div className="p-3 border rounded bg-gray-50">
-        <div className="flex items-center justify-between mb-2">
-          <span className="font-semibold">人工复核结论</span>
-          <button
-            type="button"
-            className="text-blue-600 text-sm underline"
+      <div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: 8,
+          }}
+        >
+          <Space size={8} align="center">
+            <Typography.Text style={{ fontSize: 13, color: "#5c6370" }}>
+              结论
+            </Typography.Text>
+            <Tag color={meta.color} style={{ margin: 0, fontWeight: 600 }}>
+              {meta.label}
+            </Tag>
+          </Space>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
             onClick={() => setEditing(true)}
           >
             修改
-          </button>
+          </Button>
         </div>
-        <div className="text-sm">
-          <div>
-            结论:<span className="font-bold">{STATUS_LABELS[current.status]}</span>
-          </div>
-          {current.comment && (
-            <div className="mt-1 text-gray-700">评论:{current.comment}</div>
-          )}
-          {current.reviewed_at && (
-            <div className="mt-1 text-xs text-gray-500">
-              {new Date(current.reviewed_at).toLocaleString()} by user#{current.reviewer_id}
-            </div>
-          )}
-        </div>
+        {current.comment && (
+          <Typography.Paragraph
+            style={{ fontSize: 13, color: "#5c6370", margin: "4px 0" }}
+          >
+            评论:{current.comment}
+          </Typography.Paragraph>
+        )}
+        {current.reviewed_at && (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {new Date(current.reviewed_at).toLocaleString()} by user#
+            {current.reviewer_id}
+          </Typography.Text>
+        )}
       </div>
     );
   }
 
   return (
-    <form onSubmit={submit} className="p-3 border rounded bg-white space-y-2">
-      <div className="font-semibold">人工复核</div>
-      <div>
-        <label className="text-sm mr-2">结论:</label>
-        <select
-          className="border rounded px-2 py-1 text-sm"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as ReviewStatus)}
+    <Form
+      layout="vertical"
+      component="form"
+      onSubmitCapture={submit}
+      requiredMark={false}
+    >
+      <Form.Item label="复核结论" required>
+        <Select
+          value={status || undefined}
+          onChange={(v) => setStatus(v)}
+          placeholder="请选择复核结论"
           disabled={submitting}
-        >
-          <option value="">请选择</option>
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="text-sm block mb-1">评论(可选):</label>
-        <textarea
-          className="w-full border rounded px-2 py-1 text-sm"
-          rows={2}
+          options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          style={{ width: 220 }}
+        />
+      </Form.Item>
+      <Form.Item label="评论(可选)">
+        <Input.TextArea
+          rows={3}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           disabled={submitting}
+          placeholder="可填写复核原因或补充说明"
+          maxLength={500}
+          showCount
         />
-      </div>
-      {error && <div className="text-red-600 text-sm">{error}</div>}
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
-        >
-          {submitting ? "提交中..." : "提交复核"}
-        </button>
+      </Form.Item>
+      {error && (
+        <Alert
+          type="error"
+          message={error}
+          showIcon
+          style={{ marginBottom: 12 }}
+        />
+      )}
+      <Space>
+        <Button type="primary" htmlType="submit" loading={submitting}>
+          {submitting ? "提交中" : "提交复核"}
+        </Button>
         {current.status && (
-          <button
-            type="button"
-            className="px-3 py-1 text-gray-500"
-            onClick={() => setEditing(false)}
-            disabled={submitting}
-          >
+          <Button onClick={() => setEditing(false)} disabled={submitting}>
             取消
-          </button>
+          </Button>
         )}
-      </div>
-    </form>
+      </Space>
+    </Form>
   );
 }
 

@@ -1,12 +1,30 @@
 /**
  * C15 pair 对比入口页 — C16 扩展 Tab 导航
- * Tab: 对比总览(pair 列表) | 报价对比 | 元数据对比
+ * 三个对比子 Tab: 总览(pair 列表) | 报价 | 元数据 | 文本
  */
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { Card, Empty, Spin, Table, Tag, Typography } from "antd";
+import type { TableProps } from "antd";
 
+import CompareSubTabs from "../../components/reports/CompareSubTabs";
+import ReportNavBar from "../../components/reports/ReportNavBar";
 import { ApiError, api } from "../../services/api";
 import type { PairComparisonItem } from "../../types";
+
+const DIMENSION_LABELS: Record<string, string> = {
+  text_similarity: "文本相似度",
+  section_similarity: "章节相似度",
+  structure_similarity: "结构相似度",
+  metadata_author: "元数据·作者",
+  metadata_time: "元数据·时间",
+  metadata_machine: "元数据·机器",
+  price_consistency: "报价一致性",
+  price_anomaly: "报价异常",
+  error_consistency: "错误一致性",
+  image_reuse: "图片复用",
+  style: "语言风格",
+};
 
 export function ComparePage() {
   const { projectId, version } = useParams<{
@@ -36,78 +54,155 @@ export function ComparePage() {
 
   const basePath = `/reports/${projectId}/${version}/compare`;
 
-  return (
-    <div className="p-4 max-w-5xl mx-auto">
-      {/* Tab 栏 */}
-      <div className="flex gap-2 mb-4 border-b pb-2">
-        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-t font-medium text-sm">
-          对比总览
+  const columns: TableProps<PairComparisonItem>["columns"] = [
+    {
+      title: "维度",
+      dataIndex: "dimension",
+      key: "dimension",
+      width: 160,
+      render: (d: string) => (
+        <span>
+          {DIMENSION_LABELS[d] ?? d}
+          <Typography.Text
+            type="secondary"
+            style={{ fontSize: 11, marginLeft: 6, fontFamily: "monospace" }}
+          >
+            {d}
+          </Typography.Text>
         </span>
-        <Link
-          to={`${basePath}/price`}
-          className="px-3 py-1 text-gray-600 hover:text-blue-600 text-sm"
+      ),
+    },
+    {
+      title: "投标 A",
+      dataIndex: "bidder_a_id",
+      key: "a",
+      width: 90,
+      render: (v: number) => (
+        <Typography.Text style={{ fontFamily: "monospace" }}>#{v}</Typography.Text>
+      ),
+    },
+    {
+      title: "投标 B",
+      dataIndex: "bidder_b_id",
+      key: "b",
+      width: 90,
+      render: (v: number) => (
+        <Typography.Text style={{ fontFamily: "monospace" }}>#{v}</Typography.Text>
+      ),
+    },
+    {
+      title: "分数",
+      dataIndex: "score",
+      key: "score",
+      width: 100,
+      align: "right" as const,
+      render: (s: number) => (
+        <Typography.Text
+          strong
+          style={{
+            fontSize: 15,
+            color:
+              s >= 70 ? "#c53030" : s >= 40 ? "#c27c0e" : "#5c6370",
+          }}
         >
-          报价对比
-        </Link>
-        <Link
-          to={`${basePath}/metadata`}
-          className="px-3 py-1 text-gray-600 hover:text-blue-600 text-sm"
-        >
-          元数据对比
-        </Link>
-      </div>
+          {s.toFixed(1)}
+        </Typography.Text>
+      ),
+      sorter: (a, b) => a.score - b.score,
+      defaultSortOrder: "descend" as const,
+    },
+    {
+      title: "铁证",
+      dataIndex: "is_ironclad",
+      key: "ironclad",
+      width: 80,
+      render: (v: boolean) =>
+        v ? (
+          <Tag color="error" style={{ margin: 0, fontWeight: 600 }}>
+            铁证
+          </Tag>
+        ) : (
+          <span style={{ color: "#b1b6bf" }}>—</span>
+        ),
+    },
+    {
+      title: "证据摘要",
+      dataIndex: "evidence_summary",
+      key: "summary",
+      render: (s: string | null) =>
+        s ? (
+          <Typography.Text style={{ fontSize: 13, color: "#5c6370" }}>
+            {s}
+          </Typography.Text>
+        ) : (
+          <span style={{ color: "#b1b6bf" }}>—</span>
+        ),
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 100,
+      render: (_: unknown, it) =>
+        it.dimension === "text_similarity" && it.score > 0 ? (
+          <Link
+            to={`${basePath}/text?bidder_a=${it.bidder_a_id}&bidder_b=${it.bidder_b_id}`}
+            style={{ color: "#1d4584", fontSize: 13 }}
+            title="查看文本对比"
+          >
+            文本对比 →
+          </Link>
+        ) : null,
+    },
+  ];
 
-      <h1 className="text-xl font-bold mb-4">投标人对比(pair 摘要)</h1>
+  return (
+    <div>
+      <ReportNavBar
+        projectId={projectId ?? ""}
+        version={version ?? ""}
+        title="投标人对比"
+        subtitle="按维度 × 投标人对的命中评分,点击 '文本对比' 进入段落级对照"
+        tabKey="compare"
+      />
 
-      {loading && <div className="p-4">加载中...</div>}
-      {error && <div className="p-4 text-red-600">{error}</div>}
-      {!loading && !error && (
-        <>
-          <table className="w-full text-sm border">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2 text-left">维度</th>
-                <th className="p-2 text-left">投标 A</th>
-                <th className="p-2 text-left">投标 B</th>
-                <th className="p-2 text-right">分数</th>
-                <th className="p-2 text-left">铁证</th>
-                <th className="p-2 text-left">证据摘要</th>
-                <th className="p-2 text-left">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it) => (
-                <tr key={it.id} className={it.is_ironclad ? "bg-red-50" : ""}>
-                  <td className="p-2 font-mono">{it.dimension}</td>
-                  <td className="p-2">#{it.bidder_a_id}</td>
-                  <td className="p-2">#{it.bidder_b_id}</td>
-                  <td className="p-2 text-right font-semibold">
-                    {it.score.toFixed(1)}
-                  </td>
-                  <td className="p-2">{it.is_ironclad ? "是" : "—"}</td>
-                  <td className="p-2 text-gray-700">
-                    {it.evidence_summary || "—"}
-                  </td>
-                  <td className="p-2">
-                    {it.dimension === "text_similarity" && it.score > 0 && (
-                      <Link
-                        to={`${basePath}/text?bidder_a=${it.bidder_a_id}&bidder_b=${it.bidder_b_id}`}
-                        className="text-blue-600 hover:underline text-xs"
-                        title="查看文本对比"
-                      >
-                        文本对比
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {items.length === 0 && (
-            <div className="mt-3 text-gray-500 text-sm">无对比数据</div>
-          )}
-        </>
-      )}
+      <Card
+        variant="outlined"
+        styles={{ body: { padding: 0 } }}
+      >
+        <CompareSubTabs
+          projectId={projectId ?? ""}
+          version={version ?? ""}
+          activeKey="overview"
+        />
+
+        {loading ? (
+          <div style={{ padding: 48, textAlign: "center" }}>
+            <Spin tip="加载中..." />
+          </div>
+        ) : error ? (
+          <div style={{ padding: 32 }}>
+            <Empty description={<span style={{ color: "#c53030" }}>{error}</span>} />
+          </div>
+        ) : items.length === 0 ? (
+          <div style={{ padding: 32 }}>
+            <Empty description="无对比数据" />
+          </div>
+        ) : (
+          <Table<PairComparisonItem>
+            rowKey="id"
+            columns={columns}
+            dataSource={items}
+            rowClassName={(r) => (r.is_ironclad ? "ironclad-row" : "")}
+            pagination={
+              items.length > 20
+                ? { pageSize: 20, showSizeChanger: false }
+                : false
+            }
+            size="middle"
+            style={{ border: "none" }}
+          />
+        )}
+      </Card>
     </div>
   );
 }

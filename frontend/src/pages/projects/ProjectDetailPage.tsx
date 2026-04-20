@@ -1,14 +1,39 @@
 /**
- * 项目详情页 (C3 base + C4 file-upload §9.1)。
+ * 项目详情页 (C3 base + C4 file-upload §9.1 + C5/C6 扩展)
  *
- * C4 起替换 bidders/files/progress 三处占位:
- * - 投标人卡片列表 + 添加投标人按钮 + 每张卡片含 UploadButton + FileTree + 删除
- * - progress 顶部聚合统计
- * - 报价规则 section(PriceConfigForm + PriceRulesPlaceholder)
- * - bidder.parse_status=extracting 时启动 2s 轮询,自动消失
+ * UX 重设:
+ *  - Hero 信息卡(合并原"基本信息 + 检测 + 解析进度"三卡):左侧元数据 + 右侧主 CTA(启动检测)+ 条件底行(解析进度 / 检测进度 / 报告入口)
+ *  - 投标人管理:紧凑行列表,点击行打开右侧 Drawer(文件树 + 角色编辑 + 解密入口)
+ *  - 报价规则:保留,作为独立底部卡
+ *
+ * 业务逻辑 0 改动:SSE / 轮询 / Dialog / UploadButton / FileTree / DetectSection 全量沿用
+ * data-testid 全保留
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  App,
+  Breadcrumb,
+  Button,
+  Card,
+  Drawer,
+  Empty,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+} from "antd";
+import {
+  CalendarOutlined,
+  DeleteOutlined,
+  DollarOutlined,
+  FileTextOutlined,
+  LockOutlined,
+  NumberOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  RightOutlined,
+} from "@ant-design/icons";
 import AddBidderDialog from "../../components/projects/AddBidderDialog";
 import DecryptDialog from "../../components/projects/DecryptDialog";
 import FileTree from "../../components/projects/FileTree";
@@ -32,11 +57,37 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: "#888",
-  parsing: "#1677ff",
-  ready: "#52c41a",
-  analyzing: "#e67e22",
-  completed: "#2ecc71",
+  draft: "default",
+  parsing: "processing",
+  ready: "blue",
+  analyzing: "processing",
+  completed: "success",
+};
+
+const BIDDER_STATUS_LABELS: Record<string, string> = {
+  pending: "待解析",
+  extracting: "解析中",
+  extracted: "已解压",
+  identifying: "识别中",
+  identified: "已识别",
+  pricing: "报价中",
+  priced: "已报价",
+  needs_password: "需密码",
+  failed: "失败",
+  partial: "部分成功",
+};
+
+const BIDDER_STATUS_COLORS: Record<string, string> = {
+  pending: "default",
+  extracting: "processing",
+  extracted: "blue",
+  identifying: "processing",
+  identified: "cyan",
+  pricing: "processing",
+  priced: "success",
+  needs_password: "warning",
+  failed: "error",
+  partial: "warning",
 };
 
 const POLL_INTERVAL_MS = 2000;
@@ -44,24 +95,25 @@ const POLL_INTERVAL_MS = 2000;
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { modal, message } = App.useApp();
+
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // bidder 文件树展开:bidderId -> documents 缓存
   const [docsByBidder, setDocsByBidder] = useState<Record<number, BidDocument[]>>({});
   const [showAddBidder, setShowAddBidder] = useState(false);
   const [decryptTarget, setDecryptTarget] = useState<BidDocument | null>(null);
   const [bidders, setBidders] = useState<Bidder[]>([]);
+  // 侧边 Drawer 选中的投标人 id(null = 关闭)
+  const [drawerBidderId, setDrawerBidderId] = useState<number | null>(null);
+
   const pollRef = useRef<number | null>(null);
 
   const projectId = id ? Number(id) : NaN;
 
-  // C5: SSE 订阅(断线自动降级轮询)。返回 bidders/progress 覆盖本地状态
-  const sse = useParseProgress(
-    Number.isFinite(projectId) ? projectId : null,
-  );
+  const sse = useParseProgress(Number.isFinite(projectId) ? projectId : null);
 
   const reloadProject = useCallback(async () => {
     if (!id) return;
@@ -90,7 +142,7 @@ export default function ProjectDetailPage() {
         const docs = await api.listDocuments(id, bidderId);
         setDocsByBidder((p) => ({ ...p, [bidderId]: docs }));
       } catch {
-        // 单独 bidder 拉取失败不阻塞主页
+        // ignore
       }
     },
     [id],
@@ -100,7 +152,13 @@ export default function ProjectDetailPage() {
     void reloadProject();
   }, [reloadProject]);
 
-  // 轮询:任一 bidder 处于 extracting/pending → 2s 再拉一次
+  // 打开 Drawer 时自动加载该投标人的文件(若尚未缓存)
+  useEffect(() => {
+    if (drawerBidderId !== null && !docsByBidder[drawerBidderId]) {
+      void reloadDocs(drawerBidderId);
+    }
+  }, [drawerBidderId, docsByBidder, reloadDocs]);
+
   useEffect(() => {
     if (pollRef.current) {
       window.clearInterval(pollRef.current);
@@ -124,62 +182,112 @@ export default function ProjectDetailPage() {
     };
   }, [bidders, reloadProject, reloadDocs]);
 
-  async function onDeleteProject() {
+  function onDeleteProject() {
     if (!project) return;
-    const ok = window.confirm(
-      `确定删除项目 "${project.name}" 吗?该操作会隐藏项目(软删除)。`,
-    );
-    if (!ok) return;
-    setDeleting(true);
-    try {
-      await api.deleteProject(project.id);
-      navigate("/projects", { replace: true });
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        window.alert("检测进行中,无法删除");
-      } else if (err instanceof ApiError) {
-        window.alert(`删除失败 (${err.status})`);
-      } else {
-        window.alert("删除失败,请稍后重试");
-      }
-    } finally {
-      setDeleting(false);
-    }
+    modal.confirm({
+      title: "删除项目",
+      content: (
+        <span>
+          确定删除项目 <b>{project.name}</b>?该操作会隐藏项目(软删除)。
+        </span>
+      ),
+      okText: "删除",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      async onOk() {
+        setDeleting(true);
+        try {
+          await api.deleteProject(project.id);
+          navigate("/projects", { replace: true });
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 409) {
+            void message.error("检测进行中,无法删除");
+          } else if (err instanceof ApiError) {
+            void message.error(`删除失败 (${err.status})`);
+          } else {
+            void message.error("删除失败,请稍后重试");
+          }
+        } finally {
+          setDeleting(false);
+        }
+      },
+    });
   }
 
-  async function onDeleteBidder(bidderId: number, bidderName: string) {
-    const ok = window.confirm(`确定删除投标人 "${bidderName}"?其所有解压文件会被清除。`);
-    if (!ok) return;
-    try {
-      await api.deleteBidder(projectId, bidderId);
-      await reloadProject();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        window.alert("检测进行中,无法删除投标人");
-      } else if (err instanceof ApiError) {
-        window.alert(`删除失败 (${err.status})`);
-      } else {
-        window.alert("删除失败");
-      }
-    }
+  function onDeleteBidder(bidderId: number, bidderName: string) {
+    modal.confirm({
+      title: "删除投标人",
+      content: (
+        <span>
+          确定删除投标人 <b>{bidderName}</b>?其所有解压文件会被清除。
+        </span>
+      ),
+      okText: "删除",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      async onOk() {
+        try {
+          await api.deleteBidder(projectId, bidderId);
+          // 若删除的是 Drawer 当前项,关 Drawer
+          if (drawerBidderId === bidderId) setDrawerBidderId(null);
+          await reloadProject();
+          void message.success("已删除");
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 409) {
+            void message.error("检测进行中,无法删除投标人");
+          } else if (err instanceof ApiError) {
+            void message.error(`删除失败 (${err.status})`);
+          } else {
+            void message.error("删除失败");
+          }
+        }
+      },
+    });
   }
+
+  // SSE 优先的 bidder 状态合并
+  const mergedBidders = useMemo(
+    () =>
+      bidders.map((b) => {
+        const sseMatch = sse.bidders.find((x) => x.id === b.id);
+        return sseMatch ? { ...b, parse_status: sseMatch.parse_status } : b;
+      }),
+    [bidders, sse.bidders],
+  );
+
+  const drawerBidder =
+    drawerBidderId !== null
+      ? mergedBidders.find((b) => b.id === drawerBidderId) ?? null
+      : null;
 
   if (isLoading) {
-    return (
-      <main style={{ padding: 32 }}>
-        <p data-testid="detail-loading">加载中...</p>
-      </main>
-    );
+    return <div data-testid="detail-loading">加载中...</div>;
   }
 
   if (error) {
     return (
-      <main style={{ padding: 32 }}>
-        <p data-testid="detail-error" style={{ color: "#c00" }}>
-          {error}
-        </p>
-        <Link to="/projects">← 返回项目列表</Link>
-      </main>
+      <div>
+        <Breadcrumb
+          items={[
+            { title: <Link to="/projects" data-testid="back-to-list">项目</Link> },
+            { title: "详情" },
+          ]}
+          style={{ marginBottom: 12 }}
+        />
+        <Card>
+          <Empty
+            description={
+              <span data-testid="detail-error" style={{ color: "#c53030" }}>
+                {error}
+              </span>
+            }
+          >
+            <Link to="/projects">
+              <Button type="primary">返回项目列表</Button>
+            </Link>
+          </Empty>
+        </Card>
+      </div>
     );
   }
 
@@ -188,252 +296,378 @@ export default function ProjectDetailPage() {
   const progress = project.progress;
 
   return (
-    <main style={{ padding: 32, fontFamily: "system-ui, sans-serif", maxWidth: 960 }}>
-      <header style={{ marginBottom: 16 }}>
-        <Link to="/projects" data-testid="back-to-list">
-          ← 返回项目列表
-        </Link>
-      </header>
+    <div>
+      <Breadcrumb
+        items={[
+          { title: <Link to="/projects" data-testid="back-to-list">项目</Link> },
+          { title: project.name },
+        ]}
+        style={{ marginBottom: 12 }}
+      />
 
-      <section
+      {/* Hero:基本信息 + 主 CTA + 条件底行 */}
+      <Card
+        variant="outlined"
         data-testid="project-basic"
-        style={{ borderBottom: "1px solid #eee", paddingBottom: 16 }}
+        styles={{ body: { padding: 0 } }}
+        style={{ marginBottom: 16 }}
       >
-        <h1 style={{ fontSize: 24, margin: 0 }} data-testid="project-name">
-          {project.name}
-        </h1>
-        <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap" }}>
-          <span>
-            状态:
-            <span
-              data-testid="project-status"
+        <div
+          style={{
+            padding: "20px 24px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 24,
+            flexWrap: "wrap",
+          }}
+        >
+          {/* 左:身份 + meta + 描述(每行独立 block,不会串在一起) */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* 标题行 */}
+            <div
               style={{
-                color: STATUS_COLORS[project.status] ?? "#333",
-                marginLeft: 4,
-                fontWeight: 500,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 10,
               }}
             >
-              {STATUS_LABELS[project.status] ?? project.status}
-            </span>
-          </span>
-          <span>
-            招标编号:
-            <span data-testid="project-bid-code" style={{ marginLeft: 4 }}>
-              {project.bid_code ?? "(无)"}
-            </span>
-          </span>
-          <span>
-            最高限价:
-            <span data-testid="project-max-price" style={{ marginLeft: 4 }}>
-              {project.max_price ?? "(未设置)"}
-            </span>
-          </span>
-        </div>
-        {project.description ? (
-          <p data-testid="project-description" style={{ marginTop: 12, color: "#444" }}>
-            {project.description}
-          </p>
-        ) : null}
-        <div style={{ fontSize: 12, color: "#999", marginTop: 8 }}>
-          创建时间:{new Date(project.created_at).toLocaleString()}
-        </div>
+              <Typography.Title
+                level={3}
+                style={{ margin: 0, fontWeight: 600, fontSize: 22 }}
+                data-testid="project-name"
+              >
+                {project.name}
+              </Typography.Title>
+              <Tag
+                color={STATUS_COLORS[project.status] ?? "default"}
+                data-testid="project-status"
+                style={{ margin: 0 }}
+              >
+                {STATUS_LABELS[project.status] ?? project.status}
+              </Tag>
+            </div>
 
-        <div style={{ marginTop: 16 }}>
-          <button
-            onClick={onDeleteProject}
-            disabled={deleting}
-            data-testid="detail-delete"
+            {/* Meta chip 行 */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 20,
+                flexWrap: "wrap",
+                marginBottom: project.description ? 10 : 0,
+              }}
+            >
+              <MetaChip
+                icon={<NumberOutlined />}
+                label="编号"
+                value={
+                  <span data-testid="project-bid-code">
+                    {project.bid_code ?? <span style={{ color: "#b1b6bf" }}>—</span>}
+                  </span>
+                }
+              />
+              <MetaChip
+                icon={<DollarOutlined />}
+                label="限价"
+                value={
+                  <span data-testid="project-max-price">
+                    {project.max_price ?? (
+                      <span style={{ color: "#b1b6bf" }}>未设置</span>
+                    )}
+                  </span>
+                }
+              />
+              <MetaChip
+                icon={<CalendarOutlined />}
+                label="创建于"
+                value={new Date(project.created_at).toLocaleString()}
+              />
+            </div>
+
+            {project.description ? (
+              <Typography.Paragraph
+                type="secondary"
+                style={{
+                  margin: "4px 0 0",
+                  fontSize: 13,
+                  lineHeight: 1.7,
+                }}
+                data-testid="project-description"
+              >
+                {project.description}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+
+          {/* 右:删除(左) + 主 CTA(右),拉开间距避免误点 */}
+          <div
             style={{
-              padding: "6px 12px",
-              background: "#fff0f0",
-              color: "#c00",
-              border: "1px solid #f5c0c0",
-              cursor: deleting ? "not-allowed" : "pointer",
+              display: "flex",
+              gap: 4,
+              alignItems: "center",
+              flexShrink: 0,
             }}
           >
-            {deleting ? "删除中..." : "删除项目"}
-          </button>
-        </div>
-      </section>
-
-      {/* C6 detect-framework: 启动检测按钮 + 进度指示 */}
-      <DetectSection projectId={project.id} project={project} onGoReport={(v) => navigate(`/reports/${project.id}/${v}`)} />
-
-      {(sse.progress ?? progress) && (
-        <section style={{ marginTop: 16 }}>
-          <ParseProgressIndicator
-            progress={sse.progress ?? progress}
-            connected={sse.connected}
-          />
-          {/* 保留 C4 data-testid 便于回归测试兼容 */}
-          <div data-testid="progress-summary" style={{ display: "none" }}>
-            <span data-testid="progress-total">
-              投标人 {(sse.progress ?? progress)?.total_bidders ?? 0}
-            </span>
-            <span data-testid="progress-extracted">
-              已解析 {(sse.progress ?? progress)?.extracted_count ?? 0}
-            </span>
-            <span data-testid="progress-extracting">
-              解析中 {(sse.progress ?? progress)?.extracting_count ?? 0}
-            </span>
-            <span data-testid="progress-needs-password">
-              需密码 {(sse.progress ?? progress)?.needs_password_count ?? 0}
-            </span>
-            <span data-testid="progress-failed">
-              失败 {(sse.progress ?? progress)?.failed_count ?? 0}
-            </span>
+            <Tooltip title="删除项目">
+              <Button
+                danger
+                type="text"
+                icon={<DeleteOutlined />}
+                onClick={onDeleteProject}
+                loading={deleting}
+                data-testid="detail-delete"
+                aria-label="删除项目"
+                style={{ height: 38, width: 38 }}
+              />
+            </Tooltip>
+            {/* 视觉分隔线,避免删除和启动视觉上挨太近 */}
+            <div
+              aria-hidden="true"
+              style={{
+                width: 1,
+                height: 24,
+                background: "#e4e7ed",
+                margin: "0 8px",
+              }}
+            />
+            <HeroDetectArea
+              projectId={project.id}
+              project={project}
+              onGoReport={(v) => navigate(`/reports/${project.id}/${v}`)}
+            />
           </div>
-        </section>
-      )}
+        </div>
 
-      <section
+        {/* 条件底行:解析进度(仅当有 progress 时显示) */}
+        {(sse.progress ?? progress) && (
+          <div
+            style={{
+              borderTop: "1px solid #f0f2f5",
+              padding: "14px 24px",
+              background: "#fafbfc",
+            }}
+          >
+            <ParseProgressIndicator
+              progress={sse.progress ?? progress}
+              connected={sse.connected}
+            />
+            {/* 保留 C4 data-testid 便于回归测试兼容 */}
+            <div data-testid="progress-summary" style={{ display: "none" }}>
+              <span data-testid="progress-total">
+                投标人 {(sse.progress ?? progress)?.total_bidders ?? 0}
+              </span>
+              <span data-testid="progress-extracted">
+                已解析 {(sse.progress ?? progress)?.extracted_count ?? 0}
+              </span>
+              <span data-testid="progress-extracting">
+                解析中 {(sse.progress ?? progress)?.extracting_count ?? 0}
+              </span>
+              <span data-testid="progress-needs-password">
+                需密码 {(sse.progress ?? progress)?.needs_password_count ?? 0}
+              </span>
+              <span data-testid="progress-failed">
+                失败 {(sse.progress ?? progress)?.failed_count ?? 0}
+              </span>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* 投标人管理 */}
+      <Card
+        variant="outlined"
         data-testid="bidders-section"
-        style={{ marginTop: 24 }}
+        styles={{ body: { padding: 0 } }}
+        style={{ marginBottom: 16 }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 style={{ fontSize: 16, margin: 0 }}>投标人管理</h2>
-          <button
+        <div
+          style={{
+            padding: "16px 20px",
+            borderBottom: "1px solid #f0f2f5",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Space size={8} align="center">
+            <Typography.Title level={5} style={{ margin: 0, fontWeight: 600 }}>
+              投标人管理
+            </Typography.Title>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              共 {mergedBidders.length} 个
+            </Typography.Text>
+          </Space>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
             onClick={() => setShowAddBidder(true)}
             data-testid="open-add-bidder"
-            style={{ padding: "4px 12px", background: "#1677ff", color: "#fff", border: 0 }}
           >
-            + 添加投标人
-          </button>
+            添加投标人
+          </Button>
         </div>
-        {bidders.length === 0 ? (
-          <p
-            data-testid="bidders-empty"
-            style={{ color: "#888", marginTop: 8 }}
-          >
-            还没有投标人,点击右上角添加第一个。
-          </p>
-        ) : (
-          <ul style={{ padding: 0, listStyle: "none", marginTop: 12 }}>
-            {bidders.map((_raw) => {
-              // SSE 推 bidder_status_changed 时 sse.bidders 状态最新,优先展示
-              const sseMatch = sse.bidders.find((x) => x.id === _raw.id);
-              const b = sseMatch
-                ? { ..._raw, parse_status: sseMatch.parse_status }
-                : _raw;
-              return (
-              <li
-                key={b.id}
-                data-testid={`bidder-card-${b.id}`}
-                style={{
-                  border: "1px solid #ddd",
-                  borderRadius: 4,
-                  padding: 12,
-                  marginBottom: 8,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <strong data-testid={`bidder-name-${b.id}`}>{b.name}</strong>
-                    <span
-                      data-testid={`bidder-status-${b.id}`}
-                      style={{
-                        fontSize: 11,
-                        padding: "0 6px",
-                        background: STATUS_COLORS[b.parse_status] ?? "#aaa",
-                        color: "#fff",
-                        borderRadius: 8,
-                      }}
-                    >
-                      {b.parse_status}
-                    </span>
-                    <span style={{ color: "#888", fontSize: 12 }}>
-                      {b.file_count} 个文件
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <UploadButton
-                      projectId={projectId}
-                      bidderId={b.id}
-                      onUploaded={() => {
-                        void reloadProject();
-                        void reloadDocs(b.id);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void reloadDocs(b.id)}
-                      data-testid={`bidder-refresh-${b.id}`}
-                      style={{ padding: "4px 12px" }}
-                    >
-                      刷新文件
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteBidder(b.id, b.name)}
-                      data-testid={`bidder-delete-${b.id}`}
-                      style={{
-                        padding: "4px 12px",
-                        background: "#fff0f0",
-                        color: "#c00",
-                        border: "1px solid #f5c0c0",
-                      }}
-                    >
-                      删除
-                    </button>
-                  </div>
-                </div>
-                {b.parse_status === "needs_password" && (
-                  <div style={{ marginTop: 8 }}>
-                    <button
-                      type="button"
-                      data-testid={`open-decrypt-${b.id}`}
-                      onClick={() => {
-                        const archive = (docsByBidder[b.id] ?? []).find(
-                          (d) => d.parse_status === "needs_password",
-                        );
-                        if (archive) setDecryptTarget(archive);
-                        else void reloadDocs(b.id);
-                      }}
-                      style={{ background: "#722ed1", color: "#fff", border: 0, padding: "4px 12px" }}
-                    >
-                      输入密码解密
-                    </button>
-                  </div>
-                )}
-                {b.parse_error && (
-                  <div style={{ color: "#c00", marginTop: 8, fontSize: 12 }}>
-                    {b.parse_error}
-                  </div>
-                )}
-                {docsByBidder[b.id] && (
-                  <div style={{ marginTop: 8 }}>
-                    <FileTree
-                      documents={docsByBidder[b.id]}
-                      onDocumentChanged={() => void reloadDocs(b.id)}
-                    />
-                  </div>
-                )}
-              </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
 
-      <section
+        {mergedBidders.length === 0 ? (
+          <div style={{ padding: "48px 0" }}>
+            <Empty
+              description={
+                <span data-testid="bidders-empty" style={{ color: "#8a919d" }}>
+                  还没有投标人,点击右上角添加第一个
+                </span>
+              }
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          </div>
+        ) : (
+          <div>
+            {mergedBidders.map((b, idx) => (
+              <BidderRow
+                key={b.id}
+                bidder={b}
+                isLast={idx === mergedBidders.length - 1}
+                projectId={projectId}
+                onOpenDrawer={() => setDrawerBidderId(b.id)}
+                onRefresh={() => {
+                  void reloadProject();
+                  void reloadDocs(b.id);
+                }}
+                onDelete={() => onDeleteBidder(b.id, b.name)}
+                onOpenDecrypt={() => {
+                  const archive = (docsByBidder[b.id] ?? []).find(
+                    (d) => d.parse_status === "needs_password",
+                  );
+                  if (archive) setDecryptTarget(archive);
+                  else void reloadDocs(b.id);
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* 报价规则 */}
+      <Card
+        variant="outlined"
         data-testid="price-section"
-        style={{ marginTop: 24, padding: 16, background: "#fafafa", borderRadius: 4 }}
+        styles={{ body: { padding: 20 } }}
       >
-        <h2 style={{ fontSize: 16, margin: 0 }}>报价规则</h2>
-        <div style={{ marginTop: 12 }}>
+        <Typography.Title level={5} style={{ margin: "0 0 12px", fontWeight: 600 }}>
+          报价规则
+        </Typography.Title>
+        <div style={{ marginBottom: 16 }}>
           <PriceConfigForm projectId={projectId} />
         </div>
-        <div style={{ marginTop: 12 }}>
+        <div>
           <PriceRulesPanel projectId={projectId} />
         </div>
-      </section>
+      </Card>
+
+      {/* 投标人详情 Drawer */}
+      <Drawer
+        open={drawerBidderId !== null && drawerBidder !== null}
+        onClose={() => setDrawerBidderId(null)}
+        width={560}
+        destroyOnHidden
+        title={
+          drawerBidder ? (
+            <Space size={8}>
+              <span style={{ fontSize: 15, fontWeight: 600 }}>
+                {drawerBidder.name}
+              </span>
+              <Tag
+                color={BIDDER_STATUS_COLORS[drawerBidder.parse_status] ?? "default"}
+                style={{ margin: 0 }}
+              >
+                {BIDDER_STATUS_LABELS[drawerBidder.parse_status] ??
+                  drawerBidder.parse_status}
+              </Tag>
+            </Space>
+          ) : (
+            "投标人详情"
+          )
+        }
+      >
+        {drawerBidder ? (
+          <Space direction="vertical" size={20} style={{ width: "100%" }}>
+            {/* 解密提示 */}
+            {drawerBidder.parse_status === "needs_password" && (
+              <div
+                style={{
+                  padding: 12,
+                  background: "#fcf3e3",
+                  border: "1px solid #f0e0b0",
+                  borderRadius: 6,
+                }}
+              >
+                <Space size={8}>
+                  <LockOutlined style={{ color: "#c27c0e" }} />
+                  <Typography.Text style={{ fontSize: 13 }}>
+                    压缩包需要密码才能解压
+                  </Typography.Text>
+                  <Button
+                    size="small"
+                    type="primary"
+                    data-testid={`open-decrypt-${drawerBidder.id}`}
+                    onClick={() => {
+                      const archive = (docsByBidder[drawerBidder.id] ?? []).find(
+                        (d) => d.parse_status === "needs_password",
+                      );
+                      if (archive) setDecryptTarget(archive);
+                      else void reloadDocs(drawerBidder.id);
+                    }}
+                  >
+                    输入密码
+                  </Button>
+                </Space>
+              </div>
+            )}
+
+            {/* 解析错误 */}
+            {drawerBidder.parse_error && (
+              <div
+                style={{
+                  padding: 12,
+                  background: "#fdecec",
+                  border: "1px solid #f5c0c0",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  color: "#c53030",
+                }}
+              >
+                {drawerBidder.parse_error}
+              </div>
+            )}
+
+            {/* 文件树 */}
+            <div>
+              <Typography.Text
+                type="secondary"
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 0.3,
+                  display: "block",
+                  marginBottom: 10,
+                }}
+              >
+                文件列表 · {drawerBidder.file_count} 个
+              </Typography.Text>
+              {docsByBidder[drawerBidder.id] ? (
+                <FileTree
+                  documents={docsByBidder[drawerBidder.id]}
+                  onDocumentChanged={() => void reloadDocs(drawerBidder.id)}
+                />
+              ) : (
+                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                  正在加载文件列表...
+                </Typography.Text>
+              )}
+            </div>
+          </Space>
+        ) : null}
+      </Drawer>
 
       {showAddBidder && (
         <AddBidderDialog
@@ -456,15 +690,42 @@ export default function ProjectDetailPage() {
           }}
         />
       )}
-    </main>
+    </div>
+  );
+}
+
+/* ───────── 子组件 ───────── */
+
+function MetaChip({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        fontSize: 13,
+      }}
+    >
+      <span style={{ color: "#8a919d", fontSize: 13 }}>{icon}</span>
+      <span style={{ color: "#8a919d" }}>{label}</span>
+      <span style={{ color: "#1f2328", fontWeight: 500 }}>{value}</span>
+    </span>
   );
 }
 
 /**
- * C6 detect-framework 子组件(放同文件以保持 ProjectDetailPage 作为单一入口)。
- * 订阅 /analysis/events SSE,展示启动检测按钮与进度指示器。
+ * Hero 区的检测主按钮组件
+ * 复用 StartDetectButton(含前置校验 tooltip)
  */
-function DetectSection({
+function HeroDetectArea({
   projectId,
   project,
   onGoReport,
@@ -475,25 +736,22 @@ function DetectSection({
 }) {
   const detect = useDetectProgress(projectId);
   const hasStarted =
-    detect.version !== null || project.status === "analyzing" ||
+    detect.version !== null ||
+    project.status === "analyzing" ||
     project.status === "completed";
 
   return (
-    <section style={{ marginTop: 24 }} data-testid="detect-section">
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-        <StartDetectButton
-          projectId={projectId}
-          projectStatus={detect.projectStatus || project.status}
-          bidders={project.bidders ?? []}
-          onStarted={(v) => {
-            if (v > 0) {
-              // 乐观刷新:等 SSE 推状态
-            }
-          }}
-        />
-      </div>
+    <div data-testid="detect-section">
+      <StartDetectButton
+        projectId={projectId}
+        projectStatus={detect.projectStatus || project.status}
+        bidders={project.bidders ?? []}
+        onStarted={() => {
+          // 乐观刷新:等 SSE 推
+        }}
+      />
       {hasStarted && detect.agentTasks.length > 0 && (
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, width: 320 }}>
           <DetectProgressIndicator
             agentTasks={detect.agentTasks}
             connected={detect.connected}
@@ -502,6 +760,122 @@ function DetectSection({
           />
         </div>
       )}
-    </section>
+    </div>
+  );
+}
+
+/**
+ * 投标人行:紧凑列表,点击打开 Drawer;按钮点击 stopPropagation
+ */
+function BidderRow({
+  bidder: b,
+  isLast,
+  projectId,
+  onOpenDrawer,
+  onRefresh,
+  onDelete,
+  onOpenDecrypt,
+}: {
+  bidder: Bidder;
+  isLast: boolean;
+  projectId: number;
+  onOpenDrawer: () => void;
+  onRefresh: () => void;
+  onDelete: () => void;
+  onOpenDecrypt: () => void;
+}) {
+  return (
+    <div
+      data-testid={`bidder-card-${b.id}`}
+      onClick={onOpenDrawer}
+      style={{
+        padding: "14px 20px",
+        borderBottom: isLast ? "none" : "1px solid #f0f2f5",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        cursor: "pointer",
+        transition: "background-color 0.15s ease",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "#f7f9fc";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "";
+      }}
+    >
+      <FileTextOutlined style={{ color: "#8a919d", fontSize: 18, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <Typography.Text
+          strong
+          data-testid={`bidder-name-${b.id}`}
+          style={{
+            fontSize: 14,
+            minWidth: 0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {b.name}
+        </Typography.Text>
+        <Tag
+          color={BIDDER_STATUS_COLORS[b.parse_status] ?? "default"}
+          data-testid={`bidder-status-${b.id}`}
+          style={{ margin: 0 }}
+        >
+          {BIDDER_STATUS_LABELS[b.parse_status] ?? b.parse_status}
+        </Tag>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {b.file_count} 个文件
+        </Typography.Text>
+      </div>
+
+      {/* 右侧操作区(stopPropagation 避免冒泡打开 Drawer) */}
+      <div
+        style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {b.parse_status === "needs_password" && (
+          <Tooltip title="输入密码解密">
+            <Button
+              size="small"
+              type="text"
+              icon={<LockOutlined />}
+              style={{ color: "#c27c0e" }}
+              onClick={onOpenDecrypt}
+              aria-label="输入密码"
+            />
+          </Tooltip>
+        )}
+        <UploadButton
+          projectId={projectId}
+          bidderId={b.id}
+          onUploaded={onRefresh}
+        />
+        <Tooltip title="刷新文件列表">
+          <Button
+            size="small"
+            type="text"
+            icon={<ReloadOutlined />}
+            onClick={onRefresh}
+            data-testid={`bidder-refresh-${b.id}`}
+            aria-label="刷新"
+          />
+        </Tooltip>
+        <Tooltip title="删除投标人">
+          <Button
+            size="small"
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={onDelete}
+            data-testid={`bidder-delete-${b.id}`}
+            aria-label="删除"
+          />
+        </Tooltip>
+        <RightOutlined style={{ color: "#b1b6bf", fontSize: 10, marginLeft: 2 }} />
+      </div>
+    </div>
   );
 }

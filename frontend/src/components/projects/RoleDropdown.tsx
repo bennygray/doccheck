@@ -1,11 +1,10 @@
 /**
  * C5 文档角色下拉修改组件 (US-4.3 AC-4~5)
  *
- * - 9 种角色下拉选项
- * - role_confidence='low' 显示黄色"待确认"徽章
- * - 点击修改 → PATCH /api/documents/{id}/role → 成功后触发 onChanged 回调(父组件刷列表)
+ * antd 化:Select + Tag(低置信度提示);保留 testid 和业务行为
  */
 import { useState } from "react";
+import { Select, Tag, Typography } from "antd";
 
 import { api } from "../../services/api";
 import type { DocumentRole, RoleConfidence } from "../../types";
@@ -53,13 +52,8 @@ export function RoleDropdown({
   const [error, setError] = useState<string | null>(null);
 
   const isLow = confidence === "low";
-  const displayLabel =
-    role && ROLE_LABELS[role as DocumentRole]
-      ? ROLE_LABELS[role as DocumentRole]
-      : "未分类";
 
-  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const next = e.target.value as DocumentRole;
+  const handleChange = async (next: DocumentRole) => {
     setBusy(true);
     setError(null);
     try {
@@ -75,40 +69,35 @@ export function RoleDropdown({
   return (
     <span
       data-testid={`role-dropdown-${documentId}`}
-      className={isLow ? "role-dropdown role-confidence-low" : "role-dropdown"}
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 6,
-        padding: "2px 6px",
-        borderRadius: 4,
-        background: isLow ? "#fff8e1" : "#f5f5f5",
-        border: isLow ? "1px solid #ffc107" : "1px solid #e0e0e0",
-        fontSize: "0.85em",
+        gap: 4,
       }}
     >
       {isLow && (
-        <span title="LLM 置信度低,建议确认" style={{ color: "#f57c00" }}>
+        <Tag
+          color="warning"
+          title="LLM 置信度低,建议确认"
+          style={{ margin: 0, fontSize: 11 }}
+        >
           待确认
-        </span>
+        </Tag>
       )}
-      <select
-        value={(role as DocumentRole) || "other"}
-        onChange={handleChange}
+      <Select
+        value={(role as DocumentRole) || undefined}
+        onChange={(v) => void handleChange(v as DocumentRole)}
         disabled={disabled || busy}
+        size="small"
         aria-label="修改文档角色"
-      >
-        {!role && <option value="">{displayLabel}</option>}
-        {ROLES.map((r) => (
-          <option key={r} value={r}>
-            {ROLE_LABELS[r]}
-          </option>
-        ))}
-      </select>
+        style={{ width: 120 }}
+        placeholder="未分类"
+        options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+      />
       {error && (
-        <span role="alert" style={{ color: "#d32f2f" }}>
+        <Typography.Text type="danger" style={{ fontSize: 11 }} role="alert">
           {error}
-        </span>
+        </Typography.Text>
       )}
     </span>
   );

@@ -52,8 +52,14 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5173:5173"
+    environment:
+      VITE_PROXY_TARGET: http://backend:8000
+      # Windows Docker 下 inotify 失效 → chokidar/vite 强制走轮询
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
     volumes:
       - ./frontend/src:/app/src
+      - ./frontend/vite.config.ts:/app/vite.config.ts
     depends_on:
       - backend
 

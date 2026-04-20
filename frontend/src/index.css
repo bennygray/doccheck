@@ -1,111 +1,404 @@
+/* 全局最小 reset —— 交给 antd v5 的 CSS-in-JS 做组件 reset */
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
+html,
+body,
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  min-height: 100vh;
 }
 
 body {
-  margin: 0;
+  background: #f5f7fa;
+  color: #1f2328;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "PingFang SC",
+    "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+/* 登录/改密页面共用的"品牌左栏 + 表单右栏"壳(商务大气布局) */
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(420px, 1fr);
+  background: #f5f7fa;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
+.auth-shell__brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 56px 56px 40px;
+  color: #eaf0f7;
+  background:
+    linear-gradient(160deg, #1d4584 0%, #142f5d 100%);
+  overflow: hidden;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+/* 装饰层:极淡的斜线网格 + 两个弱高光,不发光不闪 */
+.auth-shell__brand::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.035) 0,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 24px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0.02) 0,
+      rgba(255, 255, 255, 0.02) 1px,
+      transparent 1px,
+      transparent 24px
+    );
+  pointer-events: none;
 }
 
-code {
+.auth-shell__brand::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 85% 20%, rgba(255, 255, 255, 0.06), transparent 42%),
+    radial-gradient(circle at 10% 85%, rgba(255, 255, 255, 0.04), transparent 55%);
+  pointer-events: none;
+}
+
+.auth-shell__brand-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 480px;
+}
+
+/* 纯字标品牌(无图标,无渐变色块)——克制商务感 */
+.auth-shell__brand-wordmark {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(234, 240, 247, 0.58);
+  letter-spacing: 4px;
+  margin-bottom: 48px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(234, 240, 247, 0.18);
+  width: fit-content;
+  min-width: 200px;
+}
+
+.auth-shell__brand-title {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  margin: 0 0 12px;
+  color: #ffffff;
+  line-height: 1.3;
+}
+
+.auth-shell__brand-subtitle {
   font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  color: rgba(234, 240, 247, 0.75);
+  margin: 0 0 48px;
+  letter-spacing: 0.5px;
+}
+
+.auth-shell__features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.auth-shell__features li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.auth-shell__feature-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(234, 240, 247, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.auth-shell__feature-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.94);
+  margin-bottom: 2px;
+  letter-spacing: 0.3px;
+}
+
+.auth-shell__feature-desc {
+  font-size: 12.5px;
+  color: rgba(234, 240, 247, 0.62);
+  line-height: 1.6;
+  letter-spacing: 0.2px;
+}
+
+.auth-shell__brand-footer {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  color: rgba(234, 240, 247, 0.5);
+  letter-spacing: 0.3px;
+  line-height: 1.7;
+}
+
+.auth-shell__brand-footer-sub {
+  color: rgba(234, 240, 247, 0.35);
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+
+.auth-shell__form {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 32px;
+  background: #ffffff;
+}
+
+.auth-shell__form-inner {
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth-shell__form-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1f2328;
+  margin: 0 0 6px;
+}
+
+.auth-shell__form-subtitle {
+  font-size: 13px;
+  color: #5c6370;
+  margin: 0 0 32px;
+}
+
+/* 窄屏收敛成单栏 */
+@media (max-width: 960px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+  .auth-shell__brand {
+    padding: 32px 24px;
+    min-height: auto;
+  }
+  .auth-shell__brand-title {
+    font-size: 22px;
+    letter-spacing: 2px;
+  }
+  .auth-shell__brand-subtitle {
+    margin-bottom: 24px;
+  }
+  .auth-shell__features {
+    gap: 12px;
+  }
+  .auth-shell__feature-desc {
+    display: none;
+  }
+  .auth-shell__form {
+    padding: 32px 20px;
+  }
+}
+
+/* 应用主壳:顶栏 + 内容区(供 ProjectListPage 等使用) */
+.app-shell {
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+.app-shell__header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 56px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e4e7ed;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.app-shell__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2328;
+  letter-spacing: 0.5px;
+}
+
+.app-shell__brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #1d4584 0%, #2456a8 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.app-shell__content {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.page-toolbar__filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 项目列表卡片 —— Dify 风格等高卡片 + hover 轻抬升
+ * 用 min-height 而不是 height:让内容不挤压;子元素另加 flex-shrink:0 防止压扁 */
+.project-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 228px;
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid #e4e7ed;
+  border-radius: 10px;
+  box-sizing: border-box;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  cursor: pointer;
+  color: #1f2328;
+  text-decoration: none;
+}
+
+/* 卡内直接子元素默认不压缩,只有标记 flex:1 的中间描述区才能伸缩 */
+.project-card > * {
+  flex-shrink: 0;
+}
+
+.project-card:hover {
+  border-color: #1d4584;
+  box-shadow:
+    0 1px 2px rgba(17, 24, 39, 0.04),
+    0 6px 16px rgba(29, 69, 132, 0.08);
+}
+
+.project-card:active {
+  transform: translateY(1px);
+}
+
+/* 新建项目特殊卡 —— 虚线边,居中,无描述内容 */
+.project-card--create {
+  border-style: dashed;
+  border-color: #d5dae2;
+  background: #fafbfc;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-card--create:hover {
+  border-color: #1d4584;
+  border-style: solid;
+  background: #eef3fb;
+  box-shadow: none;
+}
+
+/* 项目列表行 —— 风险/状态驱动的视觉分级
+ * 设计意图:重要(高风险/进行中)自然突出,不重要的不抢戏;不搞花花绿绿的 Tag 堆砌。 */
+.proj-row > td {
+  position: relative;
+  transition: background-color 0.15s ease;
+}
+
+/* 所有行左侧留 3px 占位,让"有色条"和"无色条"的行对齐 */
+.proj-row > td:first-child {
+  border-left: 3px solid transparent;
+  padding-left: 17px !important;
+}
+
+/* 高风险行:左深红色条 + 极淡红底 + 名字行增加视觉密度 */
+.proj-row--high > td {
+  background-color: #fef8f8 !important;
+}
+.proj-row--high > td:first-child {
+  border-left-color: #c53030;
+}
+
+/* 中风险:琥珀色条 + 极淡黄底 */
+.proj-row--medium > td {
+  background-color: #fefaf2 !important;
+}
+.proj-row--medium > td:first-child {
+  border-left-color: #c27c0e;
+}
+
+/* 检测中 / 解析中:品牌蓝色条 + 极淡蓝底(进行感) */
+.proj-row--active > td {
+  background-color: #f7faff !important;
+}
+.proj-row--active > td:first-child {
+  border-left-color: #1d4584;
+}
+
+/* 默认行:zebra 极淡灰(只在未变体的行上生效,避免覆盖风险色) */
+.proj-row--default:nth-child(even) > td {
+  background-color: #fafbfc;
+}
+
+/* 统一 hover:浅品牌蓝,轻微上抬(通过阴影) */
+.proj-row:hover > td {
+  background-color: #eef3fb !important;
+}
+
+/* 行高调整:比 antd 默认稍高,给双行项目名 + 副标一点呼吸 */
+.ant-table-tbody > .proj-row > td {
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+/* 让表头更克制,灰底分割更轻 */
+.ant-table-thead > tr > th {
+  font-weight: 500 !important;
+  color: #5c6370 !important;
+  background: #fafbfc !important;
+  font-size: 12.5px !important;
+  letter-spacing: 0.3px;
 }

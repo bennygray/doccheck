@@ -74,4 +74,12 @@ DEFAULT_RULES_CONFIG: dict = {
     "metadata_whitelist": ["Administrator", "User", "Admin", "Microsoft Office User"],
     "min_paragraph_length": 50,
     "file_retention_days": 90,
+    # admin-llm-config:LLM 运行期配置。DB 无此段时代码回退 env + 默认值。
+    "llm": {
+        "provider": "dashscope",
+        "api_key": "",
+        "model": "qwen-plus",
+        "base_url": None,
+        "timeout_s": 30,
+    },
 }

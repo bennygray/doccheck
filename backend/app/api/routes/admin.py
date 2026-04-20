@@ -17,14 +17,24 @@ from app.models.system_config import SystemConfig
 from app.models.user import User
 from app.schemas.admin import (
     CreateUserRequest,
+    LLMConfigResponse,
+    LLMConfigUpdate,
+    LLMTestRequest,
+    LLMTestResponse,
     RulesConfigRequest,
     RulesConfigResponse,
     UpdateUserRequest,
     UserPublicAdmin,
 )
+from app.services.admin.llm_reader import (
+    mask_api_key,
+    read_llm_config,
+    write_llm_config,
+)
 from app.services.admin.rules_defaults import DEFAULT_RULES_CONFIG
 from app.services.admin.rules_reader import get_active_rules
 from app.services.auth.password import hash_password
+from app.services.llm.tester import test_connection
 
 router = APIRouter()
 
@@ -156,3 +166,73 @@ async def update_rules(
         "updated_by": row.updated_by,
         "updated_at": row.updated_at,
     }
+
+
+# ── LLM 配置(admin-llm-config) ──
+
+
+@router.get("/llm", response_model=LLMConfigResponse)
+async def get_llm_config(
+    session: AsyncSession = Depends(get_db),
+    _current: User = Depends(_admin),
+) -> LLMConfigResponse:
+    cfg = await read_llm_config(session)
+    return LLMConfigResponse(
+        provider=cfg.provider,
+        api_key_masked=mask_api_key(cfg.api_key),
+        model=cfg.model,
+        base_url=cfg.base_url,
+        timeout_s=cfg.timeout_s,
+        source=cfg.source,
+    )
+
+
+@router.put("/llm", response_model=LLMConfigResponse)
+async def update_llm_config(
+    body: LLMConfigUpdate,
+    session: AsyncSession = Depends(get_db),
+    current: User = Depends(_admin),
+) -> LLMConfigResponse:
+    payload: dict[str, object] = {
+        "provider": body.provider,
+        "model": body.model,
+        "base_url": body.base_url,
+        "timeout_s": body.timeout_s,
+    }
+    if body.api_key:
+        payload["api_key"] = body.api_key
+    cfg = await write_llm_config(session, payload, actor_id=current.id)
+    await session.commit()
+    return LLMConfigResponse(
+        provider=cfg.provider,
+        api_key_masked=mask_api_key(cfg.api_key),
+        model=cfg.model,
+        base_url=cfg.base_url,
+        timeout_s=cfg.timeout_s,
+        source=cfg.source,
+    )
+
+
+@router.post("/llm/test", response_model=LLMTestResponse)
+async def test_llm_connection(
+    body: LLMTestRequest,
+    session: AsyncSession = Depends(get_db),
+    _current: User = Depends(_admin),
+) -> LLMTestResponse:
+    # 字段缺省用 DB 当前配置兜底
+    current = await read_llm_config(session)
+    provider = body.provider or current.provider
+    # api_key:显式传入优先;空字符串视为"用当前 DB key"(便于不重新输入就测试)
+    api_key = body.api_key if body.api_key else current.api_key
+    model = body.model or current.model
+    base_url = body.base_url if body.base_url is not None else current.base_url
+    timeout_s = body.timeout_s if body.timeout_s is not None else min(current.timeout_s, 10)
+
+    ok, latency_ms, error = await test_connection(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
+        timeout_s=timeout_s,
+    )
+    return LLMTestResponse(ok=ok, latency_ms=latency_ms, error=error)

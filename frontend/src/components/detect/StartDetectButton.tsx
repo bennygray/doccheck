@@ -1,10 +1,12 @@
 /**
- * C6 StartDetectButton — 启动检测按钮
+ * C6 StartDetectButton — 启动检测按钮(antd 化)
  *
- * - 前置条件 hover tooltip:bidder<2 / 有非终态 bidder / analyzing 中
- * - 点击调 POST /analysis/start;成功刷新;409 跳转进度面板
+ * - 前置条件 tooltip:bidder<2 / 有非终态 bidder / analyzing 中
+ * - 点击调 POST /analysis/start;409 幂等
  */
 import { useState } from "react";
+import { Alert, Button, Tooltip } from "antd";
+import { PlayCircleOutlined } from "@ant-design/icons";
 
 import { ApiError, api } from "../../services/api";
 import type { BidderSummary } from "../../types";
@@ -69,7 +71,6 @@ export function StartDetectButton({
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 409) {
-          // 幂等:已在检测中 — 视为成功,交给 UI 跳到进度面板
           setError("已在检测中,请查看进度");
           onStarted?.(-1);
         } else {
@@ -87,25 +88,32 @@ export function StartDetectButton({
     }
   };
 
+  const btn = (
+    <Button
+      type="primary"
+      size="large"
+      icon={<PlayCircleOutlined />}
+      onClick={onClick}
+      disabled={disabled}
+      loading={loading}
+      // 显式挂 title 方便屏幕阅读器 + 测试断言(antd Tooltip 走 hover,原生 title 兼容更稳)
+      title={disabledReason ?? undefined}
+    >
+      {label}
+    </Button>
+  );
+
   return (
-    <div className="inline-flex flex-col">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        title={disabledReason ?? undefined}
-        className={
-          disabled
-            ? "px-4 py-2 rounded bg-gray-300 text-gray-500 cursor-not-allowed"
-            : "px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-        }
-      >
-        {label}
-      </button>
+    <div style={{ display: "inline-flex", flexDirection: "column", gap: 8 }}>
+      {disabledReason ? <Tooltip title={disabledReason}>{btn}</Tooltip> : btn}
       {error && (
-        <div className="mt-1 text-sm text-red-600" role="alert">
-          {error}
-        </div>
+        <Alert
+          type="error"
+          message={error}
+          role="alert"
+          showIcon
+          style={{ marginTop: 4 }}
+        />
       )}
     </div>
   );

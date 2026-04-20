@@ -1,10 +1,15 @@
 /**
  * 修改密码页 (C2 auth, US-1.4)
  *
- * 改密成功后:清 token(旧 token 已在后端失效)→ 跳 /login 提示用新密码登录
+ * 视觉:沿用 LoginPage 双栏商务布局,保持登录流一体感
+ * 功能契约不变:改密成功 → logout → 跳 /login + notice
+ * 锁死不破坏的 data-testid:change-password-form / old-password / new-password
+ *   / confirm-password / change-password-error / change-password-submit / force-notice
  */
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Alert, Button, Form, Input } from "antd";
+import { LockOutlined } from "@ant-design/icons";
 import { ApiError, api } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -24,7 +29,7 @@ export default function ChangePasswordPage() {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
 
-  async function onSubmit(e: FormEvent) {
+  async function onSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     setError(null);
 
@@ -41,7 +46,6 @@ export default function ChangePasswordPage() {
     setSubmitting(true);
     try {
       await api.changePassword(oldPwd, newPwd);
-      // 改密后旧 token 立即失效 → 前端清 token,提示重新登录
       logout();
       navigate("/login", {
         replace: true,
@@ -61,77 +65,104 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <main
-      style={{
-        padding: 32,
-        fontFamily: "system-ui, sans-serif",
-        maxWidth: 420,
-        margin: "60px auto",
-      }}
-    >
-      <h1 style={{ fontSize: 22 }}>修改密码</h1>
-      {user?.must_change_password ? (
-        <p style={{ color: "#a60" }} data-testid="force-notice">
-          首次登录需修改默认密码后方可继续使用
-        </p>
-      ) : null}
-      <form onSubmit={onSubmit} data-testid="change-password-form">
-        <label style={{ display: "block", marginTop: 12 }}>
-          <span>原密码</span>
-          <input
-            type="password"
-            value={oldPwd}
-            onChange={(e) => setOldPwd(e.target.value)}
-            required
-            data-testid="old-password"
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
-        <label style={{ display: "block", marginTop: 12 }}>
-          <span>新密码(≥8 位,含字母和数字)</span>
-          <input
-            type="password"
-            value={newPwd}
-            onChange={(e) => setNewPwd(e.target.value)}
-            required
-            data-testid="new-password"
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
-        <label style={{ display: "block", marginTop: 12 }}>
-          <span>确认新密码</span>
-          <input
-            type="password"
-            value={confirmPwd}
-            onChange={(e) => setConfirmPwd(e.target.value)}
-            required
-            data-testid="confirm-password"
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
-        {error ? (
-          <p
-            data-testid="change-password-error"
-            style={{ color: "#c00", marginTop: 12 }}
-            role="alert"
-          >
-            {error}
+    <div className="auth-shell">
+      <aside className="auth-shell__brand" aria-hidden="true">
+        <div className="auth-shell__brand-inner">
+          <div className="auth-shell__brand-wordmark">DOCUMENTCHECK</div>
+          <h1 className="auth-shell__brand-title">围标检测系统</h1>
+          <p className="auth-shell__brand-subtitle">
+            企业级投标文件围标串标行为检测平台
           </p>
-        ) : null}
-        <button
-          type="submit"
-          disabled={submitting}
-          data-testid="change-password-submit"
-          style={{
-            marginTop: 16,
-            padding: "8px 16px",
-            width: "100%",
-            cursor: submitting ? "not-allowed" : "pointer",
-          }}
-        >
-          {submitting ? "提交中..." : "确认修改"}
-        </button>
-      </form>
-    </main>
+        </div>
+        <div className="auth-shell__brand-footer">
+          DocumentCheck · 本系统仅限授权用户使用
+        </div>
+      </aside>
+
+      <main className="auth-shell__form">
+        <div className="auth-shell__form-inner">
+          <h2 className="auth-shell__form-title">修改密码</h2>
+          <p className="auth-shell__form-subtitle">
+            {user?.username ? `当前账号:${user.username}` : "为了账户安全,请设置新密码"}
+          </p>
+
+          {user?.must_change_password ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="首次登录需修改默认密码后方可继续使用"
+              data-testid="force-notice"
+              style={{ marginBottom: 20 }}
+            />
+          ) : null}
+
+          <Form
+            layout="vertical"
+            onSubmitCapture={onSubmit}
+            component="form"
+            data-testid="change-password-form"
+            requiredMark={false}
+            size="large"
+          >
+            <Form.Item label="原密码">
+              <Input.Password
+                prefix={<LockOutlined style={{ color: "#8a919d" }} />}
+                value={oldPwd}
+                onChange={(e) => setOldPwd(e.target.value)}
+                placeholder="请输入原密码"
+                data-testid="old-password"
+                required
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="新密码"
+              extra={<span style={{ fontSize: 12 }}>至少 8 位,同时包含字母和数字</span>}
+            >
+              <Input.Password
+                prefix={<LockOutlined style={{ color: "#8a919d" }} />}
+                value={newPwd}
+                onChange={(e) => setNewPwd(e.target.value)}
+                placeholder="请输入新密码"
+                data-testid="new-password"
+                required
+              />
+            </Form.Item>
+
+            <Form.Item label="确认新密码">
+              <Input.Password
+                prefix={<LockOutlined style={{ color: "#8a919d" }} />}
+                value={confirmPwd}
+                onChange={(e) => setConfirmPwd(e.target.value)}
+                placeholder="请再次输入新密码"
+                data-testid="confirm-password"
+                required
+              />
+            </Form.Item>
+
+            {error ? (
+              <Alert
+                type="error"
+                message={error}
+                data-testid="change-password-error"
+                role="alert"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            ) : null}
+
+            <Button
+              type="primary"
+              htmlType="submit"
+              block
+              loading={submitting}
+              data-testid="change-password-submit"
+            >
+              {submitting ? "提交中..." : "确认修改"}
+            </Button>
+          </Form>
+        </div>
+      </main>
+    </div>
   );
 }

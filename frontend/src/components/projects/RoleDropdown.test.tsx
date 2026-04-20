@@ -1,9 +1,11 @@
 /**
  * L1: RoleDropdown (C5 §10.1)
+ *
+ * antd 化后:select 不再是原生 <select>,是 antd Select;
+ * 测试改用 fireEvent.mouseDown 开下拉 + findByText 选项。
  */
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import RoleDropdown from "./RoleDropdown";
 
 vi.mock("../../services/api", () => ({
@@ -14,26 +16,44 @@ vi.mock("../../services/api", () => ({
 
 import { api } from "../../services/api";
 
+async function pickAntdSelect(combobox: HTMLElement, optionText: string) {
+  const wrapper = combobox.closest(".ant-select") as HTMLElement;
+  const selector = wrapper.querySelector(".ant-select-selector")!;
+  fireEvent.mouseDown(selector);
+  // 已选中的值也会在 selector 里显示同样文本 → 精确取 .ant-select-item-option
+  await screen.findAllByText(optionText);
+  const opts = Array.from(
+    document.querySelectorAll(".ant-select-item-option"),
+  ).filter((el) => el.textContent === optionText);
+  fireEvent.click(opts[opts.length - 1]);
+}
+
 describe("RoleDropdown", () => {
-  it("渲染 9 种角色选项", () => {
+  it("渲染 9 种角色选项", async () => {
     render(
       <RoleDropdown documentId={1} role="technical" confidence="high" />,
     );
-    const select = screen.getByRole("combobox", { name: /修改文档角色/ });
-    const options = Array.from(select.querySelectorAll("option"));
-    const values = options.map((o) => o.getAttribute("value"));
-    for (const v of [
-      "technical",
-      "construction",
-      "pricing",
-      "unit_price",
-      "bid_letter",
-      "qualification",
-      "company_intro",
-      "authorization",
-      "other",
+    const combobox = screen.getByRole("combobox", { name: /修改文档角色/ });
+    const wrapper = combobox.closest(".ant-select") as HTMLElement;
+    const selector = wrapper.querySelector(".ant-select-selector")!;
+    fireEvent.mouseDown(selector);
+    // 下拉展开后 .ant-select-item-option 包含全部 9 个
+    await screen.findAllByText("技术方案");
+    const opts = Array.from(
+      document.querySelectorAll(".ant-select-item-option"),
+    ).map((el) => el.textContent);
+    for (const label of [
+      "技术方案",
+      "施工组织",
+      "报价清单",
+      "综合单价",
+      "投标函",
+      "资质证明",
+      "企业介绍",
+      "授权委托",
+      "其他",
     ]) {
-      expect(values).toContain(v);
+      expect(opts).toContain(label);
     }
   });
 
@@ -55,7 +75,6 @@ describe("RoleDropdown", () => {
       warn: null,
     });
     const onChanged = vi.fn();
-    const user = userEvent.setup();
     render(
       <RoleDropdown
         documentId={7}
@@ -65,10 +84,8 @@ describe("RoleDropdown", () => {
       />,
     );
 
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: /修改文档角色/ }),
-      "pricing",
-    );
+    const combobox = screen.getByRole("combobox", { name: /修改文档角色/ });
+    await pickAntdSelect(combobox, "报价清单");
 
     await waitFor(() =>
       expect(api.patchDocumentRole).toHaveBeenCalledWith(7, "pricing"),
@@ -84,7 +101,6 @@ describe("RoleDropdown", () => {
       warn: "文档角色已修改...",
     });
     const onChanged = vi.fn();
-    const user = userEvent.setup();
     render(
       <RoleDropdown
         documentId={5}
@@ -93,10 +109,9 @@ describe("RoleDropdown", () => {
         onChanged={onChanged}
       />,
     );
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: /修改文档角色/ }),
-      "other",
-    );
+    const combobox = screen.getByRole("combobox", { name: /修改文档角色/ });
+    await pickAntdSelect(combobox, "其他");
+
     await waitFor(() =>
       expect(onChanged).toHaveBeenCalledWith("other", "文档角色已修改..."),
     );

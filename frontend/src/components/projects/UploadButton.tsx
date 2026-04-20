@@ -4,6 +4,8 @@
  * 重用 AddBidderDialog 的文件校验逻辑;调 api.uploadToBidder。
  */
 import { useRef, useState } from "react";
+import { Button, Typography } from "antd";
+import { UploadOutlined } from "@ant-design/icons";
 import { ApiError, api } from "../../services/api";
 import type { UploadResult } from "../../types";
 
@@ -60,15 +62,15 @@ export default function UploadButton({ projectId, bidderId, onUploaded }: Props)
 
   return (
     <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-      <button
-        type="button"
+      <Button
+        size="small"
+        icon={<UploadOutlined />}
         data-testid={`upload-btn-${bidderId}`}
         onClick={() => inputRef.current?.click()}
-        disabled={submitting}
-        style={{ padding: "4px 12px" }}
+        loading={submitting}
       >
-        {submitting ? "上传中..." : "追加上传"}
-      </button>
+        {submitting ? "上传中" : "追加上传"}
+      </Button>
       <input
         ref={inputRef}
         type="file"
@@ -78,9 +80,9 @@ export default function UploadButton({ projectId, bidderId, onUploaded }: Props)
         style={{ display: "none" }}
       />
       {error && (
-        <span style={{ color: "#c00", fontSize: 12 }}>
+        <Typography.Text type="danger" style={{ fontSize: 12 }}>
           {error}
-        </span>
+        </Typography.Text>
       )}
     </span>
   );

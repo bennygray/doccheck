@@ -1,17 +1,17 @@
 /**
- * C15 ExportButton — 点击触发 Word 导出 + 进度条 + 重试
+ * C15 ExportButton — antd 化:触发 Word 导出 + 进度条 + 重试
  *
- * 状态机:idle → running → done | failed
- * - idle:按钮可点
- * - running:显示进度条(订阅 SSE export_progress)
- * - done:下载按钮(自动触发一次下载)
- * - failed:显示错误 + 重试按钮
- *
- * SSE 消息契约(design D9):
- *   event: export_progress
- *   data: { job_id, phase: rendering|writing|done|failed, progress, message }
+ * SSE 契约同原版:event export_progress,data { job_id, phase, progress, message }
  */
 import { useEffect, useRef, useState } from "react";
+import { Button, Progress, Space, Typography } from "antd";
+import {
+  CheckCircleFilled,
+  CloseCircleFilled,
+  DownloadOutlined,
+  FileWordOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 
 import { ApiError, api } from "../../services/api";
 import { authStorage } from "../../contexts/AuthContext";
@@ -60,7 +60,6 @@ export function ExportButton({ projectId, version }: Props) {
   };
 
   const subscribeSse = (job_id: number) => {
-    // 复用既有 SSE endpoint；EventSource 不支持自定义 header → token 通过 query 附加
     const urlBase = api.analysisEventsUrl(projectId);
     const token = authStorage.getToken();
     const url = token
@@ -78,19 +77,17 @@ export function ExportButton({ projectId, version }: Props) {
         if (data.phase === "done") {
           setPhase("done");
           es.close();
-          // 自动触发下载
           window.open(api.downloadExportUrl(job_id), "_blank");
         } else if (data.phase === "failed") {
           setPhase("failed");
           es.close();
         }
       } catch {
-        // ignore parse errors
+        // ignore
       }
     });
     es.onerror = () => {
-      // 连接错误不立即切 failed(可能是重连);3 秒后若未 done/failed 再切
-      // 这里简单处理:保留 running 态,用户可手动取消
+      // 简单处理:保留 running 态
     };
   };
 
@@ -102,60 +99,63 @@ export function ExportButton({ projectId, version }: Props) {
 
   if (phase === "idle") {
     return (
-      <button
-        type="button"
-        className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-        onClick={start}
-      >
+      <Button type="primary" icon={<FileWordOutlined />} onClick={start}>
         导出 Word
-      </button>
+      </Button>
     );
   }
 
   if (phase === "running") {
     return (
-      <div className="flex items-center gap-2">
-        <div className="w-40 h-2 bg-gray-200 rounded overflow-hidden">
-          <div
-            className="h-full bg-blue-500 transition-all"
-            style={{ width: `${Math.round(progress * 100)}%` }}
-          />
-        </div>
-        <span className="text-xs text-gray-500">{message}</span>
-      </div>
+      <Space size={10} align="center">
+        <Progress
+          percent={Math.round(progress * 100)}
+          size="small"
+          showInfo={false}
+          strokeColor="#1d4584"
+          trailColor="#e4e7ed"
+          style={{ width: 160 }}
+        />
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {message}
+        </Typography.Text>
+      </Space>
     );
   }
 
   if (phase === "done") {
     return (
-      <div className="flex items-center gap-2">
-        <span className="text-green-600 text-sm">✓ 已生成</span>
+      <Space size={8} align="center">
+        <CheckCircleFilled style={{ color: "#2d7a4a" }} />
+        <Typography.Text style={{ fontSize: 13, color: "#2d7a4a" }}>
+          已生成
+        </Typography.Text>
         {jobId !== null && (
-          <a
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
             href={api.downloadExportUrl(jobId)}
-            className="px-3 py-1 bg-green-600 text-white rounded"
             target="_blank"
             rel="noreferrer"
+            style={{ background: "#2d7a4a", borderColor: "#2d7a4a" }}
           >
             重新下载
-          </a>
+          </Button>
         )}
-      </div>
+      </Space>
     );
   }
 
-  // failed
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-red-600 text-sm">✗ {message || "生成失败"}</span>
-      <button
-        type="button"
-        className="px-3 py-1 bg-orange-500 text-white rounded hover:bg-orange-600"
-        onClick={retry}
-      >
+    <Space size={8} align="center">
+      <CloseCircleFilled style={{ color: "#c53030" }} />
+      <Typography.Text type="danger" style={{ fontSize: 13 }}>
+        {message || "生成失败"}
+      </Typography.Text>
+      <Button danger icon={<ReloadOutlined />} onClick={retry}>
         重试
-      </button>
-    </div>
+      </Button>
+    </Space>
   );
 }
 

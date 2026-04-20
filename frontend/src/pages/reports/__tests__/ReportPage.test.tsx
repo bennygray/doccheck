@@ -126,8 +126,12 @@ describe("ReportPage", () => {
     );
     renderAt("/reports/1/1");
     await waitFor(() => {
+      // antd 重设计后风险徽章是 Tag,用 inline style 设红色背景;
+      // 检查文本渲染 + 最近 Tag 节点的 style 含主色
       const badge = screen.getByText("高风险");
-      expect(badge).toHaveClass("bg-red-600");
+      const tag = badge.closest(".ant-tag") as HTMLElement;
+      expect(tag).not.toBeNull();
+      expect(tag.style.background.toLowerCase()).toContain("rgb(197, 48, 48)");
     });
   });
 });

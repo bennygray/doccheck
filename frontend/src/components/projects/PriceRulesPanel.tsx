@@ -1,21 +1,19 @@
 /**
  * C5 报价规则面板 (US-4.4 AC-1~4)
  *
- * 替换 C4 PriceRulesPlaceholder。职责:
- * - 展示 LLM 识别的 sheet_name / header_row / column_mapping
- * - 列映射可编辑(code/name/unit/qty/unit_price/total_price 6 列 + skip_cols)
- * - 点"修正并重新应用"→ PUT /api/projects/{pid}/price-rules/{id} → 触发重回填
- * - LLM 仍在识别中(status=identifying)显示 loading
- * - LLM 识别失败(status=failed)显示错误+提示 re-parse
+ * 展示 LLM 识别的 sheet_name / header_row / column_mapping;列映射可编辑,
+ * 修正后 PUT /api/projects/{pid}/price-rules/{id} 触发重回填。
+ *
+ * antd 化:Card + Table(描述布局)+ Input + Button;data-testid 保留
  */
 import { useEffect, useState } from "react";
+import { Alert, Button, Card, Empty, Input, Space, Tag, Typography } from "antd";
 
 import { api } from "../../services/api";
 import type { PriceParsingRule } from "../../types";
 
 interface Props {
   projectId: number;
-  /** useParseProgress 里 project_price_rule_ready 事件来时可传自增 key 触发刷新 */
   refreshKey?: number;
 }
 
@@ -32,9 +30,7 @@ export default function PriceRulesPanel({ projectId, refreshKey }: Props) {
   const [rules, setRules] = useState<PriceParsingRule[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [draft, setDraft] = useState<Record<number, Record<string, string>>>(
-    {},
-  );
+  const [draft, setDraft] = useState<Record<number, Record<string, string>>>({});
   const [submitMsg, setSubmitMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,7 +41,6 @@ export default function PriceRulesPanel({ projectId, refreshKey }: Props) {
         const resp = await api.listPriceRules(projectId);
         if (cancelled) return;
         setRules(resp);
-        // 把 server 值拷到本地 draft(以便编辑)
         const d: Record<number, Record<string, string>> = {};
         for (const r of resp) {
           const mapping = (r.column_mapping ?? {}) as Record<string, unknown>;
@@ -67,27 +62,29 @@ export default function PriceRulesPanel({ projectId, refreshKey }: Props) {
 
   if (error)
     return (
-      <p role="alert" style={{ color: "#d32f2f" }}>
-        {error}
-      </p>
+      <Alert type="error" role="alert" message={error} showIcon />
     );
   if (rules === null)
-    return <p data-testid="price-rules-loading">加载中...</p>;
+    return (
+      <Typography.Text data-testid="price-rules-loading" type="secondary">
+        加载中...
+      </Typography.Text>
+    );
   if (rules.length === 0)
     return (
-      <p
+      <Empty
         data-testid="price-rules-empty"
-        style={{ color: "#888", fontSize: 13 }}
-      >
-        等待 LLM 识别报价表结构...
-      </p>
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description={
+          <span style={{ color: "#8a919d", fontSize: 13 }}>
+            等待 LLM 识别报价表结构...
+          </span>
+        }
+        style={{ padding: "20px 0" }}
+      />
     );
 
-  const handleCellChange = (
-    ruleId: number,
-    key: string,
-    value: string,
-  ) => {
+  const handleCellChange = (ruleId: number, key: string, value: string) => {
     setDraft((prev) => ({
       ...prev,
       [ruleId]: { ...(prev[ruleId] ?? {}), [key]: value.toUpperCase() },
@@ -110,7 +107,6 @@ export default function PriceRulesPanel({ projectId, refreshKey }: Props) {
         confirmed: true,
       });
       setSubmitMsg("已修正,正在重新回填...");
-      // 重新拉列表获取 created_by_llm=false
       const resp = await api.listPriceRules(projectId);
       setRules(resp);
     } catch (err) {
@@ -123,71 +119,109 @@ export default function PriceRulesPanel({ projectId, refreshKey }: Props) {
 
   return (
     <div data-testid="price-rules-panel">
-      {rules.map((r) => {
-        const status = (r as unknown as { status?: string }).status;
-        return (
-          <section
-            key={r.id}
-            style={{ border: "1px solid #e0e0e0", padding: 10, marginBottom: 8 }}
-          >
-            <header
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 6,
-              }}
+      <Space direction="vertical" size={12} style={{ width: "100%" }}>
+        {rules.map((r) => {
+          const status = (r as unknown as { status?: string }).status;
+          return (
+            <Card
+              key={r.id}
+              size="small"
+              variant="outlined"
+              styles={{ body: { padding: 14 } }}
             >
-              <strong>
-                {r.sheet_name} <small>(表头行 {r.header_row})</small>
-              </strong>
-              <small>
-                {r.created_by_llm ? "LLM 自动" : "人工修正"}
-                {" · "}
-                {r.confirmed ? "已应用" : "未确认"}
-                {status ? ` · ${status}` : ""}
-              </small>
-            </header>
-
-            <table style={{ fontSize: 13, width: "100%" }}>
-              <tbody>
-                {MAPPING_KEYS.map(({ key, label }) => (
-                  <tr key={key}>
-                    <td style={{ padding: 4, width: 100 }}>{label}</td>
-                    <td style={{ padding: 4 }}>
-                      <input
-                        type="text"
-                        maxLength={3}
-                        style={{ width: 60 }}
-                        value={draft[r.id]?.[key] ?? ""}
-                        onChange={(e) =>
-                          handleCellChange(r.id, key, e.target.value)
-                        }
-                        aria-label={`修改${label}`}
-                        data-testid={`rule-${r.id}-${key}`}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <button
-              type="button"
-              onClick={() => void handleSubmit(r)}
-              disabled={submitting}
-              data-testid={`rule-${r.id}-submit`}
-              style={{ marginTop: 6 }}
-            >
-              修正并重新应用
-            </button>
-            {submitMsg && (
-              <div style={{ marginTop: 4, color: "#555" }} role="status">
-                {submitMsg}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 10,
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                <Space size={8}>
+                  <Typography.Text strong style={{ fontSize: 14 }}>
+                    {r.sheet_name}
+                  </Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    表头行 {r.header_row}
+                  </Typography.Text>
+                </Space>
+                <Space size={4}>
+                  <Tag
+                    color={r.created_by_llm ? "blue" : "default"}
+                    style={{ margin: 0 }}
+                  >
+                    {r.created_by_llm ? "LLM 自动" : "人工修正"}
+                  </Tag>
+                  <Tag
+                    color={r.confirmed ? "success" : "warning"}
+                    style={{ margin: 0 }}
+                  >
+                    {r.confirmed ? "已应用" : "未确认"}
+                  </Tag>
+                  {status ? (
+                    <Tag style={{ margin: 0 }}>{status}</Tag>
+                  ) : null}
+                </Space>
               </div>
-            )}
-          </section>
-        );
-      })}
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+                  gap: 10,
+                  marginBottom: 10,
+                }}
+              >
+                {MAPPING_KEYS.map(({ key, label }) => (
+                  <div key={key}>
+                    <Typography.Text
+                      type="secondary"
+                      style={{
+                        fontSize: 12,
+                        display: "block",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {label}
+                    </Typography.Text>
+                    <Input
+                      size="small"
+                      maxLength={3}
+                      value={draft[r.id]?.[key] ?? ""}
+                      onChange={(e) =>
+                        handleCellChange(r.id, key, e.target.value)
+                      }
+                      aria-label={`修改${label}`}
+                      data-testid={`rule-${r.id}-${key}`}
+                      style={{ width: 80 }}
+                      placeholder="A"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <Space size={12}>
+                <Button
+                  size="small"
+                  type="primary"
+                  onClick={() => void handleSubmit(r)}
+                  loading={submitting}
+                  data-testid={`rule-${r.id}-submit`}
+                >
+                  修正并重新应用
+                </Button>
+                {submitMsg && (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }} role="status">
+                    {submitMsg}
+                  </Typography.Text>
+                )}
+              </Space>
+            </Card>
+          );
+        })}
+      </Space>
     </div>
   );
 }

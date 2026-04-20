@@ -1,6 +1,8 @@
 /**
- * C6 DetectProgressIndicator — 进度条 + 一行摘要 + 终态显示"查看报告"
+ * C6 DetectProgressIndicator — antd 化:Progress 进度条 + 一行摘要 + "查看报告"
  */
+import { Button, Progress, Space, Typography } from "antd";
+import { CheckCircleOutlined, FileTextOutlined, SyncOutlined } from "@ant-design/icons";
 import type { AgentTask, ProjectAnalysisReport } from "../../types";
 
 const TERMINAL_STATUSES = new Set<AgentTask["status"]>([
@@ -29,56 +31,84 @@ export function DetectProgressIndicator({
   ).length;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-  // 最近一个完成的 AgentTask(有 finished_at 的里面取时间最新)
   const latest = [...agentTasks]
     .filter((t) => TERMINAL_STATUSES.has(t.status))
     .sort((a, b) => (b.finished_at || "").localeCompare(a.finished_at || ""))
     .at(0);
 
   const allDone = total > 0 && completed === total;
-  const reportVersion =
-    latestReport?.version ?? (allDone ? agentTasks[0]?.id ?? null : null);
 
   return (
-    <div className="border rounded p-3 bg-gray-50">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium">
-          {allDone ? "✅ 检测完成" : "🔄 检测进行中"}
-        </span>
-        <span className="text-sm text-gray-600">
+    <div
+      style={{
+        padding: 14,
+        background: "#fafbfc",
+        border: "1px solid #e4e7ed",
+        borderRadius: 8,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 8,
+        }}
+      >
+        <Space size={6}>
+          {allDone ? (
+            <CheckCircleOutlined style={{ color: "#2d7a4a" }} />
+          ) : (
+            <SyncOutlined spin style={{ color: "#1d4584" }} />
+          )}
+          <Typography.Text strong style={{ fontSize: 13 }}>
+            {allDone ? "检测完成" : "检测进行中"}
+          </Typography.Text>
+        </Space>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {completed}/{total} 维度完成
-        </span>
+        </Typography.Text>
       </div>
-      <div className="w-full bg-gray-200 rounded h-2">
-        <div
-          className="bg-blue-500 h-2 rounded transition-all duration-300"
-          style={{ width: `${pct}%` }}
-          role="progressbar"
-          aria-valuenow={pct}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        />
-      </div>
+
+      <Progress
+        percent={pct}
+        strokeColor={allDone ? "#2d7a4a" : "#1d4584"}
+        trailColor="#e4e7ed"
+        size="small"
+        showInfo={false}
+      />
+
       {latest && (
-        <div className="mt-2 text-sm text-gray-700">
-          最新: {latest.agent_name} {latest.status}
+        <Typography.Paragraph
+          type="secondary"
+          style={{ fontSize: 12.5, margin: "8px 0 0" }}
+        >
+          最新: <Typography.Text strong style={{ fontSize: 12.5 }}>{latest.agent_name}</Typography.Text>
+          {" · "}
+          {latest.status}
           {latest.summary ? ` — ${latest.summary}` : ""}
-        </div>
+        </Typography.Paragraph>
       )}
+
       {!connected && (
-        <div className="mt-1 text-xs text-gray-500">
+        <Typography.Text
+          type="secondary"
+          style={{ fontSize: 11, display: "block", marginTop: 4 }}
+        >
           实时更新离线,轮询中
-        </div>
+        </Typography.Text>
       )}
-      {allDone && reportVersion !== null && latestReport && (
-        <div className="mt-3">
-          <button
-            type="button"
-            className="px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+
+      {allDone && latestReport && (
+        <div style={{ marginTop: 12 }}>
+          <Button
+            type="primary"
+            icon={<FileTextOutlined />}
             onClick={() => onViewReport?.(latestReport.version)}
+            style={{ background: "#2d7a4a", borderColor: "#2d7a4a" }}
           >
             查看报告
-          </button>
+          </Button>
         </div>
       )}
     </div>

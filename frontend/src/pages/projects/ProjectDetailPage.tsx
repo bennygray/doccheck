@@ -436,6 +436,8 @@ export default function ProjectDetailPage() {
             <HeroDetectArea
               projectId={project.id}
               project={project}
+              bidders={mergedBidders}
+              onReloadProject={() => void reloadProject()}
               onGoReport={(v) => navigate(`/reports/${project.id}/${v}`)}
             />
           </div>
@@ -728,34 +730,70 @@ function MetaChip({
 function HeroDetectArea({
   projectId,
   project,
+  bidders,
+  onReloadProject,
   onGoReport,
 }: {
   projectId: number;
   project: ProjectDetail;
+  bidders: Bidder[];
+  onReloadProject: () => void;
   onGoReport: (version: number) => void;
 }) {
   const detect = useDetectProgress(projectId);
+  // 刚点"启动检测",SSE 事件还没到时撑开占位面板
+  const [justStarted, setJustStarted] = useState(false);
+
+  // 兜底 1:收到 agent_tasks 即自动清掉 justStarted(正常场景立即切到 running)
+  useEffect(() => {
+    if (justStarted && detect.agentTasks.length > 0) {
+      setJustStarted(false);
+    }
+  }, [justStarted, detect.agentTasks.length]);
+
+  // 兜底 2:15s 内没拿到 agent_tasks → 自动清 justStarted,fall through 到常规逻辑
+  // 防止 token 过期/SSE 断线下"初始化..."永久卡住
+  useEffect(() => {
+    if (!justStarted) return;
+    const t = window.setTimeout(() => setJustStarted(false), 15_000);
+    return () => window.clearTimeout(t);
+  }, [justStarted]);
+
   const hasStarted =
     detect.version !== null ||
     project.status === "analyzing" ||
-    project.status === "completed";
+    project.status === "completed" ||
+    justStarted;
 
   return (
     <div data-testid="detect-section">
       <StartDetectButton
         projectId={projectId}
         projectStatus={detect.projectStatus || project.status}
-        bidders={project.bidders ?? []}
+        // 用实时 bidders(SSE 合并后),避免 project.bidders 过期导致按钮误禁用
+        bidders={bidders.map((b) => ({
+          id: b.id,
+          name: b.name,
+          parse_status: b.parse_status,
+          file_count: b.file_count,
+        }))}
         onStarted={() => {
-          // 乐观刷新:等 SSE 推
+          // 立即乐观反馈 + 主动拉状态 + 刷新项目(status→analyzing)
+          setJustStarted(true);
+          void detect.refetch();
+          onReloadProject();
+          // 之后 agentTasks 到了 justStarted 不影响渲染(有真实数据就走 running/completed 分支)
         }}
       />
-      {hasStarted && detect.agentTasks.length > 0 && (
-        <div style={{ marginTop: 12, width: 320 }}>
+      {hasStarted && (
+        <div style={{ marginTop: 12, width: "100%", maxWidth: 520 }}>
           <DetectProgressIndicator
             agentTasks={detect.agentTasks}
             connected={detect.connected}
+            lastEventAt={detect.lastEventAt}
             latestReport={detect.latestReport}
+            fallbackVersion={detect.version ?? 1}
+            justStarted={justStarted}
             onViewReport={onGoReport}
           />
         </div>

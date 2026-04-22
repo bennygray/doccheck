@@ -20,7 +20,9 @@ from app.models.analysis_report import AnalysisReport
 from app.models.audit_log import AuditLog
 from app.models.bid_document import BidDocument
 from app.models.bidder import Bidder
+from app.models.document_image import DocumentImage
 from app.models.document_metadata import DocumentMetadata
+from app.models.document_sheet import DocumentSheet
 from app.models.document_text import DocumentText
 from app.models.export_job import ExportJob
 from app.models.export_template import ExportTemplate
@@ -29,6 +31,8 @@ from app.models.pair_comparison import PairComparison
 from app.models.price_item import PriceItem
 from app.models.price_parsing_rule import PriceParsingRule
 from app.models.project import Project
+from app.models.price_config import ProjectPriceConfig
+from app.models.system_config import SystemConfig
 from app.models.user import User
 
 from ._c4_helpers import seed_project, seed_user, token_for
@@ -41,9 +45,14 @@ async def setup(client):
         for M in (
             ExportJob, ExportTemplate, AuditLog, AgentTask,
             PairComparison, OverallAnalysis, AnalysisReport,
-            PriceItem, PriceParsingRule,
-            DocumentMetadata, DocumentText, BidDocument,
-            Bidder, Project, User,
+            PriceItem, PriceParsingRule, ProjectPriceConfig,
+            # C5 扩的 4 张依附 bid_documents 的子表都要先清,否则 FK 违约
+            DocumentSheet, DocumentImage, DocumentMetadata, DocumentText,
+            BidDocument,
+            Bidder, Project,
+            # system_configs.updated_by FK users,必须在 User 之前清
+            SystemConfig,
+            User,
         ):
             await s.execute(delete(M))
         await s.commit()

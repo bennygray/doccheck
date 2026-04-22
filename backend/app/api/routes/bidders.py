@@ -310,11 +310,41 @@ async def delete_bidder(
     if project.status == "analyzing":
         raise HTTPException(status.HTTP_409_CONFLICT, "检测进行中,无法删除投标人")
 
-    # 1. 硬删 bid_documents(D1:文件依附 bidder 生命周期)
+    # 1. 级联硬删所有依附在 bid_documents 上的子表(document_texts / metadata /
+    #    images / sheets)—— FK 未设 ON DELETE CASCADE,手动清理避免 IntegrityError。
+    #    用一条原生 SQL 取 bidder 所有 doc id,再分别删依赖表。
+    from sqlalchemy import text as _sql_text
+
+    doc_ids_result = await session.execute(
+        _sql_text(
+            "SELECT id FROM bid_documents WHERE bidder_id = :bid"
+        ),
+        {"bid": bidder.id},
+    )
+    doc_ids = [r[0] for r in doc_ids_result.fetchall()]
+    if doc_ids:
+        for dep_table in (
+            "document_texts",
+            "document_metadata",
+            "document_images",
+            "document_sheets",
+        ):
+            await session.execute(
+                _sql_text(
+                    f"DELETE FROM {dep_table} WHERE bid_document_id = ANY(:ids)"
+                ),
+                {"ids": doc_ids},
+            )
+    # 1.5 清 bidder 下的 price_items(FK 到 bidder,无 CASCADE)
+    await session.execute(
+        _sql_text("DELETE FROM price_items WHERE bidder_id = :bid"),
+        {"bid": bidder.id},
+    )
+    # 2. 硬删 bid_documents(D1:文件依附 bidder 生命周期)
     await session.execute(
         BidDocument.__table__.delete().where(BidDocument.bidder_id == bidder.id)
     )
-    # 2. 软删 bidder
+    # 3. 软删 bidder
     bidder.deleted_at = datetime.now(timezone.utc)
     await session.commit()
 

@@ -176,6 +176,17 @@ async def write_llm_config(
         # cache 失效不能阻塞写入
         pass
 
+    # 同步 runtime settings:让旧 get_llm_provider()(同步签名,读 settings.llm_*)
+    # 也能立刻拿到新值。不这样做的话,pipeline/11 个 Agent 仍走旧 env 配置。
+    try:
+        settings.llm_provider = new_llm["provider"]
+        settings.llm_api_key = new_llm["api_key"]
+        settings.llm_model = new_llm["model"]
+        settings.llm_base_url = new_llm["base_url"]
+        settings.llm_timeout_s = float(new_llm["timeout_s"])
+    except Exception:  # noqa: BLE001 — settings 赋值异常不阻塞主流程
+        pass
+
     # 注:admin_llm 配置更新不写 audit_log,
     # 因 AuditLog.project_id 非空(C15 设计),系统级配置不挂项目。
     # 设计 follow-up:AuditLog project_id 改 nullable,或新建 SystemAuditLog 表。

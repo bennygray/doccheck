@@ -1,9 +1,15 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { App as AntdApp } from "antd";
 
 import { StartDetectButton } from "../StartDetectButton";
 import { ApiError, api } from "../../../services/api";
 import type { BidderSummary } from "../../../types";
+
+/** 包一层 AntdApp 让组件内 App.useApp() 能拿到 message. */
+function renderInApp(ui: React.ReactElement) {
+  return render(<AntdApp>{ui}</AntdApp>);
+}
 
 const makeBidder = (
   overrides: Partial<BidderSummary> = {},
@@ -21,7 +27,7 @@ describe("StartDetectButton", () => {
   });
 
   it("禁用当 bidder < 2", () => {
-    render(
+    renderInApp(
       <StartDetectButton
         projectId={1}
         projectStatus="ready"
@@ -34,7 +40,7 @@ describe("StartDetectButton", () => {
   });
 
   it("禁用当有非终态 bidder", () => {
-    render(
+    renderInApp(
       <StartDetectButton
         projectId={1}
         projectStatus="ready"
@@ -53,7 +59,7 @@ describe("StartDetectButton", () => {
   });
 
   it("禁用当 analyzing", () => {
-    render(
+    renderInApp(
       <StartDetectButton
         projectId={1}
         projectStatus="analyzing"
@@ -70,7 +76,7 @@ describe("StartDetectButton", () => {
       .spyOn(api, "startAnalysis")
       .mockResolvedValue({ version: 1, agent_task_count: 10 });
     const onStarted = vi.fn();
-    render(
+    renderInApp(
       <StartDetectButton
         projectId={42}
         projectStatus="ready"
@@ -91,7 +97,7 @@ describe("StartDetectButton", () => {
     vi.spyOn(api, "startAnalysis").mockRejectedValue(
       new ApiError(409, { current_version: 2 }),
     );
-    render(
+    renderInApp(
       <StartDetectButton
         projectId={1}
         projectStatus="ready"

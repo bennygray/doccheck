@@ -13,7 +13,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -157,11 +157,28 @@ async def _wait_for_rule(
 
 
 async def _load_rule(project_id: int) -> PriceParsingRule | None:
+    """加载该 project 的有效规则。
+
+    历史 bug 兜底:同 project_id 可能残留 (`_identifying_` failed 占位) + (真实 confirmed)
+    两行 → 旧 `scalar_one_or_none()` 抛 MultipleResultsFound,整条 pipeline 判死 price_failed。
+    新策略:优先 confirmed → identifying → failed;同级按 id desc 取最新。
+    """
     async with async_session() as session:
-        stmt = select(PriceParsingRule).where(
-            PriceParsingRule.project_id == project_id
+        stmt = (
+            select(PriceParsingRule)
+            .where(PriceParsingRule.project_id == project_id)
+            .order_by(
+                # 小的优先(confirmed=1, identifying=2, 其他 failed=3)
+                case(
+                    (PriceParsingRule.status == "confirmed", 1),
+                    (PriceParsingRule.status == "identifying", 2),
+                    else_=3,
+                ),
+                PriceParsingRule.id.desc(),
+            )
+            .limit(1)
         )
-        return (await session.execute(stmt)).scalar_one_or_none()
+        return (await session.execute(stmt)).scalars().first()
 
 
 def reset_for_tests() -> None:

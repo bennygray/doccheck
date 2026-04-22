@@ -1,44 +1,53 @@
 /**
- * C6/C14/C15 ReportPage —— 检测报告总览(完整 antd 重设计)
+ * C6/C14/C15 ReportPage —— 检测报告总览(可视化强化版)
  *
- * 视觉:ReportNavBar(面包屑+标题+Tab)+ 风险评分顶部卡 + LLM 结论卡 + 维度列表
- *
- * 业务契约 0 变动:
- *   - 加载 / 404 / LLM fallback 前缀哨兵 / 铁证标记
- *   - ExportButton / ReviewPanel 子组件原样嵌入
- *   - data-testid="llm-fallback-banner" 保留
+ * 视觉:
+ *  - Hero 行双栏:左 Gauge 圆盘(总分+风险) + 右 Radar 雷达(11 维度风险形状)
+ *  - LLM 结论卡(降级时 Alert 前缀哨兵)
+ *  - 人工复核卡
+ *  - 维度列表:每行带横向 Progress 条 + 色分三档 + 铁证高亮
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
-  Badge,
   Button,
   Card,
+  Col,
   Empty,
-  List,
+  Progress,
+  Row,
   Space,
   Spin,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
-import { ExclamationCircleOutlined } from "@ant-design/icons";
+import { Radar } from "@ant-design/charts";
+import {
+  CheckCircleFilled,
+  CloseCircleFilled,
+  ExclamationCircleOutlined,
+  FireOutlined,
+  MinusCircleFilled,
+  ClockCircleOutlined,
+} from "@ant-design/icons";
 
 import { ExportButton } from "../../components/reports/ExportButton";
 import { ReviewPanel } from "../../components/reports/ReviewPanel";
 import ReportNavBar from "../../components/reports/ReportNavBar";
 import { ApiError, api } from "../../services/api";
-import type { ReportResponse, RiskLevel } from "../../types";
+import type { ReportDimension, ReportResponse, RiskLevel } from "../../types";
 
 const LLM_FALLBACK_PREFIX = "AI 综合研判暂不可用";
 
 const RISK_META: Record<
   RiskLevel,
-  { label: string; color: string; bg: string; border: string }
+  { label: string; color: string; bg: string }
 > = {
-  high: { label: "高风险", color: "#c53030", bg: "#fdecec", border: "#c53030" },
-  medium: { label: "中风险", color: "#c27c0e", bg: "#fcf3e3", border: "#c27c0e" },
-  low: { label: "低风险", color: "#2d7a4a", bg: "#e8f3ec", border: "#2d7a4a" },
+  high: { label: "高风险", color: "#c53030", bg: "#fdecec" },
+  medium: { label: "中风险", color: "#c27c0e", bg: "#fcf3e3" },
+  low: { label: "低风险", color: "#2d7a4a", bg: "#e8f3ec" },
 };
 
 const DIMENSION_LABELS: Record<string, string> = {
@@ -55,6 +64,27 @@ const DIMENSION_LABELS: Record<string, string> = {
   style: "语言风格",
 };
 
+/** 雷达图轴标签(短名,省空间) */
+const DIMENSION_SHORT: Record<string, string> = {
+  text_similarity: "文本",
+  section_similarity: "章节",
+  structure_similarity: "结构",
+  metadata_author: "作者",
+  metadata_time: "时间",
+  metadata_machine: "机器",
+  price_consistency: "报价",
+  price_anomaly: "报价异常",
+  error_consistency: "错误",
+  image_reuse: "图片",
+  style: "风格",
+};
+
+function scoreColor(score: number): string {
+  if (score >= 70) return "#c53030";
+  if (score >= 40) return "#c27c0e";
+  return "#5c6370";
+}
+
 export function ReportPage() {
   const { projectId, version } = useParams<{
     projectId: string;
@@ -65,6 +95,12 @@ export function ReportPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 404 自动重试:刚点完"检测完成"就进来时,判 LLM 还在 3-10s 跑,AR 行没写入 DB。
+  // 最多重试 10 次 × 2s = 20s 窗口,够覆盖 judge.
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRY = 10;
+  const RETRY_INTERVAL_MS = 2000;
+
   const reload = useCallback(() => {
     if (!projectId || !version) return;
     setLoading(true);
@@ -73,10 +109,11 @@ export function ReportPage() {
       .then((r) => {
         setReport(r);
         setError(null);
+        setRetryCount(0);
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 404) {
-          setError("报告不存在或正在生成");
+          setError("报告正在生成,请稍候...");
         } else {
           setError("加载报告失败");
         }
@@ -88,6 +125,31 @@ export function ReportPage() {
     reload();
   }, [reload]);
 
+  // 如果 404 且未达重试上限 → 2s 后自动重试
+  useEffect(() => {
+    if (!error || !error.includes("正在生成") || report !== null) return;
+    if (retryCount >= MAX_RETRY) return;
+    const t = window.setTimeout(() => {
+      setRetryCount((c) => c + 1);
+      reload();
+    }, RETRY_INTERVAL_MS);
+    return () => window.clearTimeout(t);
+  }, [error, report, retryCount, reload]);
+
+  const radarData = useMemo(() => {
+    if (!report) return [];
+    // 固定顺序(和 DIMENSION_LABELS 一致),缺失的维度补 0
+    const order = Object.keys(DIMENSION_LABELS);
+    const map = new Map(report.dimensions.map((d) => [d.dimension, d]));
+    return order.map((dim) => {
+      const d = map.get(dim);
+      return {
+        dimension: DIMENSION_SHORT[dim] ?? dim,
+        score: d?.best_score ?? 0,
+      };
+    });
+  }, [report]);
+
   if (loading) {
     return (
       <div style={{ padding: 48, textAlign: "center" }}>
@@ -97,6 +159,8 @@ export function ReportPage() {
   }
 
   if (error || !report) {
+    const generating = error?.includes("正在生成");
+    const stillRetrying = generating && retryCount < MAX_RETRY;
     return (
       <div>
         <ReportNavBar
@@ -106,9 +170,38 @@ export function ReportPage() {
           tabKey={null}
         />
         <Card>
-          <Empty description={error || "报告不存在"}>
-            <Button onClick={() => navigate(-1)}>返回</Button>
-          </Empty>
+          {stillRetrying ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 12,
+                padding: "24px 0",
+              }}
+            >
+              <Spin size="large" />
+              <Typography.Text strong style={{ fontSize: 14, color: "#c27c0e" }}>
+                AI 综合研判生成中...
+              </Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                已等待 {retryCount * 2}s,将自动刷新({Math.max(0, MAX_RETRY - retryCount) * 2}s 内重试)
+              </Typography.Text>
+            </div>
+          ) : (
+            <Empty
+              description={
+                generating
+                  ? "报告迟迟未生成,可能后端 LLM 调用失败,请刷新或回到详情页检查"
+                  : error || "报告不存在"
+              }
+            >
+              <Space>
+                <Button onClick={reload}>刷新</Button>
+                <Button onClick={() => navigate(-1)}>返回</Button>
+              </Space>
+            </Empty>
+          )}
         </Card>
       </div>
     );
@@ -116,6 +209,7 @@ export function ReportPage() {
 
   const isLlmFallback = report.llm_conclusion.startsWith(LLM_FALLBACK_PREFIX);
   const risk = RISK_META[report.risk_level as RiskLevel] ?? RISK_META.low;
+  const ironcladCount = report.dimensions.filter((d) => d.is_ironclad).length;
 
   return (
     <div>
@@ -132,96 +226,67 @@ export function ReportPage() {
         }
       />
 
-      {/* 风险顶部卡:总分 + 等级 */}
+      {/* Hero:Gauge + Radar 双栏 */}
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={10}>
+          <GaugeCard
+            score={report.total_score}
+            risk={risk}
+            ironcladCount={ironcladCount}
+            dimensionsTotal={report.dimensions.length}
+          />
+        </Col>
+        <Col xs={24} md={14}>
+          <RadarCard data={radarData} />
+        </Col>
+      </Row>
+
+      {/* LLM 结论卡 */}
       <Card
         variant="outlined"
-        styles={{ body: { padding: 24 } }}
-        style={{
-          marginBottom: 16,
-          background: risk.bg,
-          border: `1px solid ${risk.border}33`,
-          borderLeft: `4px solid ${risk.border}`,
-        }}
+        styles={{ body: { padding: 20 } }}
+        style={{ marginBottom: 16 }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 16,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                color: "#5c6370",
-                letterSpacing: 0.5,
-                marginBottom: 8,
-              }}
-            >
-              综合研判
-            </div>
-            <Space size={16} align="center">
-              <Tag
-                style={{
-                  padding: "4px 12px",
-                  margin: 0,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "#ffffff",
-                  background: risk.color,
-                  borderColor: risk.color,
-                }}
-              >
-                {risk.label}
-              </Tag>
-              <span
-                style={{
-                  fontSize: 36,
-                  fontWeight: 600,
-                  color: "#1f2328",
-                  lineHeight: 1.2,
-                }}
-              >
-                {report.total_score.toFixed(1)}
-              </span>
-              <span style={{ fontSize: 14, color: "#5c6370" }}>/ 100</span>
-            </Space>
-          </div>
-          <div style={{ flex: 1, minWidth: 240, maxWidth: 520 }}>
-            {isLlmFallback ? (
-              <Alert
-                type="warning"
-                icon={<ExclamationCircleOutlined />}
-                showIcon
-                message={report.llm_conclusion}
-                data-testid="llm-fallback-banner"
-              />
-            ) : report.llm_conclusion ? (
-              <Typography.Paragraph
-                style={{
-                  fontSize: 13,
-                  color: "#1f2328",
-                  margin: 0,
-                  lineHeight: 1.7,
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {report.llm_conclusion}
-              </Typography.Paragraph>
-            ) : (
-              <Typography.Text italic type="secondary">
-                AI 综合研判尚未生成
-              </Typography.Text>
-            )}
-          </div>
-        </div>
+        <Typography.Title level={5} style={{ margin: "0 0 12px", fontWeight: 600 }}>
+          AI 综合研判
+        </Typography.Title>
+        {isLlmFallback ? (
+          <Alert
+            type="warning"
+            icon={<ExclamationCircleOutlined />}
+            showIcon
+            message={report.llm_conclusion}
+            data-testid="llm-fallback-banner"
+          />
+        ) : report.llm_conclusion ? (
+          <Typography.Paragraph
+            style={{
+              fontSize: 14,
+              color: "#1f2328",
+              margin: 0,
+              lineHeight: 1.8,
+              whiteSpace: "pre-wrap",
+              padding: "12px 16px",
+              background: "#fafbfc",
+              borderLeft: "3px solid #1d4584",
+              borderRadius: 4,
+            }}
+          >
+            {report.llm_conclusion}
+          </Typography.Paragraph>
+        ) : (
+          <Typography.Text italic type="secondary">
+            AI 综合研判尚未生成
+          </Typography.Text>
+        )}
       </Card>
 
       {/* 人工复核 */}
-      <Card variant="outlined" styles={{ body: { padding: 20 } }} style={{ marginBottom: 16 }}>
+      <Card
+        variant="outlined"
+        styles={{ body: { padding: 20 } }}
+        style={{ marginBottom: 16 }}
+      >
         <Typography.Title level={5} style={{ margin: "0 0 12px", fontWeight: 600 }}>
           人工复核
         </Typography.Title>
@@ -238,81 +303,295 @@ export function ReportPage() {
         />
       </Card>
 
-      {/* 维度得分列表 */}
+      {/* 维度得分列表(横向进度条) */}
       <Card
         variant="outlined"
         styles={{ body: { padding: 0 } }}
         title={<span style={{ fontWeight: 600 }}>维度得分</span>}
         extra={
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            共 {report.dimensions.length} 个维度
-          </Typography.Text>
+          <Space size={8}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              共 {report.dimensions.length} 维
+            </Typography.Text>
+            {ironcladCount > 0 && (
+              <Tag color="error" style={{ margin: 0 }}>
+                <FireOutlined /> {ironcladCount} 铁证
+              </Tag>
+            )}
+          </Space>
         }
       >
-        <List
-          dataSource={report.dimensions}
-          renderItem={(d) => (
-            <List.Item
-              style={{
-                padding: "14px 20px",
-                background: d.is_ironclad ? "#fef8f8" : undefined,
-                borderLeft: d.is_ironclad ? "3px solid #c53030" : "3px solid transparent",
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 0, marginRight: 16 }}>
-                <Space size={8} style={{ marginBottom: 4 }}>
-                  <Typography.Text strong style={{ fontSize: 14 }}>
-                    {DIMENSION_LABELS[d.dimension] ?? d.dimension}
-                  </Typography.Text>
-                  <Typography.Text
-                    type="secondary"
-                    style={{ fontSize: 11, fontFamily: "monospace" }}
-                  >
-                    {d.dimension}
-                  </Typography.Text>
-                  {d.is_ironclad && (
-                    <Tag color="error" style={{ margin: 0, fontWeight: 600 }}>
-                      铁证
-                    </Tag>
-                  )}
-                </Space>
-                {d.summaries.length > 0 && (
-                  <Typography.Paragraph
-                    type="secondary"
-                    ellipsis={{ rows: 1 }}
-                    style={{ fontSize: 12.5, margin: 0 }}
-                  >
-                    {d.summaries[0]}
-                  </Typography.Paragraph>
-                )}
-              </div>
-              <Space size={12}>
-                <Space size={4} style={{ fontSize: 11, color: "#8a919d" }}>
-                  <Badge status="success" text={d.status_counts.succeeded} />
-                  <Badge status="default" text={d.status_counts.skipped} />
-                  <Badge status="error" text={d.status_counts.failed} />
-                </Space>
-                <Typography.Text
-                  strong
-                  style={{
-                    fontSize: 18,
-                    minWidth: 56,
-                    textAlign: "right",
-                    color:
-                      d.best_score >= 70
-                        ? "#c53030"
-                        : d.best_score >= 40
-                          ? "#c27c0e"
-                          : "#5c6370",
-                  }}
-                >
-                  {d.best_score.toFixed(1)}
-                </Typography.Text>
-              </Space>
-            </List.Item>
-          )}
-        />
+        <div style={{ padding: "8px 0" }}>
+          {report.dimensions.map((d) => (
+            <DimensionRow key={d.dimension} dim={d} />
+          ))}
+        </div>
       </Card>
+    </div>
+  );
+}
+
+/* ───────── Hero 左:仪表盘 ───────── */
+function GaugeCard({
+  score,
+  risk,
+  ironcladCount,
+  dimensionsTotal,
+}: {
+  score: number;
+  risk: { label: string; color: string; bg: string };
+  ironcladCount: number;
+  dimensionsTotal: number;
+}) {
+  return (
+    <Card
+      variant="outlined"
+      styles={{ body: { padding: 20, display: "flex", flexDirection: "column" } }}
+      style={{ height: "100%" }}
+    >
+      <Typography.Title level={5} style={{ margin: "0 0 4px", fontWeight: 600 }}>
+        综合得分
+      </Typography.Title>
+      <Typography.Text type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+        基于 {dimensionsTotal} 维度加权合成
+      </Typography.Text>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 24,
+          flex: 1,
+        }}
+      >
+        <Progress
+          type="dashboard"
+          percent={Math.min(100, Math.max(0, score))}
+          format={() => (
+            <div style={{ lineHeight: 1 }}>
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: 700,
+                  color: risk.color,
+                  letterSpacing: -0.5,
+                }}
+              >
+                {score.toFixed(1)}
+              </div>
+              <div style={{ fontSize: 11, color: "#8a919d", marginTop: 4 }}>
+                / 100
+              </div>
+            </div>
+          )}
+          strokeColor={risk.color}
+          trailColor="#f0f2f5"
+          strokeWidth={10}
+          size={180}
+        />
+      </div>
+      <div style={{ textAlign: "center", marginTop: 12 }}>
+        <Tag
+          style={{
+            padding: "4px 16px",
+            margin: 0,
+            fontSize: 14,
+            fontWeight: 600,
+            color: "#ffffff",
+            background: risk.color,
+            borderColor: risk.color,
+          }}
+        >
+          {risk.label}
+        </Tag>
+        {ironcladCount > 0 && (
+          <Tag
+            icon={<FireOutlined />}
+            color="error"
+            style={{ marginLeft: 8, fontWeight: 600 }}
+          >
+            {ironcladCount} 条铁证
+          </Tag>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/* ───────── Hero 右:雷达图 ───────── */
+function RadarCard({
+  data,
+}: {
+  data: Array<{ dimension: string; score: number }>;
+}) {
+  const config = {
+    data,
+    xField: "dimension",
+    yField: "score",
+    meta: {
+      score: { min: 0, max: 100, tickCount: 5 },
+    },
+    area: {
+      style: {
+        fill: "#1d4584",
+        fillOpacity: 0.14,
+      },
+    },
+    line: {
+      style: {
+        stroke: "#1d4584",
+        strokeWidth: 2,
+      },
+    },
+    point: {
+      size: 4,
+      shape: "circle",
+      style: {
+        fill: "#ffffff",
+        stroke: "#1d4584",
+        strokeWidth: 2,
+      },
+    },
+    axis: {
+      y: {
+        gridStroke: "#ebedf0",
+        gridStrokeWidth: 1,
+        labelFontSize: 10,
+        labelFill: "#8a919d",
+      },
+      x: {
+        labelFontSize: 12,
+        labelFill: "#5c6370",
+      },
+    },
+    tooltip: {
+      title: (d: { dimension: string }) => d.dimension,
+      items: [
+        {
+          channel: "y",
+          valueFormatter: (v: number) => `${v.toFixed(1)} / 100`,
+        },
+      ],
+    },
+    animate: false,
+    autoFit: true,
+    height: 280,
+  };
+
+  return (
+    <Card
+      variant="outlined"
+      styles={{ body: { padding: 20 } }}
+      style={{ height: "100%" }}
+    >
+      <Typography.Title level={5} style={{ margin: "0 0 4px", fontWeight: 600 }}>
+        维度风险分布
+      </Typography.Title>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        11 个维度的得分雷达;越外圈分数越高,形状越偏哪侧表示该类型风险越突出
+      </Typography.Text>
+      <div style={{ marginTop: 8 }}>
+        <Radar {...config} />
+      </div>
+    </Card>
+  );
+}
+
+/* ───────── 维度行(带横向进度条) ───────── */
+function DimensionRow({ dim: d }: { dim: ReportDimension }) {
+  const color = scoreColor(d.best_score);
+  const counts = d.status_counts;
+
+  return (
+    <div
+      style={{
+        padding: "14px 20px",
+        borderBottom: "1px solid #f0f2f5",
+        display: "flex",
+        alignItems: "center",
+        gap: 20,
+        background: d.is_ironclad ? "#fef8f8" : undefined,
+        borderLeft: d.is_ironclad ? "3px solid #c53030" : "3px solid transparent",
+      }}
+    >
+      {/* 左:维度名 + 代号 + 铁证 Tag */}
+      <div style={{ flex: "0 0 200px", minWidth: 0 }}>
+        <Typography.Text strong style={{ fontSize: 14, display: "block" }}>
+          {DIMENSION_LABELS[d.dimension] ?? d.dimension}
+          {d.is_ironclad && (
+            <Tag color="error" style={{ margin: "0 0 0 6px", fontWeight: 600 }}>
+              铁证
+            </Tag>
+          )}
+        </Typography.Text>
+        <Typography.Text
+          type="secondary"
+          style={{ fontSize: 11, fontFamily: "monospace" }}
+        >
+          {d.dimension}
+        </Typography.Text>
+      </div>
+
+      {/* 中:progress 条 + summary */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <Progress
+          percent={Math.min(100, Math.max(0, d.best_score))}
+          strokeColor={color}
+          trailColor="#f0f2f5"
+          format={() => (
+            <span style={{ fontSize: 14, fontWeight: 600, color }}>
+              {d.best_score.toFixed(1)}
+            </span>
+          )}
+          strokeWidth={10}
+        />
+        {d.summaries.length > 0 && (
+          <Typography.Paragraph
+            type="secondary"
+            ellipsis={{ rows: 1 }}
+            style={{ fontSize: 12, margin: "4px 0 0" }}
+          >
+            {d.summaries[0]}
+          </Typography.Paragraph>
+        )}
+      </div>
+
+      {/* 右:状态计数 */}
+      <div
+        style={{
+          flex: "0 0 140px",
+          display: "flex",
+          gap: 10,
+          justifyContent: "flex-end",
+          fontSize: 11,
+          color: "#8a919d",
+        }}
+      >
+        <Tooltip title={`成功 ${counts.succeeded}`}>
+          <span>
+            <CheckCircleFilled style={{ color: "#2d7a4a", marginRight: 2 }} />
+            {counts.succeeded}
+          </span>
+        </Tooltip>
+        <Tooltip title={`跳过 ${counts.skipped}`}>
+          <span>
+            <MinusCircleFilled style={{ color: "#b1b6bf", marginRight: 2 }} />
+            {counts.skipped}
+          </span>
+        </Tooltip>
+        <Tooltip title={`失败 ${counts.failed}`}>
+          <span>
+            <CloseCircleFilled style={{ color: "#c53030", marginRight: 2 }} />
+            {counts.failed}
+          </span>
+        </Tooltip>
+        <Tooltip title={`超时 ${counts.timeout}`}>
+          <span>
+            <ClockCircleOutlined style={{ color: "#c27c0e", marginRight: 2 }} />
+            {counts.timeout}
+          </span>
+        </Tooltip>
+      </div>
     </div>
   );
 }

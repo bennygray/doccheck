@@ -419,9 +419,16 @@ export const api = {
       },
     ),
 
-  /** 下载导出文件:返回 Blob URL 以便浏览器下载 */
-  downloadExportUrl: (jobId: number) =>
-    `${API_BASE}/exports/${jobId}/download`,
+  /**
+   * 下载导出文件:浏览器直接导航(window.open / <a href>)不会带 Authorization 头,
+   * 这里把 JWT 塞进 access_token query param(后端 get_current_user 已支持该回退,
+   * 和 SSE EventSource 用的是同一条 auth 回退路径)
+   */
+  downloadExportUrl: (jobId: number) => {
+    const base = `${API_BASE}/exports/${jobId}/download`;
+    const token = authStorage.getToken();
+    return token ? `${base}?access_token=${encodeURIComponent(token)}` : base;
+  },
 
   // ---------------------------------------------------------- C16 compare-view
 

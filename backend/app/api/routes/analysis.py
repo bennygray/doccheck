@@ -232,6 +232,7 @@ async def get_analysis_status(
             project_status=project.status,
             started_at=None,
             agent_tasks=[],
+            latest_report=None,
         )
 
     task_rows = (
@@ -245,11 +246,34 @@ async def get_analysis_status(
         )
     ).scalars().all()
 
+    # 查该 version 的已生成报告(有 → 前端直接可进报告页,不必死等 SSE)
+    from app.models.analysis_report import AnalysisReport as _AR
+    from app.schemas.project import ProjectAnalysisReport
+
+    ar_row = (
+        await session.execute(
+            select(_AR)
+            .where(_AR.project_id == project_id, _AR.version == version)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    latest_report = (
+        ProjectAnalysisReport(
+            version=ar_row.version,
+            total_score=float(ar_row.total_score),
+            risk_level=ar_row.risk_level,
+            created_at=ar_row.created_at,
+        )
+        if ar_row is not None
+        else None
+    )
+
     return AnalysisStatusResponse(
         version=version,
         project_status=project.status,
         started_at=started_at,
         agent_tasks=[AgentTaskResponse.model_validate(t) for t in task_rows],
+        latest_report=latest_report,
     )
 
 

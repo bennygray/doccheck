@@ -110,13 +110,12 @@ describe("ReportPage", () => {
     });
   });
 
-  it("404 显示回退提示", async () => {
+  it("404 显示生成中回退提示(重试窗口内)", async () => {
     vi.spyOn(api, "getReport").mockRejectedValue(new ApiError(404, "nf"));
     renderAt("/reports/1/99");
     await waitFor(() => {
-      expect(
-        screen.getByText(/报告不存在或正在生成/),
-      ).toBeInTheDocument();
+      // 新版:404 时 auto-retry 窗口展示"生成中"状态(含 "生成中" 文案)
+      expect(screen.getByText(/生成中/)).toBeInTheDocument();
     });
   });
 

@@ -142,39 +142,20 @@ async def compare_text(
         actual_role = (selected_pc.evidence_json or {}).get("doc_role", "")
 
     # 3) 从 evidence_json.samples 提取 matches
+    # 注:detection 阶段为 TF-IDF 质量把短段合并(segmenter._merge_short_paragraphs,
+    # 用 \n 连接),sample 里的 a_idx/b_idx 是合并后索引。前端展示用原文段,索引不对齐
+    # → 我们把 a_text/b_text 按 \n 拆回,然后在该 doc 的原文段里精确匹配文本,生成
+    # 一对原文段级 TextMatch(一个合并样本可能派生出多个 match)。
     matches: list[TextMatch] = []
+    samples_raw: list[dict] = []
     if selected_pc and selected_pc.evidence_json:
-        samples = selected_pc.evidence_json.get("samples", [])
-        for s in samples:
-            matches.append(
-                TextMatch(
-                    a_idx=s.get("a_idx", 0),
-                    b_idx=s.get("b_idx", 0),
-                    sim=s.get("sim", 0.0),
-                    label=s.get("label"),
-                    a_text=s.get("a_text"),
-                    b_text=s.get("b_text"),
-                )
-            )
+        samples_raw = selected_pc.evidence_json.get("samples", []) or []
 
-    # 4) 确定 a_idx 对应哪个 bidder (evidence 中 a 对应 bidder_a_id)
-    # PairComparison 的 bidder_a_id 对应 evidence 中的 doc_id_a
+    # 4) 确定翻转方向(请求 bidder_a 可能对应 PC 的 bidder_b)
     pc_bidder_a = selected_pc.bidder_a_id if selected_pc else bidder_a
-    pc_bidder_b = selected_pc.bidder_b_id if selected_pc else bidder_b
-    # 映射:如果请求的 bidder_a 是 pc 中的 bidder_b,需要翻转
     flip = pc_bidder_a != bidder_a
 
-    if flip:
-        # 翻转 matches 的 a_idx/b_idx
-        matches = [
-            TextMatch(
-                a_idx=m.b_idx, b_idx=m.a_idx, sim=m.sim, label=m.label,
-                a_text=m.b_text, b_text=m.a_text,
-            )
-            for m in matches
-        ]
-
-    # 5) 加载双方段落
+    # 5) 加载双方段落(先加载,后续还原合并 sample 要用)
     doc_id_a = (selected_pc.evidence_json or {}).get("doc_id_a") if selected_pc else None
     doc_id_b = (selected_pc.evidence_json or {}).get("doc_id_b") if selected_pc else None
 
@@ -197,6 +178,69 @@ async def compare_text(
     right_paragraphs, total_right = await _load_paragraphs(
         session, doc_id_b, limit, offset
     )
+
+    # 6) 把合并 sample 拆回原文段级 match
+    # 构建 text → paragraph_index 的精确查找(原文段字符串唯一时直接命中)
+    left_text_map: dict[str, int] = {
+        p.text.strip(): p.paragraph_index for p in left_paragraphs
+    }
+    right_text_map: dict[str, int] = {
+        p.text.strip(): p.paragraph_index for p in right_paragraphs
+    }
+
+    for s in samples_raw:
+        raw_a_text = s.get("a_text") or ""
+        raw_b_text = s.get("b_text") or ""
+        # detection 侧是用请求的 pc_bidder_a 的视角;如果 flip,这里要换边
+        a_text = raw_b_text if flip else raw_a_text
+        b_text = raw_a_text if flip else raw_b_text
+        # flip 时 a_idx/b_idx 也要互换,保证返给前端的索引和请求的 bidder_a/b 一致
+        orig_a_idx = s.get("b_idx" if flip else "a_idx", 0)
+        orig_b_idx = s.get("a_idx" if flip else "b_idx", 0)
+
+        def _fallback() -> None:
+            matches.append(
+                TextMatch(
+                    a_idx=orig_a_idx,
+                    b_idx=orig_b_idx,
+                    sim=s.get("sim", 0.0),
+                    label=s.get("label"),
+                    a_text=a_text,
+                    b_text=b_text,
+                )
+            )
+
+        # 按 \n 拆分(segmenter._merge_short_paragraphs 用 \n 连接),对两边分别展开
+        a_parts = [x.strip() for x in a_text.split("\n") if x.strip()]
+        b_parts = [x.strip() for x in b_text.split("\n") if x.strip()]
+
+        # 无法拆分(单段或空文本)或 document_texts 未加载 → 直接用原 idx
+        if not a_parts or not b_parts or not left_text_map or not right_text_map:
+            _fallback()
+            continue
+
+        # 配对策略:按顺序 zip,逐对建立 match(合并时左右通常等长 2:2)
+        emitted = 0
+        pair_len = min(len(a_parts), len(b_parts))
+        for k in range(pair_len):
+            a_idx = left_text_map.get(a_parts[k])
+            b_idx = right_text_map.get(b_parts[k])
+            if a_idx is None or b_idx is None:
+                continue
+            matches.append(
+                TextMatch(
+                    a_idx=a_idx,
+                    b_idx=b_idx,
+                    sim=s.get("sim", 0.0),
+                    label=s.get("label"),
+                    a_text=a_parts[k],
+                    b_text=b_parts[k],
+                )
+            )
+            emitted += 1
+        # 一个 split 都没拆出来 → 保底回原合并 idx
+        if emitted == 0:
+            _fallback()
 
     has_more = (total_left > offset + limit) or (total_right > offset + limit)
 

@@ -5,7 +5,7 @@
  * - 点击调 POST /analysis/start;409 幂等
  */
 import { useState } from "react";
-import { Alert, Button, Tooltip } from "antd";
+import { Alert, App, Button, Tooltip } from "antd";
 import { PlayCircleOutlined } from "@ant-design/icons";
 
 import { ApiError, api } from "../../services/api";
@@ -39,6 +39,7 @@ export function StartDetectButton({
 }: StartDetectButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { message } = App.useApp();
 
   const bidderCount = bidders.length;
   const nonTerminal = bidders.filter(
@@ -65,12 +66,17 @@ export function StartDetectButton({
   const onClick = async () => {
     setError(null);
     setLoading(true);
+    const hide = message.loading("检测已启动,正在初始化...", 0);
     try {
       const resp = await api.startAnalysis(projectId);
+      hide();
+      void message.success(`检测已启动(版本 v${resp.version})`);
       onStarted?.(resp.version);
     } catch (err) {
+      hide();
       if (err instanceof ApiError) {
         if (err.status === 409) {
+          void message.info("已在检测中,进度面板已展开");
           setError("已在检测中,请查看进度");
           onStarted?.(-1);
         } else {
@@ -79,9 +85,11 @@ export function StartDetectButton({
               ? err.detail
               : JSON.stringify(err.detail);
           setError(msg || "启动失败");
+          void message.error(msg || "启动失败");
         }
       } else {
         setError("启动失败");
+        void message.error("启动失败");
       }
     } finally {
       setLoading(false);

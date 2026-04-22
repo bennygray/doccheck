@@ -54,10 +54,14 @@ describe("DetectProgressIndicator", () => {
     expect(bar).toHaveAttribute("aria-valuenow", "30");
   });
 
-  it("离线状态显示轮询提示", () => {
+  it("离线状态显示轮询提示(running 态)", () => {
+    // 新版:离线 banner 只在未全完成时展示(allDone 后已在绿卡,不再提示离线)
     render(
       <DetectProgressIndicator
-        agentTasks={[mkTask({ status: "succeeded" })]}
+        agentTasks={[
+          mkTask({ id: 1, status: "succeeded" }),
+          mkTask({ id: 2, status: "pending" }),
+        ]}
         connected={false}
         latestReport={null}
       />,

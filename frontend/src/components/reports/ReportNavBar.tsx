@@ -87,12 +87,11 @@ export function ReportNavBar({
             key: t.key,
             label: <Link to={tabHref[t.key]}>{t.label}</Link>,
           }))}
+          /* 去掉四角圆边框,改成一条底线 + 当前深蓝下划线;更克制,不 AI 味。 */
           tabBarStyle={{
             margin: 0,
-            background: "#ffffff",
-            border: "1px solid #e4e7ed",
-            borderRadius: "8px 8px 0 0",
-            padding: "0 16px",
+            padding: "0 4px",
+            borderBottom: "1px solid #e4e7ed",
           }}
         />
       ) : null}

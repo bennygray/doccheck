@@ -76,9 +76,24 @@ export default function PriceRulesPanel({ projectId, refreshKey }: Props) {
         data-testid="price-rules-empty"
         image={Empty.PRESENTED_IMAGE_SIMPLE}
         description={
-          <span style={{ color: "#8a919d", fontSize: 13 }}>
-            等待 LLM 识别报价表结构...
-          </span>
+          <div
+            style={{
+              color: "#8a919d",
+              fontSize: 13,
+              lineHeight: 1.7,
+              maxWidth: 420,
+              margin: "0 auto",
+            }}
+          >
+            <div style={{ fontWeight: 500, color: "#5c6370", marginBottom: 4 }}>
+              暂无报价规则
+            </div>
+            <div>
+              系统仅对角色为<b>「报价」</b>的 <b>.xlsx</b> 文件自动识别表结构。
+              当前投标人的报价文件若为 .docx/.pdf,请转成 .xlsx 重新上传,
+              或手工录入规则。
+            </div>
+          </div>
         }
         style={{ padding: "20px 0" }}
       />

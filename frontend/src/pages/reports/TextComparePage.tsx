@@ -10,8 +10,8 @@
  * data-testid 保留:left-panel / right-panel
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
-import { Card, Empty, Select, Spin, Typography } from "antd";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Button, Card, Empty, Select, Space, Spin, Typography } from "antd";
 
 import CompareSubTabs from "../../components/reports/CompareSubTabs";
 import ReportNavBar from "../../components/reports/ReportNavBar";
@@ -39,6 +39,32 @@ export function TextComparePage() {
   const [data, setData] = useState<TextCompareResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 无 bidder 参数时,自动从 pair 列表挑第一个 text_similarity pair
+  const [autoResolving, setAutoResolving] = useState(false);
+  const [noPairsFallback, setNoPairsFallback] = useState(false);
+
+  useEffect(() => {
+    if (bidderA && bidderB) return;
+    if (!projectId || !version) return;
+    setAutoResolving(true);
+    api
+      .getReportPairs(projectId, version, "score_desc", 100)
+      .then((r) => {
+        const firstTextPair = r.items.find(
+          (it) => it.dimension === "text_similarity" && it.score > 0,
+        );
+        if (firstTextPair) {
+          const next = new URLSearchParams(searchParams);
+          next.set("bidder_a", String(firstTextPair.bidder_a_id));
+          next.set("bidder_b", String(firstTextPair.bidder_b_id));
+          setSearchParams(next, { replace: true });
+        } else {
+          setNoPairsFallback(true);
+        }
+      })
+      .catch(() => setNoPairsFallback(true))
+      .finally(() => setAutoResolving(false));
+  }, [bidderA, bidderB, projectId, version, searchParams, setSearchParams]);
 
   const [leftMatchMap, setLeftMatchMap] = useState<Map<number, TextMatch>>(new Map());
   const [rightMatchMap, setRightMatchMap] = useState<Map<number, TextMatch>>(new Map());
@@ -123,11 +149,32 @@ export function TextComparePage() {
           tabKey="compare"
         />
         <Card>
-          <Empty
-            description={
-              <span style={{ color: "#c53030" }}>缺少 bidder_a / bidder_b 参数</span>
-            }
-          />
+          {autoResolving ? (
+            <div style={{ padding: 48, textAlign: "center" }}>
+              <Spin tip="正在自动选择一对投标人..." />
+            </div>
+          ) : noPairsFallback ? (
+            <Empty
+              description={
+                <Space direction="vertical" size={8} align="center">
+                  <span style={{ color: "#5c6370" }}>
+                    暂无可对比的文本相似投标人对
+                  </span>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    请在"对比总览"选择一对投标人,或等待检测完成
+                  </Typography.Text>
+                </Space>
+              }
+            >
+              <Link to={`/reports/${projectId}/${version}/compare`}>
+                <Button type="primary">去对比总览</Button>
+              </Link>
+            </Empty>
+          ) : (
+            <div style={{ padding: 48, textAlign: "center" }}>
+              <Spin tip="加载中..." />
+            </div>
+          )}
         </Card>
       </div>
     );
@@ -207,6 +254,47 @@ export function TextComparePage() {
           </div>
         ) : (
           <>
+            {/* 极简相似度图例:告诉用户颜色深浅的含义,避免猜色 */}
+            <div
+              style={{
+                padding: "10px 20px",
+                borderBottom: "1px solid #f0f2f5",
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                flexWrap: "wrap",
+                fontSize: 12,
+                color: "#5c6370",
+              }}
+            >
+              <span>相似度</span>
+              {[
+                { label: "≥ 90%", bg: simBgColor(0.95) },
+                { label: "75~90%", bg: simBgColor(0.8) },
+                { label: "60~75%", bg: simBgColor(0.65) },
+                { label: "< 60%", bg: simBgColor(0.5) },
+              ].map((s) => (
+                <span
+                  key={s.label}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: 14,
+                      height: 10,
+                      borderRadius: 2,
+                      background: s.bg,
+                      border: "1px solid #ebedf0",
+                    }}
+                  />
+                  {s.label}
+                </span>
+              ))}
+              <span style={{ marginLeft: "auto", color: "#8a919d" }}>
+                点击高亮段落可跳转至对侧匹配位置
+              </span>
+            </div>
             <div
               style={{
                 display: "flex",

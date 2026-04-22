@@ -1,5 +1,25 @@
 import "@testing-library/jest-dom/vitest";
 
+// @ant-design/charts 依赖 canvas,jsdom 不支持 → 测试里返占位 div
+import { vi } from "vitest";
+vi.mock("@ant-design/charts", () => {
+  const React = require("react");
+  const stub = (props: { data?: unknown }) =>
+    React.createElement("div", {
+      "data-testid": "chart-stub",
+      "data-chart-items": Array.isArray(props.data) ? props.data.length : 0,
+    });
+  return {
+    Radar: stub,
+    Column: stub,
+    Bar: stub,
+    Pie: stub,
+    Line: stub,
+    Gauge: stub,
+    Area: stub,
+  };
+});
+
 // antd v5 的 Grid / ResponsiveObserver 依赖 window.matchMedia,jsdom 不实现 → 补 polyfill
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
   window.matchMedia = (query: string) => ({

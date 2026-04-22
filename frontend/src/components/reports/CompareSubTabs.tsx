@@ -26,10 +26,12 @@ export function CompareSubTabs({ projectId, version, activeKey, extra }: Props) 
       activeKey={activeKey}
       items={items}
       tabBarExtraContent={extra}
+      /* 子 Tab 比主 Tab 更克制:size small + 背景融合父卡 */
+      size="small"
       tabBarStyle={{
         margin: 0,
-        padding: "0 16px",
-        background: "#ffffff",
+        padding: "4px 16px 0",
+        background: "#fafbfc",
         borderBottom: "1px solid #e4e7ed",
       }}
     />

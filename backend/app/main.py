@@ -66,6 +66,29 @@ async def lifespan(app: FastAPI):
         except Exception as exc:  # noqa: BLE001 - scanner 异常不能阻塞启动
             startup_logger.exception("scanner startup failure: %s", exc)
 
+    # admin-llm-config bootstrap:把 DB 里的 LLM 配置推到 runtime settings,
+    # 让同步版 get_llm_provider()(pipeline/Agent 用)也读到最新值。
+    # 失败不阻塞启动(DB 无 llm 段时 read_llm_config 会走 env 回退,无副作用)
+    try:
+        from app.core.config import settings as _settings
+        from app.db.session import async_session
+        from app.services.admin.llm_reader import read_llm_config
+
+        async with async_session() as s:
+            cfg = await read_llm_config(s)
+            if cfg.source == "db":
+                _settings.llm_provider = cfg.provider
+                _settings.llm_api_key = cfg.api_key
+                _settings.llm_model = cfg.model
+                _settings.llm_base_url = cfg.base_url
+                _settings.llm_timeout_s = float(cfg.timeout_s)
+                startup_logger.info(
+                    "admin-llm-config bootstrap: settings overridden from DB (provider=%s)",
+                    cfg.provider,
+                )
+    except Exception as exc:  # noqa: BLE001
+        startup_logger.exception("admin-llm-config bootstrap failure: %s", exc)
+
     yield
 
     # Shutdown

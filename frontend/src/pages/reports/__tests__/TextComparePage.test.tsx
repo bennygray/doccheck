@@ -89,8 +89,16 @@ describe("TextComparePage", () => {
     });
   });
 
-  it("缺少参数 → 错误提示", () => {
+  it("缺少参数 → 自动尝试从 pair 列表挑第一个 text_similarity pair", async () => {
+    // mock pair 列表返空 → 触发 noPairsFallback 提示
+    vi.spyOn(api, "getReportPairs").mockResolvedValue({
+      items: [],
+      total: 0,
+    });
     renderAt("/reports/1/1/compare/text");
-    expect(screen.getByText(/缺少 bidder_a/)).toBeInTheDocument();
+    await waitFor(() => {
+      // 应看到友好的 "去对比总览" 引导,不再是技术性"缺少参数"
+      expect(screen.getByText("去对比总览")).toBeInTheDocument();
+    });
   });
 });

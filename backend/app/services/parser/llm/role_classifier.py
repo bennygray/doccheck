@@ -27,7 +27,10 @@ from app.services.parser.llm.prompts import (
     ROLE_CLASSIFY_SYSTEM_PROMPT,
     ROLE_CLASSIFY_USER_TEMPLATE,
 )
-from app.services.parser.llm.role_keywords import classify_by_keywords
+from app.services.parser.llm.role_keywords import (
+    classify_by_keywords,
+    classify_by_keywords_on_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +120,7 @@ async def _classify_bidder_inner(
             "role_classifier LLM error kind=%s; fallback to keywords",
             result.error.kind,
         )
-        _apply_keyword_fallback(docs)
+        await _apply_keyword_fallback(session, docs)
         await session.commit()
         return ClassifyResult(llm_used=False, documents_updated=len(docs))
 
@@ -126,7 +129,7 @@ async def _classify_bidder_inner(
         logger.warning(
             "role_classifier LLM returned invalid JSON; fallback to keywords"
         )
-        _apply_keyword_fallback(docs)
+        await _apply_keyword_fallback(session, docs)
         await session.commit()
         return ClassifyResult(llm_used=False, documents_updated=len(docs))
 
@@ -151,7 +154,7 @@ async def _classify_bidder_inner(
 
     # LLM 漏返的文档走规则兜底
     if missing_docs:
-        _apply_keyword_fallback(missing_docs)
+        await _apply_keyword_fallback(session, missing_docs)
 
     # 身份信息 → bidder.identity_info
     identity = parsed.get("identity_info")
@@ -169,10 +172,27 @@ async def _classify_bidder_inner(
     return ClassifyResult(llm_used=True, documents_updated=len(docs))
 
 
-def _apply_keyword_fallback(docs: list[BidDocument]) -> None:
-    """对每个 doc 按文件名关键词走 classify_by_keywords,标 role_confidence='low'。"""
+async def _apply_keyword_fallback(
+    session: AsyncSession, docs: list[BidDocument]
+) -> None:
+    """两级关键词兜底(fix-mac-packed-zip-parsing 3.2):
+
+    1. 若 doc.parse_status == 'identified',先读首段正文 ≤1000 字,调
+       ``classify_by_keywords_on_text`` 做正文关键词匹配;命中即用该 role。
+    2. 未命中(或非 identified)再调 ``classify_by_keywords(file_name)``。
+    3. 仍未命中 → role='other'。
+
+    所有兜底路径一律 ``role_confidence='low'``。
+    """
     for doc in docs:
-        doc.file_role = classify_by_keywords(doc.file_name)
+        role: str | None = None
+        if doc.parse_status == "identified":
+            first_text = await _get_first_paragraph(session, doc.id)
+            if first_text:
+                role = classify_by_keywords_on_text(first_text[:1000])
+        if role is None:
+            role = classify_by_keywords(doc.file_name or "")
+        doc.file_role = role or "other"
         doc.role_confidence = "low"
 
 

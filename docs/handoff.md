@@ -11,14 +11,53 @@
 
 | 项 | 值 |
 |---|---|
-| 当前里程碑 | **M4 完成 + V1 全量验收 + admin-llm-config** |
-| 当前 change | `admin-llm-config` 归档完成。Admin 可在 Web UI 配置 LLM provider / api_key / model / base_url / timeout,保存即时生效,无需重启 |
-| 最新 commit | admin-llm-config 归档 |
-| 工作区 | admin-llm-config 全量改动:**后端**:`schemas/admin.py` 扩 `LLMConfigResponse/LLMConfigUpdate/LLMTestRequest/LLMTestResponse` + 新 `services/admin/llm_reader.py`(DB>env>默认 三层 fallback + `mask_api_key` 脱敏末 4 位)+ 新 `services/llm/tester.py`(test_connection 发 ping + max_tokens=1)+ 改 `services/llm/factory.py`(`@lru_cache` → 指纹哈希 dict cache + `invalidate_provider_cache` + 新增 `get_llm_provider_db` 异步 DB 路径)+ `routes/admin.py` 扩 `GET/PUT/POST test` 3 endpoint + Alembic 0010(SystemConfig.config.llm 默认值补写);**前端**:新 `AdminLLMPage.tsx`(provider Select / api_key Password / model / base_url / timeout InputNumber + 测试连接 + 保存 + 恢复默认)+ `App.tsx` 新 `/admin/llm` 路由 + `AppLayout.tsx` 管理子菜单加项 + `api.ts` 新增 3 API 函数 + `types/index.ts` 新增 LLM 类型;**测试**:L1 后端 11 + L1 前端 5 + L2 后端 8 = 24 新增用例,后端全量 1070/1070 绿,前端全量 97/97 绿;**spec sync**:新增 `admin-llm` spec(6 Req/14 Scenario);**L3 手工凭证**:`e2e/artifacts/admin-llm-2026-04-20/README.md` |
+| 当前里程碑 | **M4 完成 + V1 全量验收 + admin-llm-config + fix-mac-packed-zip-parsing** |
+| 当前 change | `fix-mac-packed-zip-parsing` 归档完成。修复 macOS Archive Utility 打包 zip 的 3 个级联缺陷:**打包垃圾静默过滤**(`__MACOSX/`/`._*`/`.DS_Store`/`~$*`/`.~*`/`Thumbs.db`/`.git/` 等不产生 bid_documents 行)+ **ZIP 文件名 UTF-8 优先解码**(macOS 无 flag 场景下 `供应商A/江苏锂源...` 正确还原)+ **role 分类内容关键词兜底**(LLM 失败时两级兜底:正文首段关键词 → 文件名关键词 → "other") |
+| 最新 commit | fix-mac-packed-zip-parsing 归档 |
+| 工作区 | fix-mac-packed-zip-parsing 全量改动:**后端代码**:新 `services/extract/junk_filter.py`(`is_junk_entry` 纯函数 + 三类黑名单) + 改 `services/extract/engine.py`(ZIP 路径 + 7z/rar 路径双插入点 + UTF-8 启发式反向校验 + 归档行审计留痕 `(已过滤 N 个打包垃圾文件)`) + 改 `services/extract/encoding.py`(新增 `_looks_like_utf8` 严格字节模式校验 + `decode_filename` 优先 UTF-8 层) + 改 `services/parser/llm/role_keywords.py`(新增 `classify_by_keywords_on_text` + `classify_by_keywords` 改返 `str|None` 契约) + 改 `services/parser/llm/role_classifier.py`(`_apply_keyword_fallback` 改 async,两级兜底)+ 改 `services/parser/pipeline/run_pipeline.py`(`_phase_extract_content` 按 `file_type` 过滤,不再覆盖归档行 parse_error,端到端修复);**测试**:L1 新增 `test_junk_filter.py`/`test_encoding_utf8_detection.py`/`test_engine_utf8_no_flag.py`/`test_role_classifier_content_fallback.py` 共 ~80 新 case,L2 新增 `test_extract_mac_packed_zip.py`(含手工构造 UTF-8-no-flag ZIP 字节流)/`test_role_classifier_keyword_fallback.py` 共 5 新 case;L1 全量 905/905 绿;L2 受影响子集 34/34 绿;**spec sync**:`file-upload` 加 6 新 Scenario(macOS 场景、4 类垃圾过滤、审计留痕、7z/rar 路径、不误伤),`parser-pipeline` 改 2 个 Requirement 为两级兜底语义 + 补 2 个正文关键词 Scenario;**manual 凭证**:`e2e/artifacts/supplier-ab/after-fix/` JSON(bid_documents 12/14 → 4/4、identify_failed 12 → 0、file_name 乱码 Y → N、role=None 26 → 2、检测报告 section_sim=38.67 text_sim=24.51 非零信号) |
 
 ---
 
-## 2. 本次 session 关键决策(2026-04-20,`admin-llm-config` propose+apply+archive)
+## 2. 本次 session 关键决策(2026-04-23,`fix-mac-packed-zip-parsing` propose+apply+archive)
+
+### 案例触发
+- 真实 A/B zip(`e2e/artifacts/supplier-ab/supplier_A.zip` 166MB / `supplier_B.zip` 9.8MB,macOS Archive Utility 打包)暴露:parser 流水线**静默降级为无意义结果**(bid_documents.role 全 None、identity_info 全 null、检测报告"全零 + 低风险无围标"误导结论)
+- 用户感知:"流程跑不同/卡住了" — 实则流水线跑完但结果全 0
+
+### propose 阶段已敲定(产品/范围级决策)
+- **A/B/C 选项分三层**:A 最小(只修 macOS 那批)、B 完整黑名单(+Windows/Office/VCS,**推荐选中**)、C 白名单严打(被否决:扩展名白名单过不掉 `~$x.docx` 这类恰好是 .docx 的临时文件)
+- **区分"垃圾丢弃" vs "不支持但告知"**:打包垃圾 → 静默丢弃不产 bid_documents 行;非业务扩展名 → 保留 skipped 反馈用户
+- **identity_info 不做规则兜底**:保持 spec 原意("避免精度差导致污染"),follow-up 由 UI/报告侧显示"识别信息缺失"文案
+
+### apply 现场决策
+- **保留 engine.py 既有 GBK 启发式 + 后置 UTF-8 校验**(而非整段删改):零回归路径,Windows GBK 包不受影响
+- **`classify_by_keywords` 契约变更** None on miss(原返 "other"):便于上层两级兜底区分"命中 other" vs "未命中";同步更新唯一 production 调用点 + 2 个测试文件
+- **fixture scope-safe 清理**:共享 dev DB 里有 project 226 的老数据,既有 `test_parser_llm_role_classifier.py` 的 `DELETE WHERE id>0` 会和 FK 冲突;改为按 `User.username` 前缀过滤只删本测试的 seed
+- **端到端修 `_phase_extract_content`**(范围外但必要):真实 A/B 验收暴露 pipeline 把 .zip 归档行也扔给 `extract_content`,标成"未知文件类型 .zip" 覆盖我写入的 "已过滤 N 个" 审计文本;加一行 `file_type.in_([".docx",".xlsx"])` 过滤 + 回归测试
+- **L2 fixture 手工构造 UTF-8-no-flag ZIP**:Python stdlib `zipfile` 对非 ASCII 文件名会强制置位 bit 11,无法原生模拟 macOS 无 flag 场景;手写本地文件头+中心目录+EOCD 精确控制 flag
+- **manual 凭证用 JSON 代截图**:CLI 环境无 GUI,`verify.py` 调真 LLM 跑完整流程把 `bidders_before_detect / documents_A / documents_B / analysis_status / report` JSON 落盘到 `e2e/artifacts/supplier-ab/after-fix/`
+
+### 文档联动
+- **`openspec/specs/file-upload/spec.md`** 改 "压缩包安全解压" Requirement,+6 新 Scenario
+- **`openspec/specs/parser-pipeline/spec.md`** 改 "LLM 角色分类与身份信息提取" + "角色关键词兜底规则" 两个 Requirement
+- **`docs/handoff.md`** 即本次更新
+
+### 发现但 **不在本次 change 范围** 的遗留问题(10 条)
+参见 archive 目录 `openspec/changes/archive/2026-04-23-fix-mac-packed-zip-parsing/design.md` §5"Open Questions" 上下文。总览 + 优先级:
+- **F2 高**:judge LLM 全零/全 skipped 时仍给"无围标"误导结论 — 应返"证据不足"
+- **F1 中**:ProcessPool 崩溃兜底(per-task 进程隔离);A/B 案例靠垃圾过滤"绕过"但根因没修
+- **F3 中**:identity_info NULL 时 UI/报告侧文案降级
+- **N3 中**:大文档(如 161MB docx)下 LLM role_classifier 精度退化(A 全走兜底 low,B 全 high)— 需先开日志调查
+- **N5 中**:共享 dev DB 污染导致 `pytest tests/e2e/` 全量跑不动 — testdb 容器化
+- **N7 低-中**:LLM provider `.complete()` 没统一 `asyncio.wait_for`
+- **N2 低-中**:`ROLE_KEYWORDS` 补 "价格标"/"资信标"(A 的"价格标/资信标"因此没命中 pricing/qualification)
+- **N4 低**:analysis completion 与 report 生成时序不对齐(需加 `report_ready` 字段)
+- **N6 低**:`make_gbk_zip` fixture 实际产出不是声称的东西(flag 被强制置位)— 重写
+- **N8 低**:归档行(.zip)在 UI 的语义模糊 — 按 file_type 折叠
+
+---
+
+## 2.bak_admin-llm-config 上一 session 关键决策(2026-04-20,`admin-llm-config` propose+apply+archive)
 
 ### propose 阶段已敲定(5 产品级决策)
 
@@ -89,6 +128,12 @@
 - **Follow-up(C14)**:跨项目历史共现 / DIMENSION_WEIGHTS 实战调参 / L-9 prompt N-shot 精调
 - **Follow-up(持续)**:Docker kernel-lock 未解(C3~C17 L3 全延续手工凭证)
 - **Follow-up(持续)**:生产部署前 env 覆盖全清单
+- **Follow-up(产品决策搁置,2026-04-22)**:投标包内若报价单为 `.doc/.docx` 而非 `.xlsx`,当前链路**静默 skip**(无报错),导致 price_consistency 维度漏检
+  - 现状代码位置:`run_pipeline.py:_find_pricing_xlsx` 硬过滤 `.xlsx` / `fill_price.py` 仅走 `extract_xlsx` / `price_consistency.py` preflight 找不到时 skip
+  - 已评估两条路径并**搁置**:
+    - 最小止血(1 天):改为显式 failed + UI 提示"报价单非 xlsx 格式,需人工"
+    - 完整方案(6-8 天):抽象 tabular region + docx 表抽取 + LLM 兜底 C(详见此 session 讨论记录)
+  - 触发重启条件:业务侧反馈 docx 报价单出现频率显著上升,或出现因此漏检的围标 case
 
 ---
 
@@ -119,4 +164,4 @@
 | 2026-04-16 | **V1 全量验收测试**:`docs/v1-acceptance-test-report.md` 55/66 通过(96.5% 可执行通过率);2 失败(AT-7.7 LLM 降级 UI / AT-9.2 维度复核);9 阻塞(fixture 不足) |
 | 2026-04-16 | **DEF-007 `fix-l3-acceptance-bugs` 归档**:BUG-2 TEXT_SIM_MIN_DOC_CHARS 500→300;BUG-3 get_current_user 支持 query param token + ExportButton/useDetectProgress SSE URL 追加 token;WARN-1 AdminRulesPage input null→"";L3 11/11 全绿 |
 | 2026-04-16 | **DEF-006 `fix-silent-project-transition-failure` 归档**:run_pipeline 6 处 try_transition_project_ready 加异常保护;trigger.py task 引用持有+done callback 异常日志;4 新增 L1 用例 |
-| 2026-04-16 | **DEF-004 `increase-samples-limit` 归档**:text_similarity samples 10→30, section_similarity 5→15 |
+| 2026-04-23 | **`fix-mac-packed-zip-parsing` 归档**:macOS 打包 zip 的 3 个级联缺陷(打包垃圾 + UTF-8 无 flag 文件名 + role 分类链路断裂)一次修 + bonus 修 phase1 覆盖归档行 parse_error;真 A/B zip 验收 bid_documents 12/14→4/4、identify_failed 12→0、role=None 26→2、检测报告非零信号 |

@@ -37,7 +37,8 @@ from app.core.config import settings
 from app.db.session import async_session
 from app.models.bid_document import BidDocument
 from app.models.bidder import Bidder
-from app.services.extract.encoding import decode_filename
+from app.services.extract.encoding import _looks_like_utf8, decode_filename
+from app.services.extract.junk_filter import is_junk_entry
 from app.services.extract.safety import (
     check_count_budget,
     check_nesting_depth,
@@ -283,6 +284,16 @@ async def _process_one_archive(
     elif archive_row.parse_status == "extracted":
         archive_row.parse_error = None
 
+    # 过滤统计审计留痕(fix-mac-packed-zip-parsing D5)
+    junk_n = int(counters.get("junk_skipped", 0))
+    if junk_n > 0:
+        note = f"(已过滤 {junk_n} 个打包垃圾文件)"
+        archive_row.parse_error = (
+            f"{archive_row.parse_error} {note}"
+            if archive_row.parse_error
+            else note
+        )[:500]
+
     bidder.file_count = (bidder.file_count or 0) + accepted
     await session.commit()
 
@@ -444,22 +455,41 @@ def _extract_zip(
             warn = None
             try:
                 cp437_bytes = info.filename.encode("cp437")
-                gbk_view = cp437_bytes.decode("gbk")
-                # 若 GBK 解出的字符落入"中日韩 / 全角 / 标点"区间,认为是真名
-                if any("\u4e00" <= c <= "\u9fff" for c in gbk_view) or all(
-                    32 <= ord(c) <= 126 for c in gbk_view
-                ):
-                    decoded = gbk_view
-                else:
-                    # GBK decode 出的也是噪声 → 走通用 decode_filename 兜底
-                    decoded, warn = decode_filename(
-                        cp437_bytes, is_utf8_flagged=False
-                    )
+                # 优先:若原字节是合法 UTF-8(macOS Archive Utility 无 flag 场景)
+                # 则直接用 UTF-8 解码。GBK 字节极难满足 UTF-8 字节模式规则,
+                # 所以这个分支对 Windows GBK 包零影响(fix-mac-packed-zip-parsing D3)
+                if _looks_like_utf8(cp437_bytes):
+                    try:
+                        decoded = cp437_bytes.decode("utf-8")
+                    except UnicodeDecodeError:
+                        # _looks_like_utf8 通过但 decode 失败,理论不会发生 → 退回启发式
+                        decoded = None  # type: ignore[assignment]
+                    else:
+                        # 成功解出 UTF-8,跳过 GBK 启发式
+                        cp437_bytes = None  # type: ignore[assignment]
+                if cp437_bytes is not None:
+                    # 原 GBK 启发式:cp437 字节 → GBK 解码 → 检查落点
+                    gbk_view = cp437_bytes.decode("gbk")
+                    if any("\u4e00" <= c <= "\u9fff" for c in gbk_view) or all(
+                        32 <= ord(c) <= 126 for c in gbk_view
+                    ):
+                        decoded = gbk_view
+                    else:
+                        # GBK decode 出的也是噪声 → 走通用 decode_filename 兜底
+                        decoded, warn = decode_filename(
+                            cp437_bytes, is_utf8_flagged=False
+                        )
             except (UnicodeEncodeError, UnicodeDecodeError):
                 # info.filename 含真 unicode 字符(>0xFF),不能 cp437 编 → 信原值
                 pass
             if not decoded or decoded.endswith("/"):
                 # 目录 entry,跳过(下层文件 entry 自带相对路径会建目录)
+                continue
+
+            # 打包垃圾(macOS __MACOSX/._x / .DS_Store / Office ~$x / VCS / 编辑器残留):
+            # 静默丢弃,不写盘也不产生 bid_documents 行(fix-mac-packed-zip-parsing D5)
+            if is_junk_entry(decoded):
+                counters["junk_skipped"] = counters.get("junk_skipped", 0) + 1
                 continue
 
             # 路径安全
@@ -715,6 +745,15 @@ def _walk_extracted_dir(
     """7z/rar 一次性 extractall 后,扫描产物目录建 child rows + 处理嵌套。"""
     for path in extract_root.rglob("*"):
         if path.is_dir():
+            continue
+        # 打包垃圾(7z/rar 路径;相对 extract_root 判定)
+        relative_for_junk = str(path.relative_to(extract_root))
+        if is_junk_entry(relative_for_junk):
+            try:
+                path.unlink()
+            except OSError:
+                pass
+            counters["junk_skipped"] = counters.get("junk_skipped", 0) + 1
             continue
         counters["count"] += 1
         ok, reason = check_count_budget(counters["count"])

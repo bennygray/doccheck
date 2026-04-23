@@ -49,6 +49,26 @@ VALID_ROLES = frozenset(
 )
 
 
+# N3 observability:典型 cp850-decoded-GBK mojibake 片段,用于 file_name_has_mojibake 粗判。
+_MOJIBAKE_MARKERS: tuple[str, ...] = (
+    "µ▒", "µ£", "µ¥", "µ¡", "µ£", "µà", "µ¿", "µ╡",
+    "Φï", "Φ¿", "Φ╡", "Φí",
+    "Θö", "Θ£", "ΘÖ", "Θ¢",
+    "σ┐", "σ║", "σ£", "σ╣", "σ╕", "σÆ",
+    "Σ╗", "Σ╕", "Σ╜",
+)
+
+
+def _looks_mojibake(name: str) -> bool:
+    """粗判文件名是否疑似 cp850→GBK 乱码(零依赖,诊断用)。
+
+    只在 N3 observability info 日志里消费;误判不影响任何业务控制流。
+    """
+    if not name:
+        return False
+    return any(marker in name for marker in _MOJIBAKE_MARKERS)
+
+
 @dataclass(frozen=True)
 class ClassifyResult:
     # 是否成功走 LLM 分支(True) vs 走规则兜底(False)
@@ -96,9 +116,12 @@ async def _classify_bidder_inner(
 
     # 构造 LLM 输入:每个文档首段文本(前 500 字符)
     files_block_parts: list[str] = []
+    snippet_empty = 0
     for doc in docs:
         first_text = await _get_first_paragraph(session, doc.id)
         snippet = (first_text or "")[:500]
+        if not snippet.strip():
+            snippet_empty += 1
         files_block_parts.append(
             f"- document_id={doc.id}  name={doc.file_name!r}\n  first_text: {snippet}"
         )
@@ -106,6 +129,16 @@ async def _classify_bidder_inner(
 
     user_msg = ROLE_CLASSIFY_USER_TEMPLATE.format(
         file_count=len(docs), files_block=files_block
+    )
+
+    # N3 observability:input shape(files / 空 snippet / prompt 字符数 / 文件名是否乱码)
+    logger.info(
+        "role_classifier input files=%d snippet_empty=%d total_prompt_chars=%d "
+        "file_name_has_mojibake=%s",
+        len(docs),
+        snippet_empty,
+        len(user_msg),
+        any(_looks_mojibake(d.file_name or "") for d in docs),
     )
 
     result = await llm.complete(
@@ -129,8 +162,11 @@ async def _classify_bidder_inner(
 
     parsed = _parse_llm_json(result.text)
     if parsed is None:
+        # N3 observability:raw_text 前 200 字符帮助诊断截断模式(H3 鉴别)
         logger.warning(
-            "role_classifier LLM returned invalid JSON; fallback to keywords"
+            "role_classifier LLM returned invalid JSON; fallback to keywords "
+            "raw_text_head=%r",
+            (result.text or "")[:200],
         )
         await _apply_keyword_fallback(session, docs)
         await session.commit()
@@ -145,6 +181,19 @@ async def _classify_bidder_inner(
         if isinstance(doc_id, int) and role in VALID_ROLES:
             conf = confidence if confidence in ("high", "low") else "high"
             roles_map[doc_id] = (role, conf)
+
+    # N3 observability:output confidence mix(high / low / LLM 漏返)
+    # 只统计 docs 集合内的 doc_id(避免 LLM 幻想 id 污染 low 计数)
+    docs_ids = {d.id for d in docs}
+    high_count = sum(1 for did, (_, c) in roles_map.items() if did in docs_ids and c == "high")
+    low_count = sum(1 for did, (_, c) in roles_map.items() if did in docs_ids and c == "low")
+    missing_count = len(docs) - sum(1 for did in roles_map if did in docs_ids)
+    logger.info(
+        "role_classifier output llm_confidence_high=%d low=%d missing=%d",
+        high_count,
+        low_count,
+        missing_count,
+    )
 
     missing_docs: list[BidDocument] = []
     for doc in docs:

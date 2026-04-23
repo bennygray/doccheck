@@ -22,6 +22,7 @@ from app.services.detect.context import (
     AgentRunResult,
     PreflightResult,
 )
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.registry import register_agent
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         records_a = await extract_bidder_metadata(ctx.session, ctx.bidder_a.id)
         records_b = await extract_bidder_metadata(ctx.session, ctx.bidder_b.id)
         dim_result = detect_time_collisions(records_a, records_b, cfg)
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise,防通用 except 吞 skipped 语义
+        raise
     except Exception as e:  # noqa: BLE001
         logger.exception("metadata_time 检测异常")
         evidence = {

@@ -31,6 +31,7 @@ from app.services.detect.context import (
     AgentRunResult,
     PreflightResult,
 )
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.registry import register_agent
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         summaries = await aggregate_bidder_totals(
             ctx.session, ctx.project_id, cfg
         )
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise
+        raise
     except Exception as e:  # noqa: BLE001 - 兜底:整 Agent 标 skip + error
         logger.exception("price_anomaly extractor 异常")
         evidence = {
@@ -143,6 +147,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
     # 4) 正常路径:均值偏离判定
     try:
         result = detect_outliers(summaries, cfg)
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise(price_anomaly 的第 2 处 try/except)
+        raise
     except Exception as e:  # noqa: BLE001
         logger.exception("price_anomaly detector 异常")
         evidence = {

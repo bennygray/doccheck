@@ -36,6 +36,10 @@ class AnalysisStatusResponse(BaseModel):
     # 已生成的最新报告元数据(启动前 / 生成中 → None)
     # 让前端刷新页面后也能立刻拿到"可查看报告"标志,不再死等 SSE report_ready 重放
     latest_report: "ProjectAnalysisReport | None" = None
+    # honest-detection-results N4: 当前 version 是否已生成 AnalysisReport
+    # 客户端据此区分"agent 跑完但 judge 还在处理" vs "完全完成"
+    # 与 latest_report 的区别:即使 judge 完成 version=None 时也可为 true(防御值总是 False)
+    report_ready: bool = False
 
 
 AnalysisEventType = Literal[

@@ -1,10 +1,11 @@
 /**
- * L1: FileTree (C4 file-upload §10.7)
+ * L1: FileTree (C4 file-upload §10.7 + honest-detection-results N8)
  *
  * 覆盖:空数据 / 扁平归档 / 嵌套(按 source_archive 分组)三种渲染。
+ * honest-detection-results N8:归档行默认折叠,展开后显示子文件。
  */
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import FileTree from "./FileTree";
 import type { BidDocument } from "../../types";
 
@@ -32,7 +33,7 @@ describe("FileTree", () => {
     expect(screen.getByTestId("filetree-empty")).toBeInTheDocument();
   });
 
-  it("含归档行 + 子文件按 source_archive 归组", () => {
+  it("含归档行默认折叠,展开后看到子文件", () => {
     const docs: BidDocument[] = [
       makeDoc({
         id: 1,
@@ -57,14 +58,28 @@ describe("FileTree", () => {
       }),
     ];
     render(<FileTree documents={docs} />);
-    // 重设计后:图标用 antd Icon(FolderOpenOutlined/FileOutlined)替代 emoji;
-    // 文件名以纯文本形式出现
+
+    // Collapse header 可见,显示"原始压缩包 (1 个)"
+    expect(screen.getByTestId("archives-collapse")).toBeInTheDocument();
+    expect(screen.getByText(/原始压缩包/)).toBeInTheDocument();
+    expect(screen.getByText(/1/)).toBeInTheDocument();
+
+    // honest-detection-results N8:默认折叠状态下,归档行 + 子文件不可见
+    expect(screen.queryByText("main.zip")).not.toBeInTheDocument();
+    expect(screen.queryByText("ok.docx")).not.toBeInTheDocument();
+    expect(screen.queryByText("sub.xlsx")).not.toBeInTheDocument();
+
+    // 点击 Collapse header 展开
+    const header = document.querySelector(".ant-collapse-header") as HTMLElement;
+    fireEvent.click(header);
+
+    // 展开后归档行 + 子文件可见
     expect(screen.getByText("main.zip")).toBeInTheDocument();
     expect(screen.getByText("ok.docx")).toBeInTheDocument();
     expect(screen.getByText("sub.xlsx")).toBeInTheDocument();
   });
 
-  it("归档行 needs_password 显示对应徽章", () => {
+  it("归档行 needs_password 展开后显示对应徽章", () => {
     const docs: BidDocument[] = [
       makeDoc({
         id: 5,
@@ -75,6 +90,30 @@ describe("FileTree", () => {
       }),
     ];
     render(<FileTree documents={docs} />);
-    expect(screen.getByTestId("status-badge-needs_password")).toBeInTheDocument();
+    // 默认折叠,徽章先不可见
+    expect(
+      screen.queryByTestId("status-badge-needs_password"),
+    ).not.toBeInTheDocument();
+    // 展开
+    const header = document.querySelector(".ant-collapse-header") as HTMLElement;
+    fireEvent.click(header);
+    expect(
+      screen.getByTestId("status-badge-needs_password"),
+    ).toBeInTheDocument();
+  });
+
+  // honest-detection-results N8: 无归档不渲染 Collapse(避免空入口)
+  it("只有 docx 无 zip 归档时不渲染 Collapse 入口", () => {
+    const docs: BidDocument[] = [
+      makeDoc({
+        id: 6,
+        file_name: "lone.docx",
+        file_type: ".docx",
+        source_archive: "lone.docx",
+      }),
+    ];
+    render(<FileTree documents={docs} />);
+    expect(screen.queryByTestId("archives-collapse")).not.toBeInTheDocument();
+    expect(screen.queryByText(/原始压缩包/)).not.toBeInTheDocument();
   });
 });

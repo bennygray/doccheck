@@ -28,6 +28,7 @@ import {
   DeleteOutlined,
   DollarOutlined,
   FileTextOutlined,
+  InfoCircleOutlined,
   LockOutlined,
   NumberOutlined,
   PlusOutlined,
@@ -594,6 +595,29 @@ export default function ProjectDetailPage() {
       >
         {drawerBidder ? (
           <Space direction="vertical" size={20} style={{ width: "100%" }}>
+            {/* honest-detection-results F3: 身份信息缺失提示 */}
+            {drawerBidder.identity_info_status === "insufficient" && (
+              <div
+                style={{
+                  padding: 12,
+                  background: "#eef4fb",
+                  border: "1px solid #bcd7f0",
+                  borderRadius: 6,
+                }}
+                data-testid={`identity-info-missing-${drawerBidder.id}`}
+              >
+                <Space size={8} align="start">
+                  <InfoCircleOutlined
+                    style={{ color: "#1d4584", marginTop: 3 }}
+                  />
+                  <Typography.Text style={{ fontSize: 13 }}>
+                    身份信息缺失:LLM 未能从投标文件中识别出投标人身份信息,
+                    error_consistency 等依赖身份的维度已降级
+                  </Typography.Text>
+                </Space>
+              </div>
+            )}
+
             {/* 解密提示 */}
             {drawerBidder.parse_status === "needs_password" && (
               <div

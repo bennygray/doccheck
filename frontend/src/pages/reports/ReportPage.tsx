@@ -48,6 +48,8 @@ const RISK_META: Record<
   high: { label: "高风险", color: "#c53030", bg: "#fdecec" },
   medium: { label: "中风险", color: "#c27c0e", bg: "#fcf3e3" },
   low: { label: "低风险", color: "#2d7a4a", bg: "#e8f3ec" },
+  // honest-detection-results: 新增"证据不足"档,中性灰,区别于 low 的绿
+  indeterminate: { label: "证据不足", color: "#8a919d", bg: "#f5f7fa" },
 };
 
 const DIMENSION_LABELS: Record<string, string> = {
@@ -94,6 +96,10 @@ export function ReportPage() {
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // honest-detection-results F3: 项目下任一 bidder identity_info_status=insufficient 时
+  // error_consistency 维度显示降级提示
+  const [hasInsufficientIdentity, setHasInsufficientIdentity] =
+    useState<boolean>(false);
 
   // 404 自动重试:刚点完"检测完成"就进来时,判 LLM 还在 3-10s 跑,AR 行没写入 DB。
   // 最多重试 10 次 × 2s = 20s 窗口,够覆盖 judge.
@@ -111,9 +117,29 @@ export function ReportPage() {
         setError(null);
         setRetryCount(0);
       })
-      .catch((err) => {
+      .catch(async (err) => {
         if (err instanceof ApiError && err.status === 404) {
-          setError("报告正在生成,请稍候...");
+          // honest-detection-results N4: 先问 /analysis/status 看 judge 进度,
+          // 给用户更精确的文案(agent 还没完 vs judge 还在写报告)
+          try {
+            const status = await api.getAnalysisStatus(projectId);
+            if (status.report_ready) {
+              // 极少数 race:report_ready=true 但 /reports 404 — 兜底到通用文案
+              setError("报告正在生成,请稍候...");
+            } else {
+              const agents = status.agent_tasks ?? [];
+              const unfinished = agents.filter(
+                (t) => t.status === "pending" || t.status === "running",
+              ).length;
+              if (unfinished > 0) {
+                setError(`检测进行中,剩余 ${unfinished} 个维度...`);
+              } else {
+                setError("检测已完成,LLM 综合研判中...");
+              }
+            }
+          } catch {
+            setError("报告正在生成,请稍候...");
+          }
         } else {
           setError("加载报告失败");
         }
@@ -124,6 +150,22 @@ export function ReportPage() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // honest-detection-results F3: 拉项目详情判断 identity_info_status
+  useEffect(() => {
+    if (!projectId) return;
+    api
+      .getProject(projectId)
+      .then((p) => {
+        const anyInsufficient = (p.bidders ?? []).some(
+          (b) => b.identity_info_status === "insufficient",
+        );
+        setHasInsufficientIdentity(anyInsufficient);
+      })
+      .catch(() => {
+        /* 失败静默降级:不显示提示 */
+      });
+  }, [projectId]);
 
   // 如果 404 且未达重试上限 → 2s 后自动重试
   useEffect(() => {
@@ -208,7 +250,9 @@ export function ReportPage() {
   }
 
   const isLlmFallback = report.llm_conclusion.startsWith(LLM_FALLBACK_PREFIX);
-  const risk = RISK_META[report.risk_level as RiskLevel] ?? RISK_META.low;
+  // honest-detection-results: report.risk_level 收紧为 RiskLevel,Record 索引保证非 undefined
+  // 删除了 `as RiskLevel` cast 和 `?? RISK_META.low` 运行期兜底
+  const risk = RISK_META[report.risk_level];
   const ironcladCount = report.dimensions.filter((d) => d.is_ironclad).length;
 
   return (
@@ -323,7 +367,11 @@ export function ReportPage() {
       >
         <div style={{ padding: "8px 0" }}>
           {report.dimensions.map((d) => (
-            <DimensionRow key={d.dimension} dim={d} />
+            <DimensionRow
+              key={d.dimension}
+              dim={d}
+              hasInsufficientIdentity={hasInsufficientIdentity}
+            />
           ))}
         </div>
       </Card>
@@ -498,9 +546,19 @@ function RadarCard({
 }
 
 /* ───────── 维度行(带横向进度条) ───────── */
-function DimensionRow({ dim: d }: { dim: ReportDimension }) {
+export function DimensionRow({
+  dim: d,
+  hasInsufficientIdentity = false,
+}: {
+  dim: ReportDimension;
+  hasInsufficientIdentity?: boolean;
+}) {
   const color = scoreColor(d.best_score);
   const counts = d.status_counts;
+  // honest-detection-results F3: 对 error_consistency 维度,项目下任一 bidder
+  // identity_info 缺失时显示降级提示
+  const showIdentityDegraded =
+    d.dimension === "error_consistency" && hasInsufficientIdentity;
 
   return (
     <div
@@ -508,12 +566,19 @@ function DimensionRow({ dim: d }: { dim: ReportDimension }) {
         padding: "14px 20px",
         borderBottom: "1px solid #f0f2f5",
         display: "flex",
-        alignItems: "center",
-        gap: 20,
+        flexDirection: "column",
+        gap: 10,
         background: d.is_ironclad ? "#fef8f8" : undefined,
         borderLeft: d.is_ironclad ? "3px solid #c53030" : "3px solid transparent",
       }}
     >
+     <div
+       style={{
+         display: "flex",
+         alignItems: "center",
+         gap: 20,
+       }}
+     >
       {/* 左:维度名 + 代号 + 铁证 Tag */}
       <div style={{ flex: "0 0 200px", minWidth: 0 }}>
         <Typography.Text strong style={{ fontSize: 14, display: "block" }}>
@@ -592,6 +657,18 @@ function DimensionRow({ dim: d }: { dim: ReportDimension }) {
           </span>
         </Tooltip>
       </div>
+     </div>
+      {/* honest-detection-results F3: error_consistency 降级提示 */}
+      {showIdentityDegraded && (
+        <Alert
+          type="info"
+          showIcon
+          icon={<ExclamationCircleOutlined />}
+          message="本维度在身份信息缺失情况下已降级判定,结论仅供参考"
+          data-testid="dimension-identity-degraded"
+          style={{ margin: 0 }}
+        />
+      )}
     </div>
   );
 }

@@ -254,13 +254,14 @@ preflight 抛异常 → 视为 `skip "preflight 异常: <error>"`,不视为 fail
    - `score` = 该维度的 `per_dim_max[dim]`(已在步骤 2a 计算)
    - `evidence_json` = `{"source": "pair_aggregation", "best_score": <float>, "has_iron_evidence": <bool>, "pair_count": <int>, "ironclad_pair_count": <int>}`
    - 写入 MUST 幂等:若 `(project_id, version, dimension)` 已有 OA 行则跳过
-4. 构造 **L-9 LLM 综合研判** 输入(同原步骤 3,编号后移)
-5. LLM 调用(同原步骤 4)
-6. **clamp 守护**(同原步骤 5)
-7. **失败兜底**(同原步骤 6)
-8. INSERT AnalysisReport(同原步骤 7)
-9. UPDATE `project.status = 'completed'` / `project.risk_level`(同原步骤 8)
-10. broker publish `report_ready`(同原步骤 9)
+4. **[新增] 证据不足前置判定**(honest-detection-results):调 `_has_sufficient_evidence(agent_tasks, pair_comparisons, overall_analyses)`(含铁证短路 + SIGNAL_AGENTS 白名单,见"证据不足判定规则"Requirement);若返 False → **跳过步骤 5-7** 的 LLM 调用,直接 `final_total=formula_total`、`final_level='indeterminate'`、`llm_conclusion="证据不足,无法判定围标风险(有效信号维度全部为零)"`,跳到步骤 8
+5. 构造 **L-9 LLM 综合研判** 输入(同原步骤 3,编号后移)
+6. LLM 调用(同原步骤 4)
+7. **clamp 守护**(同原步骤 5)
+8. **失败兜底**(同原步骤 6;对 indeterminate 分支不触发因已跳过 LLM)
+9. INSERT AnalysisReport(同原步骤 7)
+10. UPDATE `project.status = 'completed'` / `project.risk_level`(同原步骤 8,支持 indeterminate)
+11. broker publish `report_ready`(同原步骤 9)
 
 检测完成后,`overall_analyses` 表 MUST 包含该 version 的全部 11 个维度(4 global + 7 pair),使维度级复核 API 对所有维度可用。
 
@@ -298,6 +299,11 @@ preflight 抛异常 → 视为 `skip "preflight 异常: <error>"`,不视为 fail
 - **WHEN** formula_total=88(high + 任一 PC.is_ironclad=true),LLM 返回 `{suggested_total: 60, conclusion: "...", reasoning: "..."}`
 - **THEN** clamp step1 max(88, 60)=88;step2 铁证守护 max(88, 85)=88;final_total=88,final_level=`high`;LLM 降分完全无效
 
+#### Scenario: 证据不足触发 indeterminate 分支
+
+- **WHEN** 11 个 AgentTask 里 3 个 skipped + 8 个 succeeded 但 score 全零;judge 运行
+- **THEN** LLM 不被调用;AnalysisReport.risk_level='indeterminate'、total_score=0、llm_conclusion 含"证据不足,无法判定";project.risk_level='indeterminate'
+
 #### Scenario: LLM 重试全失败走降级兜底
 
 - **WHEN** formula_total=72、level=high、有铁证;`call_llm_judge` 重试 `LLM_JUDGE_MAX_RETRY` 次后仍返回 `(None, None)`
@@ -322,6 +328,80 @@ preflight 抛异常 → 视为 `skip "preflight 异常: <error>"`,不视为 fail
 
 - **WHEN** 所有 AgentTask 均 skipped(数据不足),formula_total=0、无铁证
 - **THEN** AnalysisReport 生成,final_total=0,final_level=`low`;若 LLM 启用且成功,conclusion 可基于"数据不足"摘要产文;若 LLM 失败,llm_conclusion=fallback_conclusion 模板明示"数据不足"
+
+---
+
+### Requirement: 证据不足判定规则
+
+系统 SHALL 在调用 L-9 LLM 综合研判**之前**先做"证据不足"前置判定:
+
+1. **铁证短路**:若当前版本的 `PairComparison` 任一 `is_ironclad=True`,或 `OverallAnalysis` 任一 `evidence_json.has_iron_evidence=True` → 直接判定为**有足够证据**(铁证本身就是最强信号),走原 LLM 路径
+2. **信号型 agent 判定**:否则过滤 AgentTask 里 `status='succeeded'` 且 `agent_name in SIGNAL_AGENTS` 的任务作为"有效信号"
+   - `SIGNAL_AGENTS = {"text_similarity", "section_similarity", "structure_similarity", "image_reuse", "style", "error_consistency"}` — 这些 agent 的 score=0 表示"真的没算出信号"
+   - **不在**该集合内的 agent(`metadata_author / metadata_time / metadata_machine / price_consistency`)**不计入**判定分母 — 这些 agent 的 score=0 表示"查了没发现碰撞/异常",不代表"无信号",否则会误标真实干净项目为 indeterminate
+3. 若有效信号为空 **或** 全部 `score` 为 0(或 NULL) → 判定为**证据不足**,跳过 LLM 调用,直接设 `AnalysisReport.risk_level='indeterminate'` + `llm_conclusion="证据不足,无法判定围标风险(有效信号维度全部为零)"`,`total_score` 按公式照算
+
+证据不足的判定函数 `_has_sufficient_evidence(agent_tasks, pair_comparisons, overall_analyses) -> bool` 纯函数,位于 `backend/app/services/detect/judge_llm.py`:
+- 返 False → 证据不足 → 触发 indeterminate 分支
+- 返 True → 有足够信号 → 进入原 L-9 LLM 调用路径
+
+#### Scenario: 信号型 agent 全零 → 证据不足
+
+- **WHEN** 无铁证,11 个 AgentTask 中 3 个 skipped、8 个 succeeded 但信号型 agent(text_sim / section_sim / structure_sim / image_reuse / style / error_consistency)得分全为 0
+- **THEN** `_has_sufficient_evidence` 返 False;跳过 `call_llm_judge`;AnalysisReport `risk_level='indeterminate'`、`llm_conclusion` 含"证据不足,无法判定"
+
+#### Scenario: 只有 metadata_* 非零信号 → 仍证据不足
+
+- **WHEN** 无铁证,`metadata_author.score=50`(发现作者碰撞),但信号型 agent 都是 0 或 skipped
+- **THEN** `_has_sufficient_evidence` 返 False(metadata_* 不在 SIGNAL_AGENTS 分母里);走 indeterminate 分支
+- **注**:有人可能觉得这个场景"其实有信号";但作者碰撞单独出现通常是巧合,没有相似度类 agent 背书不足以判风险;保持保守判定
+
+#### Scenario: 铁证短路 → 强制走 LLM 路径
+
+- **WHEN** 任一 PC.is_ironclad=True(如图片 MD5 完全一致),但所有 AgentTask 的 score=0(因为 agent 没把铁证写进 score 字段,只写了 is_ironclad)
+- **THEN** `_has_sufficient_evidence` 返 True(铁证短路);走原 LLM + 铁证升级路径;final_total ≥ 85、risk_level='high'(不会自相矛盾)
+
+#### Scenario: 无 succeeded agent
+
+- **WHEN** 所有 AgentTask 都 skipped / failed / timeout,无任何 succeeded,且无铁证
+- **THEN** `_has_sufficient_evidence` 返 False;同 indeterminate 分支
+
+#### Scenario: 有信号型非零信号照旧走 LLM
+
+- **WHEN** 有效信号 agent 至少一个 score > 0(如 text_sim=24.5)
+- **THEN** `_has_sufficient_evidence` 返 True;正常进入 L-9 LLM 调用,风险等级按公式 + LLM 推断(high/medium/low 三档)
+
+#### Scenario: LLM 失败兜底时仍保持 indeterminate 语义
+
+- **WHEN** 证据不足判定为 False 且 LLM 被跳过,fallback_conclusion 被调
+- **THEN** fallback_conclusion 仍按 `risk_level=indeterminate` 处理;`llm_conclusion` 保持"证据不足"语义,不回退到"无围标迹象"文案
+
+---
+
+### Requirement: AnalysisReport risk_level 新增 indeterminate 枚举值
+
+`analysis_reports.risk_level` 字段枚举值 MUST 扩展为 4 类:`high / medium / low / indeterminate`。DB 层面字段类型保持 `String(16)` 无变更(当前无 CheckConstraint),仅需在 Pydantic Literal、前端 TypeScript Union、Word 模板、所有按 `risk_level` 分支的渲染点加 `indeterminate` case。
+
+- `indeterminate` 语义:"证据不足,无法判定围标风险"(对应"证据不足判定规则"Requirement 的输出)
+- Pydantic schema `AnalysisReportResponse.risk_level: Literal["high", "medium", "low", "indeterminate"]`
+- `project.risk_level`(projects 表 cached 字段)同步支持 indeterminate
+- 前端 `types/index.ts` 的 `RiskLevel` 和 `ProjectRiskLevel` union 加 `"indeterminate"` 成员
+- 历史 high/medium/low 数据 MUST 零影响(纯前向兼容扩展)
+
+#### Scenario: Pydantic schema 验证 indeterminate
+
+- **WHEN** 构造 `AnalysisReportResponse(risk_level="indeterminate", ...)` 
+- **THEN** 验证通过,序列化为 JSON 字段值为 `"indeterminate"`
+
+#### Scenario: 历史 low 数据不受影响
+
+- **WHEN** 读取 change 实施前创建的 AnalysisReport(risk_level="low")
+- **THEN** Pydantic 反序列化成功,前端正常渲染为绿色"低风险"标签
+
+#### Scenario: Word 导出支持 indeterminate
+
+- **WHEN** 导出 `risk_level=indeterminate` 的报告为 Word
+- **THEN** 模板选择对应文案串(不写"低风险",写"证据不足");文档能正常生成
 
 ---
 
@@ -388,6 +468,7 @@ error_consistency 和 image_reuse agent 在 early-return 分支(session=None 或
   "version": int | null,
   "project_status": "draft|parsing|ready|analyzing|completed",
   "started_at": iso8601 | null,
+  "report_ready": bool,
   "agent_tasks": [
     {"id", "agent_name", "agent_type", "pair_bidder_a_id", "pair_bidder_b_id",
      "status", "started_at", "finished_at", "elapsed_ms", "score", "summary", "error"}
@@ -395,17 +476,34 @@ error_consistency 和 image_reuse agent 在 early-return 分支(session=None 或
 }
 ```
 
-项目从未启动检测(无 AgentTask)→ 返 `{"version": null, "project_status": <current>, "agent_tasks": []}` 200(非 404,便于前端幂等拉取)。
+- **[新增] `report_ready`**(honest-detection-results):当且仅当 `(project_id, version)` 在 `analysis_reports` 表有对应行时返 True;用于客户端区分 "agent 终态但 judge 未完成"(`report_ready=false`)vs "完全完成"(`report_ready=true`)。
+- `version=null` 的响应中 `report_ready` 固定为 `false`。
+- 项目从未启动检测(无 AgentTask)→ 返 `{"version": null, "project_status": <current>, "report_ready": false, "agent_tasks": []}` 200(非 404,便于前端幂等拉取)。
 
 #### Scenario: 检测中查看快照
 
 - **WHEN** 检测进行中 → `GET /api/projects/{pid}/analysis/status`
-- **THEN** 响应 200,`agent_tasks` 列表含所有 24 条,status 混合 `running / pending / succeeded`
+- **THEN** 响应 200,`agent_tasks` 列表含所有条目,status 混合 `running / pending / succeeded`,`report_ready=false`
+
+#### Scenario: agent 全终态但 judge 未完成
+
+- **WHEN** 所有 AgentTask 进终态但 `analysis_reports` 该 version 行尚未 INSERT
+- **THEN** 响应 `report_ready=false`,提示客户端继续轮询
+
+#### Scenario: 检测完全完成
+
+- **WHEN** `analysis_reports` 该 version 行已写入
+- **THEN** 响应 `report_ready=true`;客户端可安全拉取 `/reports/{version}`
+
+#### Scenario: report_ready 与 project_status 短暂不一致时以 report_ready 为权威
+
+- **WHEN** judge_and_create_report 已 INSERT AnalysisReport 行但尚未 UPDATE `project.status='completed'`(两步之间 ~几十毫秒窗口)
+- **THEN** `/analysis/status` 响应可能出现 `report_ready=true` + `project_status='analyzing'` 组合;前端 MUST 以 `report_ready` 为拉报告的权威判据,不看 project_status(后者下一次轮询会一致)
 
 #### Scenario: 从未检测过返空
 
 - **WHEN** 新建项目(无 AgentTask)→ 查询
-- **THEN** 响应 200 + `{"version": null, "project_status": "draft", "agent_tasks": []}`
+- **THEN** 响应 200 + `{"version": null, "project_status": "draft", "report_ready": false, "agent_tasks": []}`
 
 #### Scenario: 非 owner 返 404
 

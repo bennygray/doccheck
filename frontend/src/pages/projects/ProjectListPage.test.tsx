@@ -166,4 +166,57 @@ describe("ProjectListPage", () => {
       expect(calls.some((c) => c.search === "高速" && c.page === 1)).toBe(true);
     });
   });
+
+  // honest-detection-results: risk_level indeterminate + 回归
+  it("渲染 indeterminate 项目显示'证据不足'灰色 Tag", async () => {
+    (api.listProjects as ReturnType<typeof vi.fn>).mockImplementation(
+      async (arg: ListProjectsArg) => {
+        if (arg?.size === 1) {
+          return { items: [], total: 0, page: 1, size: 1 };
+        }
+        return {
+          items: [
+            mkItem(10, "全零信号项目", {
+              // 默认 tab 是"active",用 draft 让 card 渲染;risk_level 与 status 语义正交,
+              // 测试只关心 Tag 显示正确
+              risk_level: "indeterminate",
+            }),
+          ],
+          total: 1,
+          page: 1,
+          size: 12,
+        };
+      },
+    );
+    renderPage();
+    await screen.findByTestId("project-card-10");
+    expect(screen.getByText("证据不足")).toBeInTheDocument();
+  });
+
+  it("历史 low/medium/high 项目渲染不变(回归)", async () => {
+    (api.listProjects as ReturnType<typeof vi.fn>).mockImplementation(
+      async (arg: ListProjectsArg) => {
+        if (arg?.size === 1) {
+          return { items: [], total: 0, page: 1, size: 1 };
+        }
+        return {
+          items: [
+            mkItem(21, "项目L", { risk_level: "low" }),
+            mkItem(22, "项目M", { risk_level: "medium" }),
+            mkItem(23, "项目H", { risk_level: "high" }),
+          ],
+          total: 3,
+          page: 1,
+          size: 12,
+        };
+      },
+    );
+    renderPage();
+    await screen.findByTestId("project-card-21");
+    // 各档 Tag 文案都存在(Tag 里才有,项目名避开这些词防误匹配)
+    expect(screen.getByText("低风险")).toBeInTheDocument();
+    expect(screen.getByText("中风险")).toBeInTheDocument();
+    expect(screen.getByText("高风险")).toBeInTheDocument();
+    expect(screen.queryByText("证据不足")).not.toBeInTheDocument();
+  });
 });

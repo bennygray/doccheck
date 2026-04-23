@@ -12,14 +12,28 @@ LLM 角色分类失败时,两级兜底链路:
 from __future__ import annotations
 
 # 9 种角色中 8 个有关键词,other 为默认兜底
+# honest-detection-results N2: 新增 10 个行业术语(价格标/开标一览表/资信标/资信/业绩/
+# 类似业绩/企业简介/施工进度/进度计划)
 ROLE_KEYWORDS: dict[str, list[str]] = {
-    "pricing": ["投标报价", "报价清单", "工程量清单", "报价", "清单", "商务标"],
+    "pricing": [
+        "投标报价", "报价清单", "工程量清单", "报价", "清单", "商务标",
+        "价格标", "开标一览表",  # honest-detection-results
+    ],
     "unit_price": ["综合单价", "单价分析"],
     "technical": ["技术方案", "技术标", "技术建议书"],
-    "construction": ["施工组织", "施工方案", "施工设计"],
+    "construction": [
+        "施工组织", "施工方案", "施工设计",
+        "施工进度", "进度计划",  # honest-detection-results
+    ],
     "bid_letter": ["投标函", "投标书"],
-    "qualification": ["资质证明", "资格", "营业执照", "资质"],
-    "company_intro": ["企业介绍", "公司简介", "公司概况"],
+    "qualification": [
+        "资质证明", "资格", "营业执照", "资质",
+        "资信标", "资信", "业绩", "类似业绩",  # honest-detection-results
+    ],
+    "company_intro": [
+        "企业介绍", "公司简介", "公司概况",
+        "企业简介",  # honest-detection-results
+    ],
     "authorization": ["授权委托书", "授权", "委托"],
 }
 

@@ -32,7 +32,11 @@ import {
   RightOutlined,
 } from "@ant-design/icons";
 import { ApiError, api } from "../../services/api";
-import type { ProjectListItem, ProjectListResponse } from "../../types";
+import type {
+  ProjectListItem,
+  ProjectListResponse,
+  ProjectRiskLevel,
+} from "../../types";
 
 const PAGE_SIZE = 20;
 
@@ -58,16 +62,19 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "success",
 };
 
-const RISK_LABELS: Record<string, string> = {
+// honest-detection-results: Record<ProjectRiskLevel, ...> 收紧类型,漏 case 编译 fail
+const RISK_LABELS: Record<ProjectRiskLevel, string> = {
   high: "高风险",
   medium: "中风险",
   low: "低风险",
+  indeterminate: "证据不足",
 };
 
-const RISK_COLORS: Record<string, string> = {
+const RISK_COLORS: Record<ProjectRiskLevel, string> = {
   high: "error",
   medium: "warning",
   low: "success",
+  indeterminate: "default", // 中性灰
 };
 
 /**
@@ -580,8 +587,10 @@ function ProjectCard({
           {STATUS_LABELS[p.status] ?? p.status}
         </Tag>
         {p.risk_level ? (
-          <Tag color={RISK_COLORS[p.risk_level] ?? "default"} style={{ margin: 0 }}>
-            {RISK_LABELS[p.risk_level] ?? p.risk_level}
+          // honest-detection-results: 类型收紧后 Record 索引保证非 undefined,
+          // 不再需要 `?? "default"` / `?? p.risk_level` 运行期兜底
+          <Tag color={RISK_COLORS[p.risk_level]} style={{ margin: 0 }}>
+            {RISK_LABELS[p.risk_level]}
           </Tag>
         ) : (
           <Tag style={{ margin: 0 }}>未检测</Tag>

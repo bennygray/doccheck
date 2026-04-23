@@ -60,15 +60,19 @@ DEFAULT_RULES_CONFIG: dict = {
         },
     },
     "risk_levels": {"high": 70, "medium": 40},
+    # honest-detection-results N2: 与 parser/llm/role_keywords.py 保持 key 集合一致,
+    # value 可用短子串策略扩大覆盖(例如"报价"短子串可命中"价格标/投标报价/开标一览表
+    # 报价汇总"等场景;role_keywords.py 用复合词更精准,admin 默认值用短子串更宽松)。
+    # 测试 test_role_keywords_2way_sync.py 机械校验 key 集合 + value 非空 + 新增词条。
     "doc_role_keywords": {
         "technical": ["技术方案", "技术标", "技术建议书"],
-        "construction": ["施工组织", "施工方案", "施工设计"],
-        "pricing": ["报价", "清单", "工程量", "商务标", "投标报价"],
+        "construction": ["施工组织", "施工方案", "施工设计", "施工进度", "进度计划"],
+        "pricing": ["报价", "清单", "工程量", "商务标", "投标报价", "价格标"],
         "unit_price": ["综合单价", "单价分析"],
         "bid_letter": ["投标函", "投标书"],
-        "qualification": ["资质", "资格", "营业执照"],
-        "company_intro": ["企业介绍", "公司简介", "公司概况"],
-        "authorization": ["授权", "委托"],
+        "qualification": ["资质", "资格", "营业执照", "资信", "业绩"],
+        "company_intro": ["企业介绍", "公司简介", "公司概况", "企业简介"],
+        "authorization": ["授权委托书", "授权", "委托"],  # honest-detection-results: 补"授权委托书"
     },
     "hardware_keywords": ["加密锁号", "MAC地址", "序列号", "硬盘序列号", "主板", "CPU"],
     "metadata_whitelist": ["Administrator", "User", "Admin", "Microsoft Office User"],

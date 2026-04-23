@@ -8,18 +8,22 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.bid_document import BidDocumentSummary, ProjectProgress
 from app.schemas.bidder import BidderSummary
 
+# honest-detection-results:新增 indeterminate 枚举值
+RiskLevelLiteral = Literal["high", "medium", "low", "indeterminate"]
 
 # 合法的 status 取值集合;C3 阶段 API 只会产生 "draft",其余值预留给 C6+
 _ALLOWED_STATUSES = frozenset(
     {"draft", "parsing", "ready", "analyzing", "completed"}
 )
-_ALLOWED_RISK_LEVELS = frozenset({"high", "medium", "low"})
+# honest-detection-results: frozenset 保留供 routes/projects.py 的 Query 参数路径使用;
+# schemas 内部的 ProjectListQuery 改用 Literal 自动校验,原 field_validator("risk_level") 已删
 
 
 class ProjectCreate(BaseModel):
@@ -67,7 +71,7 @@ class ProjectResponse(BaseModel):
     max_price: Decimal | None
     description: str | None
     status: str
-    risk_level: str | None
+    risk_level: RiskLevelLiteral | None  # honest-detection-results: tightening
     owner_id: int
     created_at: datetime
     updated_at: datetime
@@ -81,7 +85,7 @@ class ProjectAnalysisReport(BaseModel):
 
     version: int
     total_score: float
-    risk_level: str
+    risk_level: RiskLevelLiteral  # honest-detection-results: tightening
     created_at: datetime
 
 
@@ -124,7 +128,7 @@ class ProjectListQuery(BaseModel):
     page: int = Field(default=1, ge=1)
     size: int = Field(default=12, ge=1, le=100)
     status: str | None = None
-    risk_level: str | None = None
+    risk_level: RiskLevelLiteral | None = None  # honest-detection-results: Literal 自动校验,原 field_validator 已删
     search: str | None = None
 
     @field_validator("status")
@@ -134,15 +138,6 @@ class ProjectListQuery(BaseModel):
             return None
         if v not in _ALLOWED_STATUSES:
             raise ValueError(f"非法 status: {v}")
-        return v
-
-    @field_validator("risk_level")
-    @classmethod
-    def _validate_risk_level(cls, v: str | None) -> str | None:
-        if v is None or v == "":
-            return None
-        if v not in _ALLOWED_RISK_LEVELS:
-            raise ValueError(f"非法 risk_level: {v}")
         return v
 
     @field_validator("search")

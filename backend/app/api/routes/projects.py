@@ -45,7 +45,7 @@ router = APIRouter()
 _ALLOWED_STATUSES = frozenset(
     {"draft", "parsing", "ready", "analyzing", "completed"}
 )
-_ALLOWED_RISK_LEVELS = frozenset({"high", "medium", "low"})
+_ALLOWED_RISK_LEVELS = frozenset({"high", "medium", "low", "indeterminate"})  # honest-detection-results
 
 
 @router.post(

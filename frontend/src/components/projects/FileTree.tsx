@@ -4,7 +4,7 @@
  * antd 化:antd Tag 状态 + Button 重试/查看错误;保留所有 data-testid
  */
 import { useState } from "react";
-import { Button, Space, Tag, Typography } from "antd";
+import { Button, Collapse, Space, Tag, Typography } from "antd";
 import {
   FileOutlined,
   FolderOpenOutlined,
@@ -103,102 +103,132 @@ export default function FileTree({ documents, onDocumentChanged }: Props) {
     (childrenByArchive[f.source_archive] ??= []).push(f);
   }
 
+  // honest-detection-results N8: 归档行本身 + 其子文件一起封进 Collapse,默认全折叠
+  const renderArchive = (arc: BidDocument) => (
+    <div data-testid={`archive-block-${arc.id}`}>
+      <Space size={8} wrap>
+        <FolderOpenOutlined style={{ color: "#1d4584" }} />
+        <Typography.Text strong style={{ fontSize: 13 }}>
+          {arc.file_name}
+        </Typography.Text>
+        <StatusTag status={arc.parse_status} />
+        {arc.parse_error && (
+          <Button
+            size="small"
+            type="link"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpenErrors((p) => ({ ...p, [arc.id]: !p[arc.id] }));
+            }}
+            data-testid={`filetree-error-toggle-${arc.id}`}
+            style={{ padding: "0 4px", fontSize: 11 }}
+          >
+            {openErrors[arc.id] ? "收起" : "查看错误/审计"}
+          </Button>
+        )}
+      </Space>
+      {arc.parse_error && openErrors[arc.id] && (
+        <div
+          data-testid={`filetree-error-${arc.id}`}
+          style={{
+            marginLeft: 24,
+            marginTop: 6,
+            padding: "6px 10px",
+            background: "#fdecec",
+            border: "1px solid #f5c0c0",
+            borderRadius: 4,
+            color: "#c53030",
+            fontSize: 12,
+          }}
+        >
+          {arc.parse_error}
+        </div>
+      )}
+      <ul
+        style={{
+          margin: "6px 0 0 24px",
+          padding: 0,
+          listStyle: "none",
+        }}
+      >
+        {(childrenByArchive[arc.file_name] ?? []).map((child) => {
+          const canEditRole =
+            child.file_type === ".docx" || child.file_type === ".xlsx";
+          const showRetry = FAILURE_STATUSES.has(child.parse_status);
+          return (
+            <li key={child.id} style={{ marginBottom: 4 }}>
+              <Space size={8} wrap>
+                <FileOutlined style={{ color: "#8a919d" }} />
+                <Typography.Text style={{ fontSize: 13 }}>
+                  {child.file_name}
+                </Typography.Text>
+                <StatusTag status={child.parse_status} />
+                {canEditRole && (
+                  <RoleDropdown
+                    documentId={child.id}
+                    role={child.file_role as DocumentRole | null}
+                    confidence={child.role_confidence}
+                    onChanged={() => onDocumentChanged?.()}
+                  />
+                )}
+                {showRetry && (
+                  <Button
+                    size="small"
+                    type="link"
+                    icon={<ReloadOutlined />}
+                    onClick={() => void handleRetry(child.id)}
+                    loading={!!retrying[child.id]}
+                    data-testid={`filetree-retry-${child.id}`}
+                    style={{ fontSize: 11 }}
+                  >
+                    重试
+                  </Button>
+                )}
+                {child.parse_error && (
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 11 }}
+                  >
+                    {child.parse_error}
+                  </Typography.Text>
+                )}
+              </Space>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+
   return (
     <div data-testid="filetree" style={{ fontSize: 13 }}>
-      {archives.map((arc) => (
-        <div key={arc.id} style={{ marginBottom: 10 }}>
-          <Space size={8} wrap>
-            <FolderOpenOutlined style={{ color: "#1d4584" }} />
-            <Typography.Text strong style={{ fontSize: 13 }}>
-              {arc.file_name}
-            </Typography.Text>
-            <StatusTag status={arc.parse_status} />
-            {arc.parse_error && (
-              <Button
-                size="small"
-                type="link"
-                onClick={() =>
-                  setOpenErrors((p) => ({ ...p, [arc.id]: !p[arc.id] }))
-                }
-                data-testid={`filetree-error-toggle-${arc.id}`}
-                style={{ padding: "0 4px", fontSize: 11 }}
-              >
-                {openErrors[arc.id] ? "收起" : "查看错误"}
-              </Button>
-            )}
-          </Space>
-          {arc.parse_error && openErrors[arc.id] && (
-            <div
-              data-testid={`filetree-error-${arc.id}`}
-              style={{
-                marginLeft: 24,
-                marginTop: 6,
-                padding: "6px 10px",
-                background: "#fdecec",
-                border: "1px solid #f5c0c0",
-                borderRadius: 4,
-                color: "#c53030",
-                fontSize: 12,
-              }}
-            >
-              {arc.parse_error}
-            </div>
-          )}
-          <ul
-            style={{
-              margin: "6px 0 0 24px",
-              padding: 0,
-              listStyle: "none",
-            }}
-          >
-            {(childrenByArchive[arc.file_name] ?? []).map((child) => {
-              const canEditRole =
-                child.file_type === ".docx" || child.file_type === ".xlsx";
-              const showRetry = FAILURE_STATUSES.has(child.parse_status);
-              return (
-                <li key={child.id} style={{ marginBottom: 4 }}>
-                  <Space size={8} wrap>
-                    <FileOutlined style={{ color: "#8a919d" }} />
-                    <Typography.Text style={{ fontSize: 13 }}>
-                      {child.file_name}
-                    </Typography.Text>
-                    <StatusTag status={child.parse_status} />
-                    {canEditRole && (
-                      <RoleDropdown
-                        documentId={child.id}
-                        role={child.file_role as DocumentRole | null}
-                        confidence={child.role_confidence}
-                        onChanged={() => onDocumentChanged?.()}
-                      />
-                    )}
-                    {showRetry && (
-                      <Button
-                        size="small"
-                        type="link"
-                        icon={<ReloadOutlined />}
-                        onClick={() => void handleRetry(child.id)}
-                        loading={!!retrying[child.id]}
-                        data-testid={`filetree-retry-${child.id}`}
-                        style={{ fontSize: 11 }}
-                      >
-                        重试
-                      </Button>
-                    )}
-                    {child.parse_error && (
-                      <Typography.Text
-                        type="secondary"
-                        style={{ fontSize: 11 }}
-                      >
-                        {child.parse_error}
-                      </Typography.Text>
-                    )}
-                  </Space>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
+      {archives.length > 0 && (
+        <Collapse
+          ghost
+          defaultActiveKey={[]}
+          data-testid="archives-collapse"
+          items={[
+            {
+              key: "archives",
+              label: (
+                <Space size={8}>
+                  <FolderOpenOutlined style={{ color: "#1d4584" }} />
+                  <Typography.Text strong style={{ fontSize: 13 }}>
+                    📦 原始压缩包 ({archives.length} 个)
+                  </Typography.Text>
+                </Space>
+              ),
+              children: (
+                <Space direction="vertical" size={10} style={{ width: "100%" }}>
+                  {archives.map((arc) => (
+                    <div key={arc.id}>{renderArchive(arc)}</div>
+                  ))}
+                </Space>
+              ),
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

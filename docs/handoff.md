@@ -11,14 +11,58 @@
 
 | 项 | 值 |
 |---|---|
-| 当前里程碑 | **M4 完成 + V1 全量验收 + admin-llm-config + fix-mac-packed-zip-parsing** |
-| 当前 change | `fix-mac-packed-zip-parsing` 归档完成。修复 macOS Archive Utility 打包 zip 的 3 个级联缺陷:**打包垃圾静默过滤**(`__MACOSX/`/`._*`/`.DS_Store`/`~$*`/`.~*`/`Thumbs.db`/`.git/` 等不产生 bid_documents 行)+ **ZIP 文件名 UTF-8 优先解码**(macOS 无 flag 场景下 `供应商A/江苏锂源...` 正确还原)+ **role 分类内容关键词兜底**(LLM 失败时两级兜底:正文首段关键词 → 文件名关键词 → "other") |
-| 最新 commit | fix-mac-packed-zip-parsing 归档 |
-| 工作区 | fix-mac-packed-zip-parsing 全量改动:**后端代码**:新 `services/extract/junk_filter.py`(`is_junk_entry` 纯函数 + 三类黑名单) + 改 `services/extract/engine.py`(ZIP 路径 + 7z/rar 路径双插入点 + UTF-8 启发式反向校验 + 归档行审计留痕 `(已过滤 N 个打包垃圾文件)`) + 改 `services/extract/encoding.py`(新增 `_looks_like_utf8` 严格字节模式校验 + `decode_filename` 优先 UTF-8 层) + 改 `services/parser/llm/role_keywords.py`(新增 `classify_by_keywords_on_text` + `classify_by_keywords` 改返 `str|None` 契约) + 改 `services/parser/llm/role_classifier.py`(`_apply_keyword_fallback` 改 async,两级兜底)+ 改 `services/parser/pipeline/run_pipeline.py`(`_phase_extract_content` 按 `file_type` 过滤,不再覆盖归档行 parse_error,端到端修复);**测试**:L1 新增 `test_junk_filter.py`/`test_encoding_utf8_detection.py`/`test_engine_utf8_no_flag.py`/`test_role_classifier_content_fallback.py` 共 ~80 新 case,L2 新增 `test_extract_mac_packed_zip.py`(含手工构造 UTF-8-no-flag ZIP 字节流)/`test_role_classifier_keyword_fallback.py` 共 5 新 case;L1 全量 905/905 绿;L2 受影响子集 34/34 绿;**spec sync**:`file-upload` 加 6 新 Scenario(macOS 场景、4 类垃圾过滤、审计留痕、7z/rar 路径、不误伤),`parser-pipeline` 改 2 个 Requirement 为两级兜底语义 + 补 2 个正文关键词 Scenario;**manual 凭证**:`e2e/artifacts/supplier-ab/after-fix/` JSON(bid_documents 12/14 → 4/4、identify_failed 12 → 0、file_name 乱码 Y → N、role=None 26 → 2、检测报告 section_sim=38.67 text_sim=24.51 非零信号) |
+| 当前里程碑 | **M4 完成 + V1 全量验收 + admin-llm-config + fix-mac-packed-zip-parsing + honest-detection-results** |
+| 当前 change | `honest-detection-results` 归档完成。修复"检测结果看起来 OK 实则沉默失败"的 5 类产品语义问题:**证据不足判定(F2)** risk_level 新增 `indeterminate` 枚举 + judge 层"非 skipped 信号型 agent 全零且无铁证"前置判定 + 跳过 LLM 直接返"证据不足"结论;**identity_info 缺失显式降级(F3)** ORM `@property` + BidderSummary/BidderResponse 双 schema 暴露 `identity_info_status` + 前端 Drawer / 报告页 error_consistency / Word 模板三处 info 蓝色降级文案;**ROLE_KEYWORDS 三副本同步(N2)** 补 10 个行业术语("价格标/开标一览表/资信标/资信/业绩/类似业绩/企业简介/施工进度/进度计划") + `rules_defaults.py.authorization` 补"授权委托书" + 2way sync 测试(SSOT role_keywords.py 与 admin/rules_defaults.py 的 key 集合一致 + value 非空 + defaults 是 SSOT 的短子串);**report_ready 字段(N4)** `/analysis/status` 新增 bool 字段区分"agent 终态 vs judge 完成";**前端 TS 类型收紧(D5)** 移除 `ProjectRiskLevel \| string` 逃生门 + `Record<RiskLevel, ...>` 强制覆盖 + 删除运行期 `?? RISK_META.low` 静默 fallback;**FileTree 归档行默认折叠(N8)** antd `Collapse ghost` 包装 `.zip/.7z/.rar` 归档行 |
+| 最新 commit | honest-detection-results 归档 |
+| 工作区 | honest-detection-results 全量改动:**后端代码**:`services/detect/judge_llm.py` 新增 `SIGNAL_AGENTS` 常量 + `_has_sufficient_evidence()` 纯函数(含铁证短路 + 信号型白名单)+ `INSUFFICIENT_EVIDENCE_CONCLUSION` 常量;`services/detect/judge.py` `judge_and_create_report()` 加证据不足前置分支;`models/bidder.py` 加 `identity_info_status @property`;`schemas/{bidder,project,report,analysis}.py` 加 Literal + computed 字段 + report_ready;`api/routes/analysis.py` 填充 report_ready;`api/routes/projects.py::_ALLOWED_RISK_LEVELS` 加 indeterminate;`services/parser/llm/role_keywords.py` 加 10 新词;`services/parser/llm/prompts.py` 同步角色描述;`services/admin/rules_defaults.py` 同步 + 补授权委托书;`services/export/{generator,worker}.py` 支持 risk_level_cn/is_indeterminate/has_insufficient_identity 降级段落。**前端代码**:`types/index.ts` union 扩展 + 删 `\| string` 逃生门 + Bidder/BidderSummary 加 identity_info_status + AnalysisStatusResponse 加 report_ready;`ProjectListPage.tsx` RISK_COLORS/LABELS 收紧为 Record<RiskLevel,...>;`ReportPage.tsx` RISK_META 加 indeterminate 条 + 拉 project detail 判 hasInsufficientIdentity + DimensionRow 降级 Alert + 删 as/fallback 兜底 + 404 retry 改用 /analysis/status 给精确文案;`ProjectDetailPage.tsx` Drawer 顶部 info Alert 条件渲染;`FileTree.tsx` archives 部分用 Collapse ghost 默认折叠;`useDetectProgress.ts` SSE report_ready 事件用 RiskLevel 替换硬编码 union。**测试**:L1 新增 `test_judge_insufficient_evidence.py` (10 case)/`test_bidder_identity_info_status.py`(6 case)/`test_role_keywords_2way_sync.py`(7 case)、扩展 `test_parser_llm_role_keywords.py` + `test_judge_pair_oa.py` fixture;L2 新增 `test_analysis_indeterminate.py`(3 case)/`test_analysis_status_report_ready.py`(3 case)/`test_export_word_indeterminate.py`(6 case);前端新增 `DimensionRow.test.tsx`(4 case)+ 扩展 `FileTree.test.tsx`/`ProjectListPage.test.tsx`;L1 全量 940/940 绿;L2 受影响子集 25/25 绿;前端 vitest 新增 14 case 全绿 + 全量 99/100(1 无关 flaky AdminUsersPage);TS --noEmit clean;**spec sync**:`detect-framework` 加 "证据不足判定规则"/"AnalysisReport risk_level 新增 indeterminate" + 改 "综合研判骨架" 插 step4 + 改 "检测状态快照 API" 加 report_ready + 4 scenario;`parser-pipeline` 改 "角色关键词兜底规则" 加三副本同步约束 + 10 新词 scenario;`report-view` 加 3 Req;`report-export` 加 1 Req;**manual 凭证**:`e2e/artifacts/honest-detection-results-2026-04-23/` JSON — identity_info_status 字段工作 ✓、report_ready 中 false / 完成 true ✓、C3 铁证短路避免 "indeterminate + 85 分" 自相矛盾 ✓(真实 docx metadata 碰撞触发,走 LLM 正确给出 high + 合理结论) |
 
 ---
 
-## 2. 本次 session 关键决策(2026-04-23,`fix-mac-packed-zip-parsing` propose+apply+archive)
+## 2. 本次 session 关键决策(2026-04-23,`honest-detection-results` propose+apply+archive)
+
+### 上游触发
+上一 change `fix-mac-packed-zip-parsing` 归档时列出的 10 条 follow-up,其中 5 条(F2/F3/N2/N4/N8)合并成本 change "用户看得到的诚实性"。F1/N5/N6/N7 基础设施鲁棒性下次做;N3 LLM 大文档精度先 explore。
+
+### propose 5 个产品决策(Q1-Q5 已与用户对齐)
+- **Q1 B**:"非 skipped 的信号型 agent 全部 score=0 且无铁证" → 证据不足
+- **Q2 C**:`risk_level` 新增 `indeterminate` 枚举值(不用标志位,一次到位类型系统强制覆盖)
+- **Q3 L2+L3+L5**:身份信息缺失显示位置 = 投标人详情 Drawer 顶部 + 报告 error_consistency 维度 + Word 导出降级文案(不做列表页/对比页)
+- **Q4 a**:ROLE_KEYWORDS 10 个强烈建议新词(价格标/开标一览表/资信标/资信/业绩/类似业绩/企业简介/施工进度/进度计划)
+- **Q5 B**:归档行用 `antd Collapse ghost` 默认折叠,复用 DimensionDetailPage 已有 pattern
+
+### apply 现场决策(技术层,不问用户)
+- **D1 信号型 agent 白名单**:SIGNAL_AGENTS 只含 text/section/structure/image/style/error_consistency,剔除 metadata_* + price_consistency("0 == 没异常" 不算无信号)—— 缓解"干净项目被误判 indeterminate"
+- **D1 铁证短路**:PC.is_ironclad / OA.has_iron_evidence 任一为 True → 证据充分 True(避免 `total_score=85 + risk_level=indeterminate` 自相矛盾)
+- **D4 identity_info_status 放 ORM @property + from_attributes=True**:而不是 Pydantic computed_field(BidderSummary 没 identity_info 字段,computed_field 会 AttributeError)
+- **D5 前端 TS 收紧路径**:`Record<RiskLevel, ...>` + 删 `| string` 逃生门 + 删运行期 `?? RISK_META.low` — 第 1 轮 reviewer 指出原"TS 强制覆盖"承诺是虚假保证,收紧后才真成立
+- **D7 ROLE_KEYWORDS 同步约束降级**:SSOT=role_keywords.py;defaults 允许短子串(故意不强求值相等);弱一致性=defaults 每词 MUST 是 SSOT 某词的子串;prompts.py 不进机械测试(自然语言无可靠提取规则),靠 docstring 人工 review
+- **D10 report_ready vs project.status 顺序**:INSERT AnalysisReport → UPDATE project.status 之间有 ~几十毫秒窗口,前端 MUST 以 report_ready 为权威拉取判据(spec scenario 明确)
+- **I-3 补 DimensionRow 孤立组件测试**:第 3 轮 reviewer 指出 Task 5.7/6.4 降级 manual 后, `<Alert data-testid="dimension-identity-degraded">` 零自动化覆盖 — export DimensionRow + 4 case 孤立 render 测试
+
+### 文档联动
+- **`openspec/specs/detect-framework/spec.md`** 改:"综合研判骨架" 插 step4 + 加 scenario;"检测状态快照 API" 加 report_ready + 4 scenario
+- **`openspec/specs/detect-framework/spec.md`** 加:"证据不足判定规则" / "AnalysisReport risk_level 新增 indeterminate" 两 Requirement
+- **`openspec/specs/parser-pipeline/spec.md`** 改 "角色关键词兜底规则":加三副本同步约束 + 10 新词 scenario + authorization 条说明
+- **`openspec/specs/report-view/spec.md`** 加 3 Req
+- **`openspec/specs/report-export/spec.md`** 加 1 Req
+- **`docs/handoff.md`** 即本次更新
+
+### 3 轮独立 review 均 CONDITIONAL GO → GO(最终)
+- 第 1 轮:TS 强制覆盖虚假保证 / BidderSummary 无 identity_info / 铁证 vs indeterminate 冲突 / 三副本 set 相等不可靠 — 全修
+- 第 2 轮:BidderSummary computed_field AttributeError / _ALLOWED_RISK_LEVELS 漏改 / Word 模板 low/medium/high 回归 / report_ready vs project_status 顺序 — 全修
+- 第 3 轮:useDetectProgress SSE risk_level 漏 indeterminate / report_ready 前端无消费点 / 2way sync 弱一致性缺失 / DimensionRow 零自动化 — 全修
+
+### 遗留到下一 change(`harden-async-infra`)
+- F1 ProcessPool per-task 进程隔离
+- N5 testdb 容器化
+- N6 `make_gbk_zip` fixture 重写
+- N7 LLM provider `.complete()` 统一 `asyncio.wait_for`
+
+N3 LLM 大文档精度先 `/openspec-explore` 再决定。11.3 Manual 观测建议:跑全量历史项目统计 indeterminate 占比,>5% 触发 design 复审。
+
+---
+
+## 2.bak_fix-mac-packed-zip-parsing 上一 session 关键决策(2026-04-23,`fix-mac-packed-zip-parsing` propose+apply+archive)
 
 ### 案例触发
 - 真实 A/B zip(`e2e/artifacts/supplier-ab/supplier_A.zip` 166MB / `supplier_B.zip` 9.8MB,macOS Archive Utility 打包)暴露:parser 流水线**静默降级为无意义结果**(bid_documents.role 全 None、identity_info 全 null、检测报告"全零 + 低风险无围标"误导结论)
@@ -163,5 +207,5 @@
 | 2026-04-16 | **DEF-OA `fix-dimension-review-oa` 归档**:judge.py 补写 7 pair 维度 OA 聚合行;error_consistency/image_reuse early-return 补 OA;维度级复核 API 全 11 维度可用;L1 801 + L2 250 全绿 |
 | 2026-04-16 | **V1 全量验收测试**:`docs/v1-acceptance-test-report.md` 55/66 通过(96.5% 可执行通过率);2 失败(AT-7.7 LLM 降级 UI / AT-9.2 维度复核);9 阻塞(fixture 不足) |
 | 2026-04-16 | **DEF-007 `fix-l3-acceptance-bugs` 归档**:BUG-2 TEXT_SIM_MIN_DOC_CHARS 500→300;BUG-3 get_current_user 支持 query param token + ExportButton/useDetectProgress SSE URL 追加 token;WARN-1 AdminRulesPage input null→"";L3 11/11 全绿 |
-| 2026-04-16 | **DEF-006 `fix-silent-project-transition-failure` 归档**:run_pipeline 6 处 try_transition_project_ready 加异常保护;trigger.py task 引用持有+done callback 异常日志;4 新增 L1 用例 |
+| 2026-04-23 | **`honest-detection-results` 归档**:F2 证据不足+indeterminate 枚举(铁证短路 + 信号型 agent 白名单)+ F3 identity_info_status ORM property 三处显式降级文案 + N2 ROLE_KEYWORDS 10 新词三副本同步 + N4 report_ready 字段 + 前端 TS 类型收紧(删 \| string 逃生门+Record<RiskLevel,...>)+ N8 FileTree Collapse 折叠;L1 940、L2 25、前端 vitest 14 新增全绿;3 轮独立 reviewer 报告全吸收 |
 | 2026-04-23 | **`fix-mac-packed-zip-parsing` 归档**:macOS 打包 zip 的 3 个级联缺陷(打包垃圾 + UTF-8 无 flag 文件名 + role 分类链路断裂)一次修 + bonus 修 phase1 覆盖归档行 parse_error;真 A/B zip 验收 bid_documents 12/14→4/4、identify_failed 12→0、role=None 26→2、检测报告非零信号 |

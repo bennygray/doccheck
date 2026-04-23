@@ -87,3 +87,32 @@ def test_classify_by_keywords_on_text_hit(text: str, expected: str) -> None:
 )
 def test_classify_by_keywords_on_text_miss_returns_none(text: str) -> None:
     assert classify_by_keywords_on_text(text) is None
+
+
+# ---- honest-detection-results N2: 10 个新增行业术语命中 ----
+
+
+@pytest.mark.parametrize(
+    "file_name,expected",
+    [
+        ("XX 价格标.docx", "pricing"),
+        ("开标一览表.xlsx", "pricing"),
+        ("XX 资信标.docx", "qualification"),
+        ("资信证明.pdf", "qualification"),
+        ("类似业绩汇总.docx", "qualification"),
+        ("业绩证明.pdf", "qualification"),
+        ("企业简介.docx", "company_intro"),
+        ("施工进度计划.docx", "construction"),
+        ("进度计划表.xlsx", "construction"),
+    ],
+)
+def test_new_industry_keywords_hit(file_name: str, expected: str) -> None:
+    assert classify_by_keywords(file_name) == expected
+
+
+def test_new_keyword_via_content() -> None:
+    # 正文里出现"类似业绩"也应命中 qualification
+    assert (
+        classify_by_keywords_on_text("本公司近三年完成如下类似业绩:xxx")
+        == "qualification"
+    )

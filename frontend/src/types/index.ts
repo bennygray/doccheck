@@ -12,7 +12,8 @@ export type ProjectStatus =
   | "analyzing"
   | "completed";
 
-export type ProjectRiskLevel = "high" | "medium" | "low";
+/** honest-detection-results: 新增 indeterminate(证据不足) */
+export type ProjectRiskLevel = "high" | "medium" | "low" | "indeterminate";
 
 /** 项目基础字段(列表 + 创建都返这一套) */
 export interface Project {
@@ -22,7 +23,8 @@ export interface Project {
   max_price: string | null; // Pydantic Decimal 序列化为字符串
   description: string | null;
   status: ProjectStatus | string;
-  risk_level: ProjectRiskLevel | string | null;
+  /** honest-detection-results: 移除 `| string` 逃生门,漏 case 编译 fail */
+  risk_level: ProjectRiskLevel | null;
   owner_id: number;
   created_at: string; // ISO 8601
   updated_at: string;
@@ -68,6 +70,9 @@ export type DocumentRole =
 /** C5: LLM 置信度 / 用户修正标记 */
 export type RoleConfidence = "high" | "low" | "user";
 
+/** honest-detection-results F3: 身份信息充分性,从后端 ORM @property 读 */
+export type IdentityInfoStatus = "sufficient" | "insufficient";
+
 export interface Bidder {
   id: number;
   name: string;
@@ -76,6 +81,7 @@ export interface Bidder {
   parse_error: string | null;
   file_count: number;
   identity_info: Record<string, unknown> | null;
+  identity_info_status: IdentityInfoStatus;  // honest-detection-results F3
   created_at: string;
   updated_at: string;
 }
@@ -85,6 +91,7 @@ export interface BidderSummary {
   name: string;
   parse_status: ParseStatus | string;
   file_count: number;
+  identity_info_status: IdentityInfoStatus;  // honest-detection-results F3
 }
 
 export interface BidderListResponse {
@@ -196,7 +203,8 @@ export interface ProjectListQuery {
   page?: number;
   size?: number;
   status?: ProjectStatus | string;
-  risk_level?: ProjectRiskLevel | string;
+  /** honest-detection-results: 移除 `| string` 逃生门 */
+  risk_level?: ProjectRiskLevel;
   search?: string;
 }
 
@@ -262,7 +270,8 @@ export type AgentTaskStatus =
   | "skipped";
 
 export type AgentType = "pair" | "global";
-export type RiskLevel = "high" | "medium" | "low";
+/** honest-detection-results: 新增 indeterminate(证据不足) */
+export type RiskLevel = "high" | "medium" | "low" | "indeterminate";
 
 export interface AgentTask {
   id: number;
@@ -298,6 +307,14 @@ export interface AnalysisStatusResponse {
   project_status: string;
   started_at: string | null;
   agent_tasks: AgentTask[];
+  /** honest-detection-results N4: 当前 version 的 AnalysisReport 是否已写入。
+   * 客户端据此区分"agent 终态但 judge 在写 report"(false) vs "完全完成"(true)。
+   * 与 project_status='completed' 存在短暂竞态(judge INSERT ↔ UPDATE projects 两
+   * 步之间),spec 规定以 report_ready 为拉取报告的权威判据。 */
+  report_ready?: boolean;
+  /** 已生成的最新报告摘要(report_ready=true 时非 null),便于前端刷新页面后
+   * 不必重放 SSE 即可拿到可查看标志。 */
+  latest_report?: ProjectAnalysisReport | null;
 }
 
 /** SSE 事件类型 */

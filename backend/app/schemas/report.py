@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+# honest-detection-results:risk_level 枚举扩展
+RiskLevelLiteral = Literal["high", "medium", "low", "indeterminate"]
 
 
 class ReportDimensionStatusCounts(BaseModel):
@@ -30,7 +33,7 @@ class ReportResponse(BaseModel):
 
     version: int
     total_score: float
-    risk_level: str  # high|medium|low
+    risk_level: RiskLevelLiteral  # honest-detection-results: 新增 indeterminate
     llm_conclusion: str
     created_at: datetime
     dimensions: list[ReportDimension]

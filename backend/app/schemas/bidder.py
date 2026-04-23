@@ -6,9 +6,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+# honest-detection-results F3
+IdentityInfoStatusLiteral = Literal["sufficient", "insufficient"]
 
 
 class BidderCreate(BaseModel):
@@ -30,12 +33,17 @@ class BidderCreate(BaseModel):
 
 
 class BidderSummary(BaseModel):
-    """ProjectDetailResponse.bidders 用的轻量摘要(MODIFIED Requirement)。"""
+    """ProjectDetailResponse.bidders 用的轻量摘要(MODIFIED Requirement)。
+
+    honest-detection-results F3: 新增 identity_info_status 计算字段,
+    从 ORM Bidder.identity_info_status @property 读取,用于前端 UI 显式降级文案。
+    """
 
     id: int
     name: str
     parse_status: str
     file_count: int
+    identity_info_status: IdentityInfoStatusLiteral
 
     model_config = {"from_attributes": True}
 
@@ -50,6 +58,7 @@ class BidderResponse(BaseModel):
     parse_error: str | None
     file_count: int
     identity_info: dict[str, Any] | None
+    identity_info_status: IdentityInfoStatusLiteral  # honest-detection-results F3
     created_at: datetime
     updated_at: datetime
 

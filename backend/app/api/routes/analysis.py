@@ -233,6 +233,7 @@ async def get_analysis_status(
             started_at=None,
             agent_tasks=[],
             latest_report=None,
+            report_ready=False,  # honest-detection-results N4
         )
 
     task_rows = (
@@ -274,6 +275,8 @@ async def get_analysis_status(
         started_at=started_at,
         agent_tasks=[AgentTaskResponse.model_validate(t) for t in task_rows],
         latest_report=latest_report,
+        # honest-detection-results N4: 存在 AnalysisReport 行即 report_ready
+        report_ready=ar_row is not None,
     )
 
 

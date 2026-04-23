@@ -105,3 +105,52 @@ describe("DimensionRow — N7/F1 新 skipped 文案渲染(harden-async-infra)", 
     },
   );
 });
+
+/**
+ * test-infra-followup-wave2 Item 6:text_similarity degraded 路径(非 skipped,
+ * 保留公式相似度 + LLM 研判不可用)的真实 shape 下 DimensionRow 依然正确渲染
+ * _DEGRADED_SUMMARY 文案 + 非零分数 + succeeded 计数。
+ *
+ * 后端契约(text_similarity.py):evidence["degraded"]=true 时 summary 置为
+ * _DEGRADED_SUMMARY,AgentTask.status 仍为 succeeded(有公式结果,不走 skipped)。
+ * 本 case 锁"降级非 skipped"场景的前端渲染不回归 —— 防未来改 DimensionRow 把
+ * "text_sim + succeeded" 的 summaries[0] 吞掉。
+ */
+describe("DimensionRow — text_similarity degraded 真实场景(Item 6)", () => {
+  const DEGRADED_SUMMARY = "AI 研判暂不可用,仅展示程序相似度(降级)";
+
+  it("text_sim degraded 保留公式分数 + 渲染降级 summary", () => {
+    render(
+      <DimensionRow
+        dim={makeDim({
+          dimension: "text_similarity",
+          best_score: 42.5, // 公式相似度仍产出(非零)
+          is_ironclad: false,
+          summaries: [DEGRADED_SUMMARY],
+          // degraded 路径 status = succeeded(带公式结果),不是 skipped
+          status_counts: { succeeded: 1, failed: 0, timeout: 0, skipped: 0 },
+        })}
+      />,
+    );
+    expect(screen.getByText(DEGRADED_SUMMARY)).toBeInTheDocument();
+    // 分数文本由 Progress format 产出,带小数
+    expect(screen.getByText("42.5")).toBeInTheDocument();
+  });
+
+  it("text_sim degraded summaries 空数组 → 不 render summary 段(graceful)", () => {
+    // 防御:上游异常导致 summaries 为空,组件不崩
+    const { container } = render(
+      <DimensionRow
+        dim={makeDim({
+          dimension: "text_similarity",
+          best_score: 0,
+          summaries: [],
+          status_counts: { succeeded: 0, failed: 0, timeout: 0, skipped: 1 },
+        })}
+      />,
+    );
+    expect(screen.queryByText(DEGRADED_SUMMARY)).not.toBeInTheDocument();
+    // 组件渲染不崩(有根节点)
+    expect(container.firstChild).not.toBeNull();
+  });
+});

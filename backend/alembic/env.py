@@ -24,7 +24,10 @@ config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False:保留此前已创建的 `app.*` logger,
+    # 防 L2 session fixture `alembic upgrade head` 意外 disable 应用 logger
+    # 导致 caplog 类测试静默失败(test-infra-followup-wave2 Item 1)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # C1 阶段 Base.metadata 为空(无业务 model),后续 change 注册 model 后会自动纳入
 target_metadata = Base.metadata

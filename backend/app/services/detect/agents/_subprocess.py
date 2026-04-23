@@ -84,7 +84,18 @@ async def run_isolated(
         #
         # ProcessPoolExecutor._processes 是官方 stdlib 属性(字典 pid→Process),
         # 虽为下划线前缀但 Py 3.8~3.13 稳定可用,作为"per-call 池"无 race 风险。
-        workers = list(getattr(pool, "_processes", {}).values())
+        #
+        # test-infra-followup-wave2 Item 3:对 Py 3.14+ 潜在字段消失 / 类型变化
+        # (例如改 method / 改容器类型)加 try/except 兜底。fallback 路径 = 纯
+        # shutdown(wait=False) 无主动 terminate/kill,假定届时 stdlib 已完备清理
+        # hang worker(3.13 及之前不会触发 fallback)。
+        try:
+            workers = list(getattr(pool, "_processes", {}).values())
+        except (AttributeError, TypeError) as exc:
+            logger.warning(
+                "run_isolated: _processes 访问异常,走 fallback shutdown(%s)", exc
+            )
+            workers = []
         pool.shutdown(wait=False, cancel_futures=True)
         for proc in workers:
             try:

@@ -87,8 +87,13 @@ async def detect_price_rule(
     )
 
     if llm_result.error is not None:
+        # harden-async-infra N7:parser 层(非 agent),不抛 AgentSkippedError。
+        # 返 None 让 price_consistency agent 走既有"找不到表头"preflight skip,
+        # 精细化 kind 日志供 N3 explore 分析根因。
         logger.warning(
-            "price_rule_detector LLM error kind=%s", llm_result.error.kind
+            "price_rule_detector LLM error kind=%s msg=%s",
+            llm_result.error.kind,
+            llm_result.error.message,
         )
         return None
 

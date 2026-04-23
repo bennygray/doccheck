@@ -9,8 +9,6 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from app.services.detect.agents.section_sim_impl.models import (
     ChapterBlock,
     ChapterPair,
@@ -29,7 +27,6 @@ from app.services.detect.agents.text_sim_impl import (
     tfidf as c7_tfidf,
 )
 from app.services.detect.agents.text_sim_impl.models import ParaPair
-from app.services.detect.engine import get_cpu_executor
 from app.services.llm.base import LLMProvider
 
 # 每章节在 evidence_json.chapter_pairs[*].samples 上限
@@ -53,19 +50,22 @@ async def score_all_chapter_pairs(
     max_pairs_to_llm = c7_config.max_pairs_to_llm()
 
     # 1) 每章节对算段落级相似度(CPU 密集,走 executor)
-    loop = asyncio.get_running_loop()
+    # harden-async-infra F1:per-task 子进程隔离
+    from app.core.config import settings
+    from app.services.detect.agents._subprocess import run_isolated
+
     per_chapter_pairs: list[list[ParaPair]] = []
     for cp in chapter_pairs:
         ca = chapters_a[cp.a_idx]
         cb = chapters_b[cp.b_idx]
-        pairs = await loop.run_in_executor(
-            get_cpu_executor(),
+        pairs = await run_isolated(
             c7_tfidf.compute_pair_similarity,
             list(ca.paragraphs),
             list(cb.paragraphs),
             threshold,
             # 章节内也设上限,防单章节段落爆(粗 max,跨章节再统一截 max_pairs_to_llm)
             max_pairs_to_llm,
+            timeout=settings.agent_subprocess_timeout,
         )
         per_chapter_pairs.append(pairs)
 

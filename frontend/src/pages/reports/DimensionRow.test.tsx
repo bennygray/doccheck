@@ -67,3 +67,41 @@ describe("DimensionRow — F3 身份缺失降级提示", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+/**
+ * harden-async-infra N7 / F1:新 skipped 文案不截断不变形
+ * (design D6 规范:后端写入 AgentTask.summary,前端 DimensionRow 通过
+ *  summaries[0] 原样渲染,零映射。此处参数化验证 7 条新文案在现有
+ *  Typography.Paragraph ellipsis 容器里可用,不会撑破布局。)
+ */
+describe("DimensionRow — N7/F1 新 skipped 文案渲染(harden-async-infra)", () => {
+  const newSkipSummaries = [
+    "解析崩溃,已跳过",       // subprocess crash
+    "解析超时,已跳过",       // subprocess timeout
+    "LLM 超时,已跳过",       // LLM timeout
+    "LLM 限流,已跳过",       // LLM rate_limit
+    "LLM 鉴权失败,已跳过",   // LLM auth
+    "LLM 网络错误,已跳过",   // LLM network
+    "LLM 返回异常,已跳过",   // LLM bad_response / other
+    // reviewer L4:text_similarity 的 _DEGRADED_SUMMARY(非 skipped 路径但也是降级)
+    "AI 研判暂不可用,仅展示程序相似度(降级)",
+  ];
+
+  it.each(newSkipSummaries)(
+    "summary=%p 原样渲染到 DimensionRow",
+    (summary) => {
+      render(
+        <DimensionRow
+          dim={makeDim({
+            dimension: "text_similarity",
+            summaries: [summary],
+            status_counts: { succeeded: 0, failed: 0, timeout: 0, skipped: 1 },
+          })}
+        />,
+      );
+      // Typography.Paragraph ellipsis rows=1 会在超长时用 title 属性承载全文本;
+      // 这里文案 ≤50 字,正常可见 & 不截断
+      expect(screen.getByText(summary)).toBeInTheDocument();
+    },
+  );
+});

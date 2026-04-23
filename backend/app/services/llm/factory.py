@@ -34,6 +34,22 @@ _providers: dict[_ProviderKey, LLMProvider] = {}
 _MAX_CACHE_ENTRIES = 3
 
 
+def _cap_timeout(raw: float | int | None) -> float:
+    """全局 LLM 超时 cap(harden-async-infra D4)。
+
+    无论 env 路径 (settings.llm_timeout_s) 还是 DB 路径 (cfg.timeout_s) 都过这层:
+    - None / 0 / 负数 → 返回默认 cap(防 admin 配 NULL 或误填 0 导致
+      `asyncio.wait_for(timeout=0)` 立即超时,所有 LLM 无条件失败)
+    - 正数 → min(raw, settings.llm_call_timeout) — 超过 cap 被压到 cap
+
+    reviewer H3 + M1 一并修:两入口共享该 helper 覆盖 env 路径,且防御 None/0/负数。
+    """
+    cap = settings.llm_call_timeout
+    if raw is None or raw <= 0:
+        return float(cap)
+    return float(min(float(raw), cap))
+
+
 def _build_provider(
     provider: str,
     api_key: str,
@@ -99,7 +115,7 @@ def get_llm_provider(session: "AsyncSession | None" = None) -> LLMProvider:
         settings.llm_api_key,
         settings.llm_model,
         base_url,
-        int(settings.llm_timeout_s),
+        max(1, int(_cap_timeout(settings.llm_timeout_s))),
     )
     return _get_or_create(key)
 
@@ -122,7 +138,7 @@ async def get_llm_provider_db(session: "AsyncSession") -> LLMProvider:
         cfg.api_key,
         cfg.model,
         resolved_base,
-        cfg.timeout_s,
+        max(1, int(_cap_timeout(cfg.timeout_s))),
     )
     return _get_or_create(key)
 

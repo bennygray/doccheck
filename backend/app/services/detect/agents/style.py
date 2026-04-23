@@ -31,6 +31,7 @@ from app.services.detect.agents.style_impl.llm_client import (
 )
 from app.services.detect.agents.style_impl.models import StyleFeatureBrief
 from app.services.detect.agents.style_impl.sampler import sample
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.agents.style_impl.scorer import (
     LIMITATION_NOTE,
     compute_score,
@@ -246,6 +247,22 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             all_consistent_groups.extend(
                 comparison.get("consistent_groups", [])
             )
+    except AgentSkippedError as skip_exc:
+        # harden-async-infra N7 + reviewer H2:LLM 所有重试耗尽 → AgentSkippedError
+        # 逸出,交给 engine._execute_agent_task 走 _mark_skipped 路径。
+        #
+        # MUST 在 except Exception 之前。**且必须先写 OA stub**(score=0 + skip_reason
+        # in evidence),保持与 pre-N7 降级路径的"UI/report 页有 style 维度条目"行为
+        # 一致,避免 ReportPage 按 OA 枚举维度时 style 整行消失 — 这是 reviewer H2
+        # 点出的回归风险(旧路径 `if brief is None: return AgentRunResult(score=0)`
+        # 之前一直在写 OA 行)。
+        evidence = _build_evidence(
+            cfg, enabled=True, skip_reason=f"L-8 LLM 失败: {skip_exc}"
+        )
+        await write_overall_analysis_row(
+            ctx, dimension=_DIMENSION, score=0.0, evidence=evidence
+        )
+        raise
     except Exception as e:  # noqa: BLE001
         logger.exception("style 异常")
         evidence = _build_evidence(

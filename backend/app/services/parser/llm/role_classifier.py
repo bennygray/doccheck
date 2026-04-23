@@ -116,9 +116,12 @@ async def _classify_bidder_inner(
     )
 
     if result.error is not None:
+        # harden-async-infra N7:保留 classify_by_keywords 兜底(现有设计,解析流水线
+        # 不中断);日志精细化 kind 供 N3 explore 分析大文档场景 LLM 根因占比。
         logger.warning(
-            "role_classifier LLM error kind=%s; fallback to keywords",
+            "role_classifier LLM error kind=%s msg=%s; fallback to keywords",
             result.error.kind,
+            result.error.message,
         )
         await _apply_keyword_fallback(session, docs)
         await session.commit()

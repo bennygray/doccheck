@@ -152,18 +152,20 @@ async def call_llm_judge(
 
     messages = build_prompt(bidder_a_name, bidder_b_name, doc_role, pairs)
 
+    # harden-async-infra N7:text_similarity 有本地 TF-IDF 兜底(agent 返 degraded
+    # summary),符合"有兜底则保留"规则 — LLM 失败时返 ({}, None) 让 agent 走本地
+    # 降级路径,**不**抛 AgentSkippedError。精细化日志供 N3 explore 分析根因。
     for attempt in range(2):  # 初次 + 1 次重试
         result = await provider.complete(messages)
         if result.error is not None:
+            kind = result.error.kind
             logger.warning(
                 "text_sim_llm_judge error attempt=%s kind=%s: %s",
-                attempt,
-                result.error.kind,
-                result.error.message,
+                attempt, kind, result.error.message,
             )
-            # timeout / rate_limit / network / auth / bad_response / other
-            # 仅 bad_response 或 other 走重试,其他错类型直接降级
-            if result.error.kind not in ("bad_response", "other"):
+            # 瞬态错误(bad_response / other)可能是解析抖动或未分类错,给 1 次重试机会;
+            # 其余(timeout / rate_limit / auth / network)同一请求再试意义不大,直接降级
+            if kind not in ("bad_response", "other"):
                 return {}, None
             continue
 

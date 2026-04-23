@@ -28,6 +28,7 @@ from app.db.session import async_session
 from app.models.agent_task import AgentTask
 from app.models.bidder import Bidder
 from app.services.detect.context import AgentContext, PreflightResult
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.registry import AGENT_REGISTRY
 from app.services.parser.pipeline.progress_broker import progress_broker
 
@@ -210,6 +211,13 @@ async def _execute_agent_task(agent_task_id: int) -> None:
             result = await asyncio.wait_for(spec.run(ctx), timeout=get_agent_timeout_s())
         except TimeoutError:
             await _mark_timeout(session, task)
+            await session.commit()
+            await _publish_agent_status(task)
+            return
+        except AgentSkippedError as exc:
+            # harden-async-infra D2:agent 主动请求标 skipped(subprocess 崩溃 / 超时 / LLM 超时等)
+            # MUST 在通用 `except Exception` 之前捕获
+            await _mark_skipped(session, task, str(exc))
             await session.commit()
             await _publish_agent_status(task)
             return

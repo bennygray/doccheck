@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from app.services.detect.agents.text_sim_impl import (
     aggregator as c7_aggregator,
 )
@@ -20,7 +18,6 @@ from app.services.detect.agents.text_sim_impl import (
 from app.services.detect.agents.text_sim_impl import (
     tfidf as c7_tfidf,
 )
-from app.services.detect.engine import get_cpu_executor
 from app.services.llm.base import LLMProvider
 
 
@@ -45,14 +42,17 @@ async def run_doc_level_fallback(
     threshold = c7_config.pair_score_threshold()
     max_pairs = c7_config.max_pairs_to_llm()
 
-    loop = asyncio.get_running_loop()
-    para_pairs = await loop.run_in_executor(
-        get_cpu_executor(),
+    # harden-async-infra F1:per-task 子进程隔离
+    from app.core.config import settings
+    from app.services.detect.agents._subprocess import run_isolated
+
+    para_pairs = await run_isolated(
         c7_tfidf.compute_pair_similarity,
         paragraphs_a,
         paragraphs_b,
         threshold,
         max_pairs,
+        timeout=settings.agent_subprocess_timeout,
     )
 
     if para_pairs:

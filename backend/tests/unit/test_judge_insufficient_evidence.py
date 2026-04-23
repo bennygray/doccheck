@@ -56,6 +56,18 @@ def test_all_skipped_returns_false() -> None:
     assert judge_llm._has_sufficient_evidence(tasks, [], []) is False
 
 
+def test_harden_async_infra_agentskipped_error_filtered() -> None:
+    """harden-async-infra reviewer M3 显式回归:AgentSkippedError 触发的 skipped
+    必须自动排除出信号池,避免将来 _has_sufficient_evidence 重构破坏这一
+    隐含依赖(依赖 `status == "succeeded"` 过滤)。"""
+    # 全部 SIGNAL_AGENTS 被 AgentSkippedError 标 skipped(不管 reason 是
+    # SUBPROC_CRASH / SUBPROC_TIMEOUT / LLM_TIMEOUT 任一文案)
+    tasks = [
+        _T("skipped", agent) for agent in judge_llm.SIGNAL_AGENTS
+    ]
+    assert judge_llm._has_sufficient_evidence(tasks, [], []) is False
+
+
 def test_all_signal_agents_zero_returns_false() -> None:
     tasks = [
         _T("succeeded", "text_similarity", 0),

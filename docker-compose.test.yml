@@ -1,0 +1,27 @@
+# L2 测试隔离 PostgreSQL(harden-async-infra N5)
+#
+# 用途:`pytest backend/tests/e2e/` 全量可跑,不污染 dev DB。
+#
+# 使用:
+#   1) docker-compose -f docker-compose.test.yml up -d
+#   2) export TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:55432/documentcheck_test
+#   3) cd backend && uv run pytest tests/e2e/
+#
+# 端口通过 env TEST_DB_PORT 可调(默认 55432 避免与 dev 5432 冲突);
+# volume 匿名,`docker-compose -f docker-compose.test.yml down -v` 清零 schema,
+# 下次 up 时 alembic upgrade head 重建。
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: documentcheck_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${TEST_DB_PORT:-55432}:5432"
+    # volume 匿名 — 有意不挂 host / named volume,down -v 彻底清除
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d documentcheck_test"]
+      interval: 3s
+      timeout: 2s
+      retries: 10

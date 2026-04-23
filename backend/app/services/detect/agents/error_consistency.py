@@ -32,6 +32,7 @@ from app.services.detect.agents.error_impl.keyword_extractor import (
 )
 from app.services.detect.agents.error_impl.llm_judge import call_l5
 from app.services.detect.agents.error_impl.models import PairResult
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.agents.error_impl.scorer import (
     compute_agent_score,
     compute_pair_score,
@@ -245,6 +246,21 @@ async def run(ctx: AgentContext) -> AgentRunResult:
                     pair_score=pair_score,
                 )
             )
+    except AgentSkippedError as skip_exc:
+        # harden-async-infra reviewer M1:若未来 call_l5 或其他 helper 改为 raise
+        # AgentSkippedError(N3 explore 可能引入),必须先于通用 Exception 捕获
+        # 并写 OA stub(对齐 style.py 的 H2 模式),再 re-raise 交给 engine _mark_skipped。
+        evidence = _build_evidence(
+            pair_results,
+            cfg,
+            enabled=True,
+            downgrade_mode=downgrade_mode,
+            error=f"skipped: {skip_exc}",
+        )
+        await write_overall_analysis_row(
+            ctx, dimension=_DIMENSION, score=0.0, evidence=evidence
+        )
+        raise
     except Exception as e:  # noqa: BLE001
         logger.exception("error_consistency 检测异常")
         evidence = _build_evidence(

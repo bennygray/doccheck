@@ -32,6 +32,19 @@ async def lifespan(app: FastAPI):
     # Startup: 启动生命周期 dry-run 任务(测试环境可通过 INFRA_DISABLE_LIFECYCLE=1 跳过)
     import logging
     import os
+    import sys
+
+    # config-llm-timeout-default:Windows 默认 GBK 控制台对含 U+00BA 等冷门字符的中文日志
+    # 崩 UnicodeEncodeError,把 stdout/stderr 转成 utf-8 兜底(errors='replace' 防极端字符)。
+    # 测试框架替换 stream / 容器化部署 stream 已非 TextIO wrapper 场景 → AttributeError/
+    # ValueError,静默跳过不阻塞启动。
+    for stream_name in ("stdout", "stderr"):
+        try:
+            getattr(sys, stream_name).reconfigure(
+                encoding="utf-8", errors="replace"
+            )
+        except (AttributeError, ValueError):
+            pass
 
     # test-infra-followup-wave2 Item 4:让 `app.*` logger 树级默认 INFO,方便 N3
     # 类诊断(input shape / output mix)在 uvicorn --log-level info 下自然可见。

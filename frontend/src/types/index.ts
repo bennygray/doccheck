@@ -298,6 +298,7 @@ export interface AnalysisStatusResponse {
   project_status: string;
   started_at: string | null;
   agent_tasks: AgentTask[];
+  latest_report?: ProjectAnalysisReport | null;
 }
 
 /** SSE 事件类型 */

@@ -12,7 +12,7 @@
  * 业务契约 0 变动,所有 testid 保留。
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   App,
   Button,
@@ -119,7 +119,6 @@ function timeAgo(iso: string): string {
 }
 
 export default function ProjectListPage() {
-  const navigate = useNavigate();
   const { modal, message } = App.useApp();
 
   const [tab, setTab] = useState<"active" | "completed" | "all">("active");

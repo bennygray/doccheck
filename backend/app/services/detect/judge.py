@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: F401
 
 from app.db.session import async_session
+from app.models.agent_task import AgentTask
 from app.models.analysis_report import AnalysisReport
 from app.models.bidder import Bidder
 from app.models.overall_analysis import OverallAnalysis
@@ -282,34 +283,53 @@ async def judge_and_create_report(
             "bidder_count": bidder_count,
         }
 
-        # L-9 LLM 综合研判
-        cfg = judge_llm.load_llm_judge_config()
-        llm_conclusion, llm_suggested = await _run_l9(
-            pair_comparisons,
-            overall_analyses,
-            per_dim_max,
-            ironclad_dims,
-            formula_total=formula_total,
-            formula_level=formula_level,
-            has_ironclad=has_ironclad,
-            project_info=project_info,
-            cfg=cfg,
-            provider=llm_provider,
+        # honest-detection-results D1: 证据不足前置判定(铁证短路 + 信号型 agent 白名单)
+        at_stmt = select(AgentTask).where(
+            AgentTask.project_id == project_id,
+            AgentTask.version == version,
         )
-
-        # clamp(LLM 成功) or 降级(LLM 失败)
-        if llm_conclusion is not None and llm_suggested is not None:
-            final_total = _clamp_with_llm(
-                formula_total, llm_suggested, has_ironclad
+        agent_tasks = list((await session.execute(at_stmt)).scalars().all())
+        if not judge_llm._has_sufficient_evidence(
+            agent_tasks, pair_comparisons, overall_analyses
+        ):
+            logger.info(
+                "detect: insufficient evidence project=%s v=%s, skip LLM judge",
+                project_id,
+                version,
             )
-            final_level = _compute_level(final_total, risk_levels=_risk_levels)
-            final_conclusion = llm_conclusion
-        else:
             final_total = formula_total
-            final_level = formula_level
-            final_conclusion = judge_llm.fallback_conclusion(
-                final_total, final_level, per_dim_max, ironclad_dims
+            final_level = "indeterminate"
+            final_conclusion = judge_llm.INSUFFICIENT_EVIDENCE_CONCLUSION
+            llm_conclusion = None  # 用于后面 logger 标注
+        else:
+            # L-9 LLM 综合研判
+            cfg = judge_llm.load_llm_judge_config()
+            llm_conclusion, llm_suggested = await _run_l9(
+                pair_comparisons,
+                overall_analyses,
+                per_dim_max,
+                ironclad_dims,
+                formula_total=formula_total,
+                formula_level=formula_level,
+                has_ironclad=has_ironclad,
+                project_info=project_info,
+                cfg=cfg,
+                provider=llm_provider,
             )
+
+            # clamp(LLM 成功) or 降级(LLM 失败)
+            if llm_conclusion is not None and llm_suggested is not None:
+                final_total = _clamp_with_llm(
+                    formula_total, llm_suggested, has_ironclad
+                )
+                final_level = _compute_level(final_total, risk_levels=_risk_levels)
+                final_conclusion = llm_conclusion
+            else:
+                final_total = formula_total
+                final_level = formula_level
+                final_conclusion = judge_llm.fallback_conclusion(
+                    final_total, final_level, per_dim_max, ironclad_dims
+                )
 
         # INSERT AnalysisReport
         report = AnalysisReport(

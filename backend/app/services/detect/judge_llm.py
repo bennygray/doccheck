@@ -27,6 +27,58 @@ logger = logging.getLogger(__name__)
 
 FALLBACK_PREFIX = "AI 综合研判暂不可用"
 
+# honest-detection-results D1: 信号型 agent 白名单
+# 这些 agent 的 score=0 表示"真的没算出信号",算进证据充分性判定分母
+# 不在此集合的 agent (metadata_* / price_consistency) score=0 表示"查了没发现异常",
+# 不代表"无信号",不进分母 — 避免干净项目被误标 indeterminate
+SIGNAL_AGENTS: frozenset[str] = frozenset({
+    "text_similarity",
+    "section_similarity",
+    "structure_similarity",
+    "image_reuse",
+    "style",
+    "error_consistency",
+})
+
+INSUFFICIENT_EVIDENCE_CONCLUSION = "证据不足,无法判定围标风险(有效信号维度全部为零)"
+
+
+def _has_sufficient_evidence(
+    agent_tasks,
+    pair_comparisons,
+    overall_analyses,
+) -> bool:
+    """honest-detection-results D1:证据充分性判定。
+
+    Step 1 铁证短路:任一 PC.is_ironclad 或 OA.has_iron_evidence → True
+        避免 agent.score=0 但铁证存在时产出 total_score=85 + indeterminate 的矛盾
+
+    Step 2 信号型 agent 全零判定:只看 SIGNAL_AGENTS,过滤 succeeded 的 tasks
+        - 无信号型 succeeded agent → False(证据不足)
+        - 有信号型 agent 至少一个 score>0 → True
+        - 信号型 agent 都是 succeeded 但 score 全 0 → False
+    """
+    # Step 1:铁证短路
+    for pc in pair_comparisons or []:
+        if pc.is_ironclad:
+            return True
+    for oa in overall_analyses or []:
+        ev = getattr(oa, "evidence_json", None) or {}
+        if isinstance(ev, dict) and ev.get("has_iron_evidence") is True:
+            return True
+
+    # Step 2:信号型 agent 判定
+    signals = [
+        t for t in (agent_tasks or [])
+        if t.status == "succeeded" and t.agent_name in SIGNAL_AGENTS
+    ]
+    if not signals:
+        return False
+    return any(
+        (float(t.score) if t.score is not None else 0.0) > 0
+        for t in signals
+    )
+
 
 @dataclass(frozen=True)
 class LLMJudgeConfig:

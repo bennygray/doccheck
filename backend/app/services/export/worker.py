@@ -114,9 +114,24 @@ async def run_export(job_id: int) -> None:
                     )
                 )
             ).scalars().all()
+            # honest-detection-results F3: 加载 bidders 以支持 identity_info_status 降级文案
+            from app.models.bidder import Bidder
+
+            bidder_rows = (
+                await session.execute(
+                    select(Bidder).where(
+                        Bidder.project_id == project_id,
+                        Bidder.deleted_at.is_(None),
+                    )
+                )
+            ).scalars().all()
 
             context = build_render_context(
-                project=project, ar=ar, oa_rows=oa_rows, pc_rows=pc_rows
+                project=project,
+                ar=ar,
+                oa_rows=oa_rows,
+                pc_rows=pc_rows,
+                bidders=bidder_rows,
             )
 
         await _publish(project_id, job_id, "rendering", 0.4, "渲染模板")

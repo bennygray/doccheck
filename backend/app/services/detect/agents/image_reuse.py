@@ -32,6 +32,7 @@ from app.services.detect.context import (
     AgentRunResult,
     PreflightResult,
 )
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.registry import register_agent
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
     # 2) 比较
     try:
         result = await compare(ctx.session, ctx.project_id, cfg)
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise,防通用 except 吞 skipped 语义
+        raise
     except Exception as e:  # noqa: BLE001
         logger.exception("image_reuse 比较异常")
         evidence = _build_evidence(

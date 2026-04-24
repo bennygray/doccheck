@@ -16,6 +16,7 @@ import type {
   AnalysisStatusResponse,
   DetectEvent,
   ProjectAnalysisReport,
+  RiskLevel,
 } from "../types";
 
 export interface DetectProgressState {
@@ -142,10 +143,11 @@ export function useDetectProgress(
             ),
           );
         } else if (eventType === "report_ready") {
+          // honest-detection-results: risk_level 收紧为 RiskLevel union(含 indeterminate)
           const d = data as {
             version: number;
             total_score: number;
-            risk_level: "high" | "medium" | "low";
+            risk_level: RiskLevel;
           };
           setLatestReport({
             version: d.version,

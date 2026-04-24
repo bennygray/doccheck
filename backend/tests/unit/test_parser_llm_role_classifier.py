@@ -15,6 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import async_session
 from app.models.bid_document import BidDocument
 from app.models.bidder import Bidder
+from app.models.document_image import DocumentImage
+from app.models.document_metadata import DocumentMetadata
+from app.models.document_sheet import DocumentSheet
 from app.models.document_text import DocumentText
 from app.models.project import Project
 from app.models.user import User
@@ -85,18 +88,90 @@ async def _seed_bidder_with_docs(
 
 @pytest_asyncio.fixture
 async def clean_parser_data():
-    """每个测试前后清干净,不影响 C2/C3/C4 fixture。"""
-    from sqlalchemy import delete
+    """只清理本测试文件 seed 的行(按 User.username 前缀 "rc_" 过滤),
+    不动共享 DB 里其他测试或手工调试产生的数据
+    (fix-mac-packed-zip-parsing 3.3 范围;原实现 DELETE WHERE id>0 会遇到
+    document_metadata/sheet 等子表 FK 冲突)。"""
+    from sqlalchemy import delete, select
 
-    async with async_session() as session:
-        for M in (DocumentText, BidDocument, Bidder, Project, User):
-            await session.execute(delete(M).where(M.id > 0))
-        await session.commit()
+    prefix = "rc_"
+
+    async def _purge():
+        async with async_session() as session:
+            user_ids = (
+                await session.execute(
+                    select(User.id).where(User.username.like(f"{prefix}%"))
+                )
+            ).scalars().all()
+            if not user_ids:
+                return
+            project_ids = (
+                await session.execute(
+                    select(Project.id).where(Project.owner_id.in_(user_ids))
+                )
+            ).scalars().all()
+            bidder_ids = (
+                (
+                    await session.execute(
+                        select(Bidder.id).where(
+                            Bidder.project_id.in_(project_ids)
+                        )
+                    )
+                ).scalars().all()
+                if project_ids
+                else []
+            )
+            doc_ids = (
+                (
+                    await session.execute(
+                        select(BidDocument.id).where(
+                            BidDocument.bidder_id.in_(bidder_ids)
+                        )
+                    )
+                ).scalars().all()
+                if bidder_ids
+                else []
+            )
+            if doc_ids:
+                await session.execute(
+                    delete(DocumentText).where(
+                        DocumentText.bid_document_id.in_(doc_ids)
+                    )
+                )
+                await session.execute(
+                    delete(DocumentMetadata).where(
+                        DocumentMetadata.bid_document_id.in_(doc_ids)
+                    )
+                )
+                await session.execute(
+                    delete(DocumentImage).where(
+                        DocumentImage.bid_document_id.in_(doc_ids)
+                    )
+                )
+                await session.execute(
+                    delete(DocumentSheet).where(
+                        DocumentSheet.bid_document_id.in_(doc_ids)
+                    )
+                )
+                await session.execute(
+                    delete(BidDocument).where(BidDocument.id.in_(doc_ids))
+                )
+            if bidder_ids:
+                await session.execute(
+                    delete(Bidder).where(Bidder.id.in_(bidder_ids))
+                )
+            if project_ids:
+                await session.execute(
+                    delete(Project).where(Project.id.in_(project_ids))
+                )
+            await session.execute(
+                delete(User).where(User.id.in_(user_ids))
+            )
+            await session.commit()
+
+    await _purge()
     yield
-    async with async_session() as session:
-        for M in (DocumentText, BidDocument, Bidder, Project, User):
-            await session.execute(delete(M).where(M.id > 0))
-        await session.commit()
+    await _purge()
 
 
 @pytest.mark.asyncio

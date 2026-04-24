@@ -18,6 +18,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db.session import async_session
+from app.models.agent_task import AgentTask
 from app.models.analysis_report import AnalysisReport
 from app.models.bidder import Bidder
 from app.models.overall_analysis import OverallAnalysis
@@ -96,6 +97,45 @@ async def _seed_oas(
         await s.commit()
 
 
+async def _seed_agent_tasks_succeeded(
+    project_id: int, agent_names: list[str]
+) -> None:
+    """为 honest-detection-results 的 `_has_sufficient_evidence` 提供信号。
+
+    该函数断言"至少一个 SIGNAL_AGENTS agent 以 succeeded + score>0 状态存在",
+    否则 judge 直接走 `INSUFFICIENT_EVIDENCE_CONCLUSION` 而非 `FALLBACK_PREFIX`。
+    老 L2 测试在 dev DB 下因残留 AgentTask 行巧合通过;clean testdb(N5)暴露出
+    显式 seed AgentTask 的必要(harden-async-infra 观察)。
+
+    对 pair 型 agent 设 bidder_a/b(满足 check constraint
+    `ck_agent_tasks_pair_bidder_consistency`);error_consistency 是 global 型,
+    两侧 NULL。
+    """
+    async with async_session() as s:
+        bidders = (
+            await s.execute(
+                select(Bidder).where(Bidder.project_id == project_id)
+            )
+        ).scalars().all()
+        if len(bidders) < 2:
+            raise RuntimeError("seed bidders first")
+        for name in agent_names:
+            is_global = name == "error_consistency"
+            s.add(
+                AgentTask(
+                    project_id=project_id,
+                    version=1,
+                    agent_name=name,
+                    agent_type="global" if is_global else "pair",
+                    status="succeeded",
+                    score=Decimal("50"),
+                    pair_bidder_a_id=None if is_global else bidders[0].id,
+                    pair_bidder_b_id=None if is_global else bidders[1].id,
+                )
+            )
+        await s.commit()
+
+
 async def _get_report(project_id: int) -> AnalysisReport | None:
     async with async_session() as s:
         return (
@@ -131,6 +171,12 @@ async def test_s1_llm_upgrade_crosses_tier(
         ],
     )
     await _seed_oas(pid, [("error_consistency", 100, None)])
+    # harden-async-infra N5:clean testdb 暴露需显式 seed AgentTask 满足
+    # honest-detection-results 的 `_has_sufficient_evidence` SIGNAL_AGENTS 检查
+    await _seed_agent_tasks_succeeded(
+        pid,
+        ["text_similarity", "section_similarity", "error_consistency"],
+    )
 
     # mock LLM 返 suggested=75(override e2e conftest autouse 的 (None,None))
     async def _llm_upgrade(summary, formula_total, *, provider=None, cfg=None):
@@ -221,6 +267,9 @@ async def test_s3_llm_failed_goes_to_fallback(
         ],
     )
     await _seed_oas(pid, [("error_consistency", 90, None)])
+    await _seed_agent_tasks_succeeded(
+        pid, ["text_similarity", "error_consistency"]
+    )
 
     # autouse _disable_l9_llm_by_default 已 patch,直接跑即走降级
     await judge.judge_and_create_report(pid, version=1)
@@ -258,6 +307,9 @@ async def test_s4_env_disabled_skips_llm(
     pid = await _seed_project_with_bidders(seeded_reviewer.id, n=2)
     await _seed_pcs(pid, [("text_similarity", 50, False)])
     await _seed_oas(pid, [("error_consistency", 50, None)])
+    await _seed_agent_tasks_succeeded(
+        pid, ["text_similarity", "error_consistency"]
+    )
 
     await judge.judge_and_create_report(pid, version=1)
 

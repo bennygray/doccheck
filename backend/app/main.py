@@ -33,6 +33,15 @@ async def lifespan(app: FastAPI):
     import logging
     import os
 
+    # test-infra-followup-wave2 Item 4:让 `app.*` logger 树级默认 INFO,方便 N3
+    # 类诊断(input shape / output mix)在 uvicorn --log-level info 下自然可见。
+    # 只设 logger level,不改 handler/formatter/dictConfig;prod handler 默认 warning
+    # 级仍过滤 info 输出。try/except 兜 logging 初始化未就绪的极端场景。
+    try:
+        logging.getLogger("app").setLevel(logging.INFO)
+    except Exception:  # noqa: BLE001 - logging 失败不阻塞启动
+        pass
+
     startup_logger = logging.getLogger("app.startup")
 
     task = None

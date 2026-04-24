@@ -61,32 +61,53 @@ async def test_stage2_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stage1_llm_error_returns_none() -> None:
+async def test_stage1_llm_timeout_raises_skipped() -> None:
+    """harden-async-infra N7:所有重试耗尽 → 抛 AgentSkippedError(LLM 超时)。"""
+    from app.services.detect.errors import (
+        SKIP_REASON_LLM_TIMEOUT,
+        AgentSkippedError,
+    )
+
     cfg = StyleConfig(llm_max_retries=2)
     provider = _MockProvider(
         [LLMResult(text="", error=LLMError(kind="timeout", message="x"))] * 3
     )
-    result = await llm_client.call_l8_stage1(provider, 1, ["p"], cfg)
-    assert result is None
+    with pytest.raises(AgentSkippedError) as excinfo:
+        await llm_client.call_l8_stage1(provider, 1, ["p"], cfg)
+    assert str(excinfo.value) == SKIP_REASON_LLM_TIMEOUT
 
 
 @pytest.mark.asyncio
-async def test_stage2_llm_error_returns_none() -> None:
+async def test_stage2_llm_rate_limit_raises_skipped() -> None:
+    """不同 error.kind 映射到不同的 skip reason。"""
+    from app.services.detect.errors import (
+        SKIP_REASON_LLM_RATE_LIMIT,
+        AgentSkippedError,
+    )
+
     cfg = StyleConfig(llm_max_retries=1)
     provider = _MockProvider(
-        [LLMResult(text="", error=LLMError(kind="timeout", message="x"))] * 3
+        [LLMResult(text="", error=LLMError(kind="rate_limit", message="x"))] * 3
     )
     briefs = {1: StyleFeatureBrief(bidder_id=1)}
-    result = await llm_client.call_l8_stage2(provider, briefs, cfg)
-    assert result is None
+    with pytest.raises(AgentSkippedError) as excinfo:
+        await llm_client.call_l8_stage2(provider, briefs, cfg)
+    assert str(excinfo.value) == SKIP_REASON_LLM_RATE_LIMIT
 
 
 @pytest.mark.asyncio
-async def test_stage1_bad_json_returns_none() -> None:
+async def test_stage1_bad_json_raises_skipped() -> None:
+    """解析失败也会耗尽重试 → 抛 AgentSkippedError(LLM 返回异常)。"""
+    from app.services.detect.errors import (
+        SKIP_REASON_LLM_BAD_RESPONSE,
+        AgentSkippedError,
+    )
+
     cfg = StyleConfig(llm_max_retries=0)
     provider = _MockProvider([LLMResult(text="not json")])
-    result = await llm_client.call_l8_stage1(provider, 1, ["p"], cfg)
-    assert result is None
+    with pytest.raises(AgentSkippedError) as excinfo:
+        await llm_client.call_l8_stage1(provider, 1, ["p"], cfg)
+    assert str(excinfo.value) == SKIP_REASON_LLM_BAD_RESPONSE
 
 
 @pytest.mark.asyncio

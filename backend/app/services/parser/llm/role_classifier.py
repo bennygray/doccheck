@@ -27,7 +27,10 @@ from app.services.parser.llm.prompts import (
     ROLE_CLASSIFY_SYSTEM_PROMPT,
     ROLE_CLASSIFY_USER_TEMPLATE,
 )
-from app.services.parser.llm.role_keywords import classify_by_keywords
+from app.services.parser.llm.role_keywords import (
+    classify_by_keywords,
+    classify_by_keywords_on_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,26 @@ VALID_ROLES = frozenset(
         "other",
     }
 )
+
+
+# N3 observability:典型 cp850-decoded-GBK mojibake 片段,用于 file_name_has_mojibake 粗判。
+_MOJIBAKE_MARKERS: tuple[str, ...] = (
+    "µ▒", "µ£", "µ¥", "µ¡", "µ£", "µà", "µ¿", "µ╡",
+    "Φï", "Φ¿", "Φ╡", "Φí",
+    "Θö", "Θ£", "ΘÖ", "Θ¢",
+    "σ┐", "σ║", "σ£", "σ╣", "σ╕", "σÆ",
+    "Σ╗", "Σ╕", "Σ╜",
+)
+
+
+def _looks_mojibake(name: str) -> bool:
+    """粗判文件名是否疑似 cp850→GBK 乱码(零依赖,诊断用)。
+
+    只在 N3 observability info 日志里消费;误判不影响任何业务控制流。
+    """
+    if not name:
+        return False
+    return any(marker in name for marker in _MOJIBAKE_MARKERS)
 
 
 @dataclass(frozen=True)
@@ -93,9 +116,12 @@ async def _classify_bidder_inner(
 
     # 构造 LLM 输入:每个文档首段文本(前 500 字符)
     files_block_parts: list[str] = []
+    snippet_empty = 0
     for doc in docs:
         first_text = await _get_first_paragraph(session, doc.id)
         snippet = (first_text or "")[:500]
+        if not snippet.strip():
+            snippet_empty += 1
         files_block_parts.append(
             f"- document_id={doc.id}  name={doc.file_name!r}\n  first_text: {snippet}"
         )
@@ -103,6 +129,16 @@ async def _classify_bidder_inner(
 
     user_msg = ROLE_CLASSIFY_USER_TEMPLATE.format(
         file_count=len(docs), files_block=files_block
+    )
+
+    # N3 observability:input shape(files / 空 snippet / prompt 字符数 / 文件名是否乱码)
+    logger.info(
+        "role_classifier input files=%d snippet_empty=%d total_prompt_chars=%d "
+        "file_name_has_mojibake=%s",
+        len(docs),
+        snippet_empty,
+        len(user_msg),
+        any(_looks_mojibake(d.file_name or "") for d in docs),
     )
 
     result = await llm.complete(
@@ -113,20 +149,26 @@ async def _classify_bidder_inner(
     )
 
     if result.error is not None:
+        # harden-async-infra N7:保留 classify_by_keywords 兜底(现有设计,解析流水线
+        # 不中断);日志精细化 kind 供 N3 explore 分析大文档场景 LLM 根因占比。
         logger.warning(
-            "role_classifier LLM error kind=%s; fallback to keywords",
+            "role_classifier LLM error kind=%s msg=%s; fallback to keywords",
             result.error.kind,
+            result.error.message,
         )
-        _apply_keyword_fallback(docs)
+        await _apply_keyword_fallback(session, docs)
         await session.commit()
         return ClassifyResult(llm_used=False, documents_updated=len(docs))
 
     parsed = _parse_llm_json(result.text)
     if parsed is None:
+        # N3 observability:raw_text 前 200 字符帮助诊断截断模式(H3 鉴别)
         logger.warning(
-            "role_classifier LLM returned invalid JSON; fallback to keywords"
+            "role_classifier LLM returned invalid JSON; fallback to keywords "
+            "raw_text_head=%r",
+            (result.text or "")[:200],
         )
-        _apply_keyword_fallback(docs)
+        await _apply_keyword_fallback(session, docs)
         await session.commit()
         return ClassifyResult(llm_used=False, documents_updated=len(docs))
 
@@ -140,6 +182,19 @@ async def _classify_bidder_inner(
             conf = confidence if confidence in ("high", "low") else "high"
             roles_map[doc_id] = (role, conf)
 
+    # N3 observability:output confidence mix(high / low / LLM 漏返)
+    # 只统计 docs 集合内的 doc_id(避免 LLM 幻想 id 污染 low 计数)
+    docs_ids = {d.id for d in docs}
+    high_count = sum(1 for did, (_, c) in roles_map.items() if did in docs_ids and c == "high")
+    low_count = sum(1 for did, (_, c) in roles_map.items() if did in docs_ids and c == "low")
+    missing_count = len(docs) - sum(1 for did in roles_map if did in docs_ids)
+    logger.info(
+        "role_classifier output llm_confidence_high=%d low=%d missing=%d",
+        high_count,
+        low_count,
+        missing_count,
+    )
+
     missing_docs: list[BidDocument] = []
     for doc in docs:
         if doc.id in roles_map:
@@ -151,7 +206,7 @@ async def _classify_bidder_inner(
 
     # LLM 漏返的文档走规则兜底
     if missing_docs:
-        _apply_keyword_fallback(missing_docs)
+        await _apply_keyword_fallback(session, missing_docs)
 
     # 身份信息 → bidder.identity_info
     identity = parsed.get("identity_info")
@@ -169,10 +224,27 @@ async def _classify_bidder_inner(
     return ClassifyResult(llm_used=True, documents_updated=len(docs))
 
 
-def _apply_keyword_fallback(docs: list[BidDocument]) -> None:
-    """对每个 doc 按文件名关键词走 classify_by_keywords,标 role_confidence='low'。"""
+async def _apply_keyword_fallback(
+    session: AsyncSession, docs: list[BidDocument]
+) -> None:
+    """两级关键词兜底(fix-mac-packed-zip-parsing 3.2):
+
+    1. 若 doc.parse_status == 'identified',先读首段正文 ≤1000 字,调
+       ``classify_by_keywords_on_text`` 做正文关键词匹配;命中即用该 role。
+    2. 未命中(或非 identified)再调 ``classify_by_keywords(file_name)``。
+    3. 仍未命中 → role='other'。
+
+    所有兜底路径一律 ``role_confidence='low'``。
+    """
     for doc in docs:
-        doc.file_role = classify_by_keywords(doc.file_name)
+        role: str | None = None
+        if doc.parse_status == "identified":
+            first_text = await _get_first_paragraph(session, doc.id)
+            if first_text:
+                role = classify_by_keywords_on_text(first_text[:1000])
+        if role is None:
+            role = classify_by_keywords(doc.file_name or "")
+        doc.file_role = role or "other"
         doc.role_confidence = "low"
 
 

@@ -88,8 +88,10 @@
 
 - **角色枚举**(9 种):`technical / construction / pricing / unit_price / bid_letter / qualification / company_intro / authorization / other`
 - **身份信息** JSONB schema:`{company_full_name?, company_short_name?, project_manager?, legal_rep?, qualification_no?, contact_phone?}`,所有字段可选
-- **LLM 失败兜底**(D2 决策):
-  - 角色分类:fallback 到 `role_keywords.py` 关键词匹配;全未命中 → `role='other', confidence='low'`
+- **LLM 失败兜底**(D2 决策 + fix-mac-packed-zip-parsing 补丁):
+  - 角色分类:两级兜底链路
+    1. 先对 `parse_status=identified` 的 DOCX/XLSX 读取 `document_texts` 首段 ≤1000 字(按 `paragraph_index` 升序取 `location='body'` 最早的段落),调 `classify_by_keywords_on_text` 做子串关键词匹配(复用 `ROLE_KEYWORDS`);命中即返回对应角色,`role_confidence='low'`
+    2. 未命中(或该文档正文为空/未 identified)再落到 `classify_by_keywords(doc.file_name)` 文件名兜底;仍未命中则 `role='other', role_confidence='low'`
   - 身份信息:不做规则兜底,`bidders.identity_info = NULL`;bidder 仍进 `identified`(身份缺失不阻塞)
 - 结果写 `bid_documents.file_role` / `bid_documents.role_confidence` / `bidders.identity_info`
 
@@ -101,12 +103,17 @@
 #### Scenario: LLM 超时走规则兜底
 
 - **WHEN** 调用 LLM 返回 `LLMResult.error.kind='timeout'`
-- **THEN** 所有文档按文件名关键词走 `role_keywords.py` 兜底:含"报价"→ `pricing`,含"技术"→ `technical`,依次检查;未命中 → `other`;`role_confidence='low'`(所有兜底命中都标 low);`bidders.identity_info = NULL`;bidder 进 `identified`
+- **THEN** 所有文档先走正文关键词兜底、未命中再走文件名关键词兜底;命中任一路径 → 对应角色 + `role_confidence='low'`;全未命中 → `role='other', role_confidence='low'`;`bidders.identity_info = NULL`;bidder 进 `identified`
 
 #### Scenario: LLM 返回非法 JSON 走规则兜底
 
 - **WHEN** LLM 返回 `text='{"roles": [...' 缺右括号
-- **THEN** 视同 `bad_response` 错,走规则兜底路径(同 timeout 场景)
+- **THEN** 视同 `bad_response` 错,走两级兜底路径(同 timeout 场景)
+
+#### Scenario: 文件名乱码但正文含关键词
+
+- **WHEN** LLM 失败且文件名为乱码(如 `Σ╛¢σ║öσòåA/...docx`,文件名关键词零命中),但正文首段含"投标报价一览表"字样
+- **THEN** 正文关键词匹配命中 `pricing`,`file_role='pricing', role_confidence='low'`;不再走文件名兜底
 
 #### Scenario: 身份信息部分字段缺失
 
@@ -120,8 +127,13 @@
 
 #### Scenario: 规则兜底命中"other"
 
-- **WHEN** 文件名 "XYZ 文件.docx" 不含任何关键词,LLM 也失败
+- **WHEN** 文件名与正文均不含任何关键词,LLM 也失败
 - **THEN** `file_role='other', role_confidence='low'`
+
+#### Scenario: 文档未 identified 时跳过正文兜底
+
+- **WHEN** LLM 失败,且某文档 `parse_status != 'identified'`(内容提取失败,`document_texts` 为空)
+- **THEN** 跳过正文关键词兜底,直接走文件名关键词兜底
 
 ---
 
@@ -453,11 +465,28 @@
 
 ### Requirement: 角色关键词兜底规则
 
-系统 SHALL 在 `app/services/parser/llm/role_keywords.py` 维护 `ROLE_KEYWORDS: dict[str, list[str]]` 常量,用于 LLM 失败时的文件名关键词匹配兜底。
+系统 SHALL 在 `app/services/parser/llm/role_keywords.py` 维护 `ROLE_KEYWORDS: dict[str, list[str]]` 常量,用于 LLM 失败时的"正文关键词兜底 + 文件名关键词兜底"两级匹配。
 
 - 8 个角色各配一组关键词(pricing / technical / construction / unit_price / bid_letter / qualification / company_intro / authorization);第 9 个角色 `other` 为默认兜底,无需关键词
-- 关键词匹配采用"子串包含"(不区分大小写),按字典声明顺序遍历,首次命中即返回
-- 本期不支持管理员动态维护(D2 决策);C17 升级为 DB + admin UI
+- 提供两个入口函数:
+  - `classify_by_keywords(file_name: str) -> str | None`:对文件名做子串包含匹配(不区分大小写),按字典声明顺序遍历,首次命中即返回,全未命中返回 `None`
+  - `classify_by_keywords_on_text(text: str) -> str | None`:对正文首段文本做子串包含匹配(不区分大小写),规则同上
+- **[honest-detection-results]** ROLE_KEYWORDS 实际存在 3 处副本,本 change 采取**降级同步约束**(不强求值集合完全相等):
+  1. `app/services/parser/llm/role_keywords.py` — runtime 两级兜底匹配入口(**SSOT,关键词加减从这里开始**)
+  2. `app/services/parser/llm/prompts.py` — LLM 系统 prompt 中"角色→主要关键词"的说明性描述(**不进机械化测试**,改关键词时需 docstring 标注并人工 review 同步)
+  3. `app/services/admin/rules_defaults.py` — admin UI 管理员可配置关键词的默认值(**允许用短子串以扩大覆盖范围**,与 role_keywords.py 的复合词策略不同)
+- 同步约束:
+  - (a) 三处对 9 种 role 的 key 集合完全一致
+  - (b) 每处每个 role 的 keywords list 非空
+  - (c) **不要求** value 集合相等(rules_defaults.py 短子串与 role_keywords.py 复合词故意不等是 admin 默认覆盖语义)
+  - (d) **弱一致性约束**:rules_defaults.py 每个关键词 MUST 是 role_keywords.py 对应 role 里某个 keyword 的子串(防止 defaults 加了 SSOT 没有的词漂移)
+- **[honest-detection-results]** 行业术语补充(10 个新词加到 role_keywords.py,rules_defaults.py 可酌情加对应短子串):
+  - `pricing`: 增加 `价格标`、`开标一览表`
+  - `qualification`: 增加 `资信标`、`资信`、`业绩`、`类似业绩`
+  - `company_intro`: 增加 `企业简介`
+  - `construction`: 增加 `施工进度`、`进度计划`
+- **[honest-detection-results]** `rules_defaults.py:71` 的 `authorization` keywords 当前为 `["授权", "委托"]`,补一项 `"授权委托书"`(之前提案误称"整条缺失",实为少一词)
+- 本期不支持管理员动态维护(D2 决策);C17 升级为 DB + admin UI(admin_rules capability);三副本合并 SSOT 留 follow-up
 
 #### Scenario: 角色关键词常量存在
 
@@ -469,10 +498,65 @@
 - **WHEN** 文件名 "投标报价.xlsx",调用 `classify_by_keywords(name)`
 - **THEN** 返回 `"pricing"`(命中关键词 "报价")
 
-#### Scenario: 未命中返回 other
+#### Scenario: 文件名未命中返回 None
 
 - **WHEN** 文件名 "XYZ.docx" 不含任何关键词
-- **THEN** 返回 `"other"`
+- **THEN** `classify_by_keywords` 返回 `None`(调用方据此决定走下一层兜底或兜底到 "other")
+
+#### Scenario: 正文命中关键词返回对应角色
+
+- **WHEN** 正文首段"本公司针对本次招标项目提交投标报价一览表如下",调用 `classify_by_keywords_on_text(text)`
+- **THEN** 返回 `"pricing"`(命中关键词 "报价")
+
+#### Scenario: 正文未命中返回 None
+
+- **WHEN** 正文首段不含任何角色关键词
+- **THEN** `classify_by_keywords_on_text` 返回 `None`
+
+#### Scenario: 新增"价格标"术语命中 pricing
+
+- **WHEN** 文件名 "XX 价格标.docx",调用 `classify_by_keywords(name)`
+- **THEN** 返回 `"pricing"`
+
+#### Scenario: 新增"资信标"术语命中 qualification
+
+- **WHEN** 文件名 "XX 资信标.docx",调用 `classify_by_keywords(name)`
+- **THEN** 返回 `"qualification"`
+
+#### Scenario: 新增"类似业绩"术语命中 qualification
+
+- **WHEN** 文件名 "类似业绩证明.docx" 或正文"公司完成过如下类似业绩",调用对应 classify 函数
+- **THEN** 返回 `"qualification"`
+
+#### Scenario: 新增"开标一览表"术语命中 pricing
+
+- **WHEN** 文件名含 "开标一览表"
+- **THEN** `classify_by_keywords` 返回 `"pricing"`
+
+#### Scenario: 新增"企业简介"术语命中 company_intro
+
+- **WHEN** 文件名 "企业简介.docx",调用 `classify_by_keywords(name)`
+- **THEN** 返回 `"company_intro"`(原有表只有"企业介绍/公司简介/公司概况",不含"企业简介")
+
+#### Scenario: 新增"施工进度"/"进度计划"术语命中 construction
+
+- **WHEN** 文件名 "施工进度表.docx" 或 "进度计划.xlsx"
+- **THEN** `classify_by_keywords` 分别返回 `"construction"`
+
+#### Scenario: 两处可机械校验副本保持 key 同步
+
+- **WHEN** L1 测试 `test_role_keywords_2way_sync` 比对 `role_keywords.py::ROLE_KEYWORDS` 和 `rules_defaults.py::ROLE_KEYWORDS`(prompts.py 不进测试,因其为自然语言描述无可靠提取规则)
+- **THEN** 两处 key 集合完全相同;两处每个 role 的 keywords list 非空;**不**要求 value 集合相等(rules_defaults.py 可用短子串);defaults 每个关键词 MUST 是 SSOT 对应 role 里某个 keyword 的子串
+
+#### Scenario: rules_defaults.py 的 authorization 含授权委托书
+
+- **WHEN** 读取 `admin/rules_defaults.py::ROLE_KEYWORDS["authorization"]`
+- **THEN** 列表含 `授权委托书`、`授权`、`委托` 三项(change 前只有后两项)
+
+#### Scenario: rules_defaults.py 允许短子串策略
+
+- **WHEN** `role_keywords.py::ROLE_KEYWORDS["pricing"]` 含复合词 `投标报价`,而 `rules_defaults.py::ROLE_KEYWORDS["pricing"]` 含短子串 `报价`
+- **THEN** 两者**都合法**,测试不 fail;本 change 不改 admin 默认的短子串覆盖策略
 
 ---
 
@@ -643,3 +727,26 @@ per-bidder 解析流水线（`run_pipeline`）在 bidder 到达终态后，SHALL
 #### Scenario: bidder 解析失败
 - **WHEN** `run_pipeline()` 将 bidder 状态设为 `identify_failed` 或 `price_failed`
 - **THEN** 同样调用项目状态聚合函数（失败也是终态）
+
+
+### Requirement: role_classifier 诊断日志契约
+
+`backend/app/services/parser/llm/role_classifier.py::_classify_bidder_inner` SHALL 在 LLM 调用前后输出足够诊断 N3(LLM 大文档精度退化)根因归类的结构化日志,覆盖"LLM 成功 + 自返 low" 与 "JSON 解析失败"两条现有 `kind` 日志未覆盖的决策路径。具体内容:
+
+- **input shape**:`logger.info` SHALL 在 `llm.complete()` 调用前记录 `files=<int>`、`snippet_empty=<int>`(文档首段正文为空的份数)、`total_prompt_chars=<int>`(完整 user message 字符数)、`file_name_has_mojibake=<bool>`(文件名是否疑似 cp850→GBK 乱码,启发式判定)
+- **output confidence mix**:`logger.info` SHALL 在 LLM 返回解析成功后、roles 写入 DB 前记录 `llm_confidence_high=<int>`、`llm_confidence_low=<int>`、`llm_confidence_missing=<int>`(LLM 漏返而走关键词兜底的文档数);三者之和 MUST 等于该 bidder 该批次文档数
+- **raw text head**:既有 "role_classifier LLM returned invalid JSON" `logger.warning` SHALL 追加 `raw_text_head=<前 200 字符>`(按字符数,不是字节),用于诊断 response 截断模式
+
+上述三处日志 MUST 零控制流/返回值变化,失败仅影响日志输出不影响主流水线。LLM 调用失败路径(既有 `kind=X msg=Y` warning)保持不变;日志 level 用 `logger.info`(prod 默认 warning 级不输出,诊断时主动调低)。
+
+#### Scenario: LLM 成功路径记 input shape + output mix
+- **WHEN** role_classifier 处理一个 bidder,其 DOCX/XLSX 文档集传入 LLM 并返回有效 JSON(含 high / low / 漏返文档的混合)
+- **THEN** caplog 捕获 1 条 input shape info(files/snippet_empty/total_prompt_chars/file_name_has_mojibake 字段齐全)+ 1 条 output mix info(high+low+missing 之和等于输入文档数);**不**触发任何 kind warning 或 invalid JSON warning
+
+#### Scenario: LLM 失败路径仅记 kind,不记 output mix
+- **WHEN** role_classifier 处理一个 bidder,LLM 返回 `result.error != None`(kind=timeout / rate_limit / ...)
+- **THEN** caplog 捕获既有 `"role_classifier LLM error kind=%s msg=%s; fallback to keywords"` warning(未回归)+ input shape info(调用前已打);**不**捕获 output confidence mix info(因为 LLM 未成功返回,不存在 mix 状态)
+
+#### Scenario: JSON 解析失败路径 warning 带 raw_text_head
+- **WHEN** LLM 返回非 None、但 `_parse_llm_json` 返回 None(LLM 输出为非法 JSON,如被截断或 markdown 包裹错位)
+- **THEN** caplog 捕获的 warning 消息 MUST 含 `raw_text_head=` 字段 + 前 200 字符原始输出;**不**触发 output confidence mix info(解析未成功)

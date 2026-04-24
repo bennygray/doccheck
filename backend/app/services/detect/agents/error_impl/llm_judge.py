@@ -107,21 +107,32 @@ async def call_l5(
 
     attempts = cfg.llm_max_retries + 1  # 首次 + 重试
     last_error: Any = None
+    last_kind: str = "other"
     for i in range(attempts):
         result = await provider.complete(messages, temperature=0.0)
         if not result.ok:
             last_error = result.error
+            last_kind = result.error.kind if result.error else "other"
             logger.warning(
-                "L-5 attempt %d/%d failed: %s", i + 1, attempts, result.error
+                "L-5 attempt %d/%d failed kind=%s msg=%s",
+                i + 1, attempts, last_kind,
+                result.error.message if result.error else "",
             )
             continue
         judgment = _parse_response(result.text)
         if judgment is not None:
             return judgment
         last_error = "json_parse_failed"
+        last_kind = "bad_response"
         logger.warning("L-5 attempt %d/%d JSON parse failed", i + 1, attempts)
 
-    logger.warning("L-5 all %d attempts failed: %s", attempts, last_error)
+    # harden-async-infra N7:error_consistency agent 有本地兜底(segs-based pair_score),
+    # 符合 "有兜底则保留" 规则 — 此处返 None 保持原行为,仅日志精细化 last_kind。
+    # 当前 kind 可作为 N3 explore 的根因统计信号。
+    logger.warning(
+        "L-5 all %d attempts failed last_kind=%s last_error=%s",
+        attempts, last_kind, last_error,
+    )
     return None
 
 

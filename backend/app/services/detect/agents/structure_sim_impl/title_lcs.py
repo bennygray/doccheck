@@ -6,13 +6,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 
 from app.services.detect.agents.structure_sim_impl import config
 from app.services.detect.agents.structure_sim_impl.models import DirResult
-from app.services.detect.engine import get_cpu_executor
 
 logger = logging.getLogger(__name__)
 
@@ -126,12 +124,15 @@ async def compute_directory_similarity(
     if len(titles_a) < min_n or len(titles_b) < min_n:
         return None
 
-    loop = asyncio.get_running_loop()
-    lcs_len, matched = await loop.run_in_executor(
-        get_cpu_executor(),
+    # harden-async-infra F1:per-task 子进程隔离
+    from app.core.config import settings
+    from app.services.detect.agents._subprocess import run_isolated
+
+    lcs_len, matched = await run_isolated(
         _compute_sync,
         titles_a,
         titles_b,
+        timeout=settings.agent_subprocess_timeout,
     )
     total = len(titles_a) + len(titles_b)
     score = (2 * lcs_len / total) if total > 0 else 0.0

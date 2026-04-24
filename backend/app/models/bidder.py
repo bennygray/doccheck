@@ -91,6 +91,15 @@ class Bidder(Base):
         ),
     )
 
+    @property
+    def identity_info_status(self) -> str:
+        """honest-detection-results F3: 身份信息充分性状态。
+
+        用于前端 UI / Word 导出对"LLM 没抽出身份信息"场景显式降级文案。
+        None 或空 dict 都算 insufficient;非空 dict(即使只含 company_name)算 sufficient。
+        """
+        return "sufficient" if self.identity_info else "insufficient"
+
     def __repr__(self) -> str:  # pragma: no cover - debug only
         return (
             f"<Bidder id={self.id} name={self.name!r} "

@@ -1,6 +1,6 @@
 [project]
 name = "documentcheck"
-version = "0.2.0"
+version = "0.3.0"
 description = "围标检测系统 - 投标文件分析与围标串标行为检测"
 readme = "README.md"
 requires-python = ">=3.12"

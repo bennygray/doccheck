@@ -18,6 +18,10 @@ from app.services.detect.agents.style_impl.models import (
     GlobalComparison,
     StyleFeatureBrief,
 )
+from app.services.detect.errors import (
+    AgentSkippedError,
+    llm_error_to_skip_reason,
+)
 from app.services.llm.base import LLMProvider, Message
 
 logger = logging.getLogger(__name__)
@@ -111,11 +115,17 @@ async def _call_with_retry_and_parse(
     retries: int,
     parser,
 ):
-    """共享重试调用 + 解析。返解析结果或 None(全部失败)。
+    """共享重试调用 + 解析。成功返解析结果;**全部重试耗尽直接抛 AgentSkippedError**。
 
     LLM 调用失败 OR 解析失败都消费一次重试名额(贴 L-5 行为)。
+
+    harden-async-infra N7:
+    - 所有重试失败后 raise AgentSkippedError(具体 kind → 中文文案常量)
+    - style agent 的 try/except 必须在 except Exception 之前加 `except AgentSkippedError: raise`
+      让它逸出交给 engine._execute_agent_task 路由到 _mark_skipped
     """
     attempts = retries + 1
+    last_error_kind: str = "other"  # 默认兜底(正常不应走到这里)
     for i in range(attempts):
         result = await provider.complete(messages, temperature=0.0)
         if result.ok:
@@ -125,14 +135,18 @@ async def _call_with_retry_and_parse(
             logger.warning(
                 "L-8 attempt %d/%d parse failed", i + 1, attempts
             )
+            last_error_kind = "bad_response"  # 解析失败视作 bad_response
         else:
+            last_error_kind = result.error.kind if result.error else "other"
             logger.warning(
-                "L-8 attempt %d/%d failed: %s",
+                "L-8 attempt %d/%d failed kind=%s msg=%s",
                 i + 1,
                 attempts,
-                result.error,
+                last_error_kind,
+                result.error.message if result.error else "",
             )
-    return None
+    # 所有重试耗尽 → raise
+    raise AgentSkippedError(llm_error_to_skip_reason(last_error_kind))
 
 
 async def call_l8_stage1(

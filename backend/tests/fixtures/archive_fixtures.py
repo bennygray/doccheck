@@ -64,16 +64,23 @@ def make_nested_zip(out: Path, depth: int = 4) -> Path:
 
 
 def make_gbk_zip(out: Path) -> Path:
-    """entry 名用 GBK 编码,不置 UTF-8 flag。"""
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
-        info = zipfile.ZipInfo(filename="投标文件.docx")
-        info.flag_bits = 0  # 不置 0x800
-        # zipfile 在写 ZipInfo 时把 filename 视作 str → 内部 encode('utf-8' if flag 0x800 else 'cp437')
-        # 我们要 GBK,故先把 filename 设成 cp437 解码视图的 GBK bytes
-        gbk_name = "投标文件.docx".encode("gbk")
-        # 利用 cp437 是 1:1 字节映射的特性,把 GBK bytes 当 cp437 字符塞进去
-        info.filename = gbk_name.decode("cp437")
-        zf.writestr(info, _DOCX_DUMMY)
+    """entry 名用 GBK 编码,不置 UTF-8 flag(bit 11 = 0)。
+
+    harden-async-infra N6:Python stdlib `zipfile` 写非 ASCII 文件名时**强制置位
+    bit 11**(即便通过 ZipInfo 预先设 `flag_bits=0`,writestr 内部仍会 re-set),
+    导致旧版声称的"flag=0 + GBK"fixture 实际产出 "flag=0x800 + cp437(GBK 字节
+    按 cp437 解码)"—— `fix-mac-packed-zip-parsing` 的自动化回归保障因此失效。
+
+    改用手写 `build_zip_bytes(flag_bits=0)` 精确控制字节布局。
+    """
+    from tests.fixtures.zip_bytes import build_zip_bytes
+
+    filename_bytes = "投标文件.docx".encode("gbk")
+    zip_bytes = build_zip_bytes(
+        [(filename_bytes, _DOCX_DUMMY)],
+        flag_bits=0,
+    )
+    out.write_bytes(zip_bytes)
     return out
 
 

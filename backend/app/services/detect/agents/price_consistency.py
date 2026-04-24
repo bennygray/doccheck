@@ -34,6 +34,7 @@ from app.services.detect.context import (
     AgentRunResult,
     PreflightResult,
 )
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.registry import register_agent
 
 logger = logging.getLogger(__name__)
@@ -156,6 +157,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             )
         else:
             results["series"] = None
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise,防通用 except 吞 skipped 语义
+        raise
     except Exception as e:  # noqa: BLE001 - §3 C11 兜底:整 Agent 标失败
         logger.exception("price_consistency 检测异常")
         evidence = {

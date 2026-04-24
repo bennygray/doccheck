@@ -12,7 +12,6 @@ preflight:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from decimal import Decimal
 
@@ -29,7 +28,6 @@ from app.services.detect.context import (
     AgentRunResult,
     PreflightResult,
 )
-from app.services.detect.engine import get_cpu_executor
 from app.services.detect.registry import register_agent
 
 logger = logging.getLogger(__name__)
@@ -80,16 +78,19 @@ async def run(ctx: AgentContext) -> AgentRunResult:
     doc_role = seg_a.doc_role or seg_b.doc_role or "unknown"
 
     # 2) CPU 密集:TF-IDF 向量化 + cosine 矩阵 → 超阈值段落对
+    # harden-async-infra F1:per-task 子进程隔离,坏 docx 段错误只影响本 agent
     threshold = config.pair_score_threshold()
     max_pairs = config.max_pairs_to_llm()
-    loop = asyncio.get_running_loop()
-    pairs = await loop.run_in_executor(
-        get_cpu_executor(),
+    from app.core.config import settings
+    from app.services.detect.agents._subprocess import run_isolated
+
+    pairs = await run_isolated(
         tfidf.compute_pair_similarity,
         seg_a.paragraphs,
         seg_b.paragraphs,
         threshold,
         max_pairs,
+        timeout=settings.agent_subprocess_timeout,
     )
 
     # 3) LLM 定性判定(无超阈值段对 → 跳 LLM,judgments 空但不算降级)

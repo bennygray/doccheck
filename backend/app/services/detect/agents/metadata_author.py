@@ -18,6 +18,7 @@ from app.services.detect.agents.metadata_impl.extractor import (
     extract_bidder_metadata,
 )
 from app.services.detect.agents.metadata_impl.scorer import combine_dimension
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.context import (
     AgentContext,
     AgentRunResult,
@@ -82,6 +83,10 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         records_a = await extract_bidder_metadata(ctx.session, ctx.bidder_a.id)
         records_b = await extract_bidder_metadata(ctx.session, ctx.bidder_b.id)
         dim_result = detect_author_collisions(records_a, records_b, cfg)
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise,防未来 helper 抛 AgentSkippedError 被
+        # 通用 except 吞成 failed 绕过 skipped 语义(harden-async-infra H2 同型隐患)
+        raise
     except Exception as e:  # noqa: BLE001 - §3 C10 兜底:整 Agent 标失败
         logger.exception("metadata_author 检测异常")
         evidence = {

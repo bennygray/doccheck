@@ -16,10 +16,23 @@ from typing import Any, Iterable
 from docxtpl import DocxTemplate
 
 from app.models.analysis_report import AnalysisReport
+from app.models.bidder import Bidder
 from app.models.overall_analysis import OverallAnalysis
 from app.models.pair_comparison import PairComparison
 from app.models.project import Project
 from app.services.detect.judge import DIMENSION_WEIGHTS
+
+# honest-detection-results: risk_level 中文映射 + indeterminate 额外 key
+_RISK_LEVEL_CN: dict[str, str] = {
+    "high": "高风险",
+    "medium": "中风险",
+    "low": "低风险",
+    "indeterminate": "证据不足",
+}
+
+_IDENTITY_DEGRADED_NOTE = (
+    "注:本维度在身份信息缺失情况下已降级判定,结论仅供参考。"
+)
 
 
 def _summary_of_evidence(evidence_json: dict | None) -> str:
@@ -101,12 +114,19 @@ def build_render_context(
     ar: AnalysisReport,
     oa_rows: Iterable[OverallAnalysis],
     pc_rows: Iterable[PairComparison],
+    bidders: Iterable[Bidder] = (),
     top_k: int = 5,
 ) -> dict[str, Any]:
-    """装配 docxtpl 渲染上下文。design D6 schema。"""
+    """装配 docxtpl 渲染上下文。design D6 schema。
+
+    honest-detection-results: report.risk_level_cn 和 report.is_indeterminate 新增;
+    error_consistency 维度若 `any(bidder.identity_info_status=='insufficient')`,
+    其 evidence_summary 末尾追加"本维度在身份信息缺失情况下已降级判定"文案。
+    """
     # 物化成 list(支持多次迭代)
     oa_list = list(oa_rows)
     pc_list = list(pc_rows)
+    bidder_list = list(bidders)
 
     review_section: dict[str, Any] | None = None
     if ar.manual_review_status is not None:
@@ -116,6 +136,23 @@ def build_render_context(
             "reviewer_id": ar.reviewer_id,
             "reviewed_at": ar.reviewed_at.isoformat() if ar.reviewed_at else "",
         }
+
+    # honest-detection-results F3: 检查是否有 bidder identity_info_status=insufficient
+    has_insufficient_identity = any(
+        b.identity_info_status == "insufficient" for b in bidder_list
+    )
+
+    dimensions = _aggregate_dimensions(oa_list, pc_list)
+    # 对 error_consistency 维度追加降级文案
+    if has_insufficient_identity:
+        for dim in dimensions:
+            if dim["name"] == "error_consistency":
+                existing = dim.get("evidence_summary") or ""
+                dim["evidence_summary"] = (
+                    f"{existing}\n{_IDENTITY_DEGRADED_NOTE}"
+                    if existing
+                    else _IDENTITY_DEGRADED_NOTE
+                )
 
     return {
         "project": {
@@ -128,11 +165,16 @@ def build_render_context(
             "version": ar.version,
             "total_score": float(ar.total_score),
             "risk_level": ar.risk_level,
+            # honest-detection-results: 新增中文名 + indeterminate 标志,供模板 jinja 分支
+            "risk_level_cn": _RISK_LEVEL_CN.get(ar.risk_level, ar.risk_level),
+            "is_indeterminate": ar.risk_level == "indeterminate",
             "llm_conclusion": ar.llm_conclusion or "",
         },
-        "dimensions": _aggregate_dimensions(oa_list, pc_list),
+        "dimensions": dimensions,
         "top_pairs": _top_pairs(pc_list, top_k=top_k),
         "review": review_section,
+        # honest-detection-results: 供模板判断是否全局显示"识别信息缺失"提示
+        "has_insufficient_identity": has_insufficient_identity,
     }
 
 

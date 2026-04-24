@@ -78,33 +78,41 @@ test("渲染用户列表", async () => {
   expect(screen.getByText("reviewer1")).toBeInTheDocument();
 });
 
-test("创建用户成功", async () => {
-  (api.createUser as ReturnType<typeof vi.fn>).mockResolvedValue({
-    id: 3,
-    username: "newuser",
-    role: "reviewer",
-    is_active: true,
-    must_change_password: true,
-    created_at: "2026-01-03T00:00:00Z",
-  });
-
-  renderPage();
-  await screen.findByTestId("users-table");
-
-  const user = userEvent.setup();
-  await user.click(screen.getByTestId("create-user-btn"));
-  await user.type(screen.getByTestId("input-username"), "newuser");
-  await user.type(screen.getByTestId("input-password"), "Test1234");
-  await user.click(screen.getByText("确认创建"));
-
-  await waitFor(() => {
-    expect(api.createUser).toHaveBeenCalledWith({
+test(
+  "创建用户成功",
+  async () => {
+    (api.createUser as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 3,
       username: "newuser",
-      password: "Test1234",
       role: "reviewer",
+      is_active: true,
+      must_change_password: true,
+      created_at: "2026-01-03T00:00:00Z",
     });
-  });
-});
+
+    renderPage();
+    await screen.findByTestId("users-table");
+
+    // fix-admin-users-page-flaky-test:
+    // - delay:null 移除 keystroke 间 microtask tick(主方案 D1)
+    // - test-level timeout 15000 兜底全量跑下 vitest + jsdom + antd 累积负载
+    //   (fallback D2 实测触发:delay:null 独立 3/3 fail,加 timeout 后稳定绿)
+    const user = userEvent.setup({ delay: null });
+    await user.click(screen.getByTestId("create-user-btn"));
+    await user.type(screen.getByTestId("input-username"), "newuser");
+    await user.type(screen.getByTestId("input-password"), "Test1234");
+    await user.click(screen.getByText("确认创建"));
+
+    await waitFor(() => {
+      expect(api.createUser).toHaveBeenCalledWith({
+        username: "newuser",
+        password: "Test1234",
+        role: "reviewer",
+      });
+    });
+  },
+  15000,
+);
 
 test("禁用开关", async () => {
   (api.updateUser as ReturnType<typeof vi.fn>).mockResolvedValue({

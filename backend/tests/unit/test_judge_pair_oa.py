@@ -70,6 +70,9 @@ class _FakeSession:
             return _ScalarsResult(self._oas)
         if "bidders" in stmt_str:
             return _ScalarsResult([])
+        # honest-detection-results: judge 新增 agent_tasks 查询(证据不足判定)
+        if "agent_tasks" in stmt_str:
+            return _ScalarsResult([])  # 空 tasks → _has_sufficient_evidence 走铁证短路或返 False
         return _ScalarResult(None)
 
     async def get(self, model, pk):

@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     llm_model: str = "qwen-plus"  # dashscope 默认;openai 时改 gpt-4o-mini 等
     llm_base_url: str | None = None  # 留空走 provider 默认
     llm_timeout_s: float = 30.0
+    # 全局 LLM 调用超时上限(harden-async-infra D4):factory 两路径(env/DB)统一 cap
+    llm_call_timeout: float = 60.0
+
+    # 检测子进程超时(harden-async-infra F1):per-task ProcessPoolExecutor 的 wait_for 超时
+    agent_subprocess_timeout: float = 120.0
 
     # 数据生命周期 (C1 强制 dry-run;真删随 C4 file-upload 一起开放)
     lifecycle_dry_run: bool = True

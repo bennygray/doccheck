@@ -200,10 +200,18 @@ async def _safe_try_transition(project_id: int) -> None:
 
 
 async def _phase_extract_content(bidder_id: int) -> None:
-    """对 bidder 下所有 extracted 文档逐个调 extract_content。"""
+    """对 bidder 下所有 extracted 文档逐个调 extract_content。
+
+    只处理 .docx / .xlsx 这两类业务文档;跳过归档行(.zip/.7z/.rar)与图片
+    等其他 file_type — 归档行自身不是可解析内容,若进来会被 extract_content
+    误标成 skipped + '未知文件类型 .zip',同时**覆盖** extract 阶段写入的
+    审计 parse_error(如 '已过滤 N 个打包垃圾文件')
+    (fix-mac-packed-zip-parsing 端到端修复)。
+    """
     async with async_session() as session:
         stmt = select(BidDocument).where(
             BidDocument.bidder_id == bidder_id,
+            BidDocument.file_type.in_([".docx", ".xlsx"]),
             BidDocument.parse_status.in_(["extracted", "identify_failed"]),
         )
         docs = (await session.execute(stmt)).scalars().all()

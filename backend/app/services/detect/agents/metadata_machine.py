@@ -19,6 +19,7 @@ from app.services.detect.agents.metadata_impl.machine_detector import (
     detect_machine_collisions,
 )
 from app.services.detect.agents.metadata_impl.scorer import combine_dimension
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.context import (
     AgentContext,
     AgentRunResult,
@@ -80,6 +81,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         records_a = await extract_bidder_metadata(ctx.session, ctx.bidder_a.id)
         records_b = await extract_bidder_metadata(ctx.session, ctx.bidder_b.id)
         dim_result = detect_machine_collisions(records_a, records_b, cfg)
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise,防通用 except 吞 skipped 语义
+        raise
     except Exception as e:  # noqa: BLE001
         logger.exception("metadata_machine 检测异常")
         evidence = {

@@ -407,9 +407,27 @@ uvicorn app.main:app --reload                       # 启服务
 alembic upgrade head                                # 迁移到最新
 alembic downgrade -1                                # 回滚一档
 pytest tests/unit/                                  # L1 单元
-pytest tests/e2e/                                   # L2 接口 E2E
+pytest tests/e2e/                                   # L2 接口 E2E(见下方"testdb 容器化")
 INFRA_DISABLE_LIFECYCLE=1 uvicorn ...               # 跳过生命周期清理(测试常用)
 INFRA_DISABLE_EXTRACT=1 pytest ...                  # 跳过自动解压协程(L2 用 fixture 手动 await)
 INFRA_DISABLE_PIPELINE=1 pytest ...                 # 跳过解析流水线协程(C5 L2 用 fixture 手动 await)
 INFRA_DISABLE_DETECT=1 pytest ...                   # 跳过自动检测调度(C6 L2 用 fixture 手动 await)
 ```
+
+## L2 测试如何跑(testdb 容器化,harden-async-infra N5)
+
+```bash
+# 1. 启 testdb(独立于 dev DB,端口 55432 避免冲突,volume 匿名清零)
+docker-compose -f ../docker-compose.test.yml up -d
+
+# 2. 指向 testdb,session 启动自动 alembic upgrade head
+export TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:55432/documentcheck_test
+
+# 3. 跑 e2e
+pytest tests/e2e/
+
+# 清理
+docker-compose -f ../docker-compose.test.yml down -v
+```
+
+**未设 `TEST_DATABASE_URL` 时 pytest 会 loud 退出(exit code 2)带引导文案**,不会静默退回 dev DB。L1 单元(`tests/unit/`)不需 testdb。

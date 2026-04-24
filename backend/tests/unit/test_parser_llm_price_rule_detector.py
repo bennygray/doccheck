@@ -26,7 +26,8 @@ class FakeLLM:
 
 
 @pytest.mark.asyncio
-async def test_llm_success_returns_rule(tmp_path: Path) -> None:
+async def test_llm_success_returns_rule_legacy_format(tmp_path: Path) -> None:
+    """老 JSON format(sheet_name + header_row + column_mapping 顶层)→ 包装单 sheet"""
     xlsx = make_price_xlsx(tmp_path / "p.xlsx", row_count=3)
     llm = FakeLLM(
         response_text=json.dumps(
@@ -47,9 +48,56 @@ async def test_llm_success_returns_rule(tmp_path: Path) -> None:
     )
     result = await detect_price_rule(xlsx, llm)
     assert result is not None
-    assert result.sheet_name == "报价清单"
-    assert result.header_row == 2
-    assert result.column_mapping["code_col"] == "A"
+    # parser-accuracy-fixes P1-5:新字段 sheets_config(单 sheet 包装)
+    assert len(result.sheets_config) == 1
+    assert result.first_sheet_name == "报价清单"
+    assert result.first_header_row == 2
+    assert result.first_column_mapping["code_col"] == "A"
+
+
+@pytest.mark.asyncio
+async def test_llm_success_returns_rule_new_format(tmp_path: Path) -> None:
+    """新 JSON format(sheets_config 数组)→ 多 sheet"""
+    xlsx = make_price_xlsx(tmp_path / "p.xlsx", row_count=3)
+    llm = FakeLLM(
+        response_text=json.dumps(
+            {
+                "sheets_config": [
+                    {
+                        "sheet_name": "报价表",
+                        "header_row": 2,
+                        "column_mapping": {
+                            "code_col": "A",
+                            "name_col": "B",
+                            "unit_col": "C",
+                            "qty_col": "D",
+                            "unit_price_col": "E",
+                            "total_price_col": "F",
+                            "skip_cols": [],
+                        },
+                    },
+                    {
+                        "sheet_name": "明细分析表",
+                        "header_row": 1,
+                        "column_mapping": {
+                            "code_col": "A",
+                            "name_col": "B",
+                            "unit_col": "C",
+                            "qty_col": "D",
+                            "unit_price_col": "E",
+                            "total_price_col": "F",
+                            "skip_cols": [],
+                        },
+                    },
+                ]
+            }
+        )
+    )
+    result = await detect_price_rule(xlsx, llm)
+    assert result is not None
+    assert len(result.sheets_config) == 2
+    assert result.sheets_config[0]["sheet_name"] == "报价表"
+    assert result.sheets_config[1]["sheet_name"] == "明细分析表"
 
 
 @pytest.mark.asyncio

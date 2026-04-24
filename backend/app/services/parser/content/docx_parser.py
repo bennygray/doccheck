@@ -11,10 +11,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from lxml import etree
+
 if TYPE_CHECKING:
     from docx.document import Document as DocxDocument  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+# parser-accuracy-fixes P2-8:预编译 lxml XPath,绕过 python-docx BaseOxmlElement.xpath(namespaces=...)
+# 新版 python-docx 的 BaseOxmlElement.xpath() 已废 `namespaces` kwarg(抛 TypeError)
+# lxml.etree.XPath 直接传 namespaces 编译,对 BaseOxmlElement 底层 lxml Element 可用
+_TEXTBOX_XPATH = etree.XPath(
+    ".//w:txbxContent//w:t",
+    namespaces={"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"},
+)
 
 
 @dataclass(frozen=True)
@@ -73,15 +83,10 @@ def extract_docx(file_path: str | Path) -> DocxExtractResult:
                 blocks.append(TextBlock(idx, text, "footer"))
                 idx += 1
 
-    # --- 文本框(w:txbxContent) ---
+    # --- 文本框(w:txbxContent) parser-accuracy-fixes P2-8:用预编译 lxml XPath ---
     try:
-        from lxml import etree
-
-        ns = {
-            "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-        }
         root = doc.element.body
-        txbx_nodes = root.xpath(".//w:txbxContent//w:t", namespaces=ns)
+        txbx_nodes = _TEXTBOX_XPATH(root)
         collected: list[str] = []
         for node in txbx_nodes:
             t = (node.text or "").strip()

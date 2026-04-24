@@ -80,9 +80,12 @@ async def acquire_or_wait_rule(
                 event.set()
                 _RULE_EVENTS.pop(project_id, None)
                 return None
-            row.sheet_name = draft.sheet_name
-            row.header_row = draft.header_row
-            row.column_mapping = draft.column_mapping
+            # parser-accuracy-fixes P1-5:新权威字段 sheets_config
+            row.sheets_config = draft.sheets_config
+            # H2 同步回写:backward compat 缓冲(老 admin UI GET 仍读 sheet_name/header_row/column_mapping)
+            row.sheet_name = draft.first_sheet_name
+            row.header_row = draft.first_header_row
+            row.column_mapping = draft.first_column_mapping
             row.status = "confirmed"
             row.confirmed = True
             row.created_by_llm = True
@@ -103,11 +106,14 @@ async def _try_claim(
 
     调用方若捕获 IntegrityError 说明已有人占位,进入等待。
     """
+    # parser-accuracy-fixes H2:占位 INSERT 后 3 列可 NULL(migration 0011 后生效)
+    # 但为保持调试可读性 + 确保 old admin UI 读 sheet_name 不见 NULL,留占位字符串
     row = PriceParsingRule(
         project_id=project_id,
         sheet_name="_identifying_",  # 占位
         header_row=1,
         column_mapping={},
+        sheets_config=[],  # 权威字段,识别完成后 acquire 路径覆盖
         status="identifying",
         created_by_llm=True,
         confirmed=False,

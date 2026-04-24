@@ -139,22 +139,27 @@ async def put_price_rule(
     带 ``id`` 视为 update;无 ``id`` 视为 insert。``project_id`` 路径参数权威。
     """
     await _fetch_visible_project(session, user, project_id)
+    # parser-accuracy-fixes P1-5:统一展开为 sheets_config;老 payload 包成单 sheet
+    sheets_config = body.normalized_sheets_config()
+    first = sheets_config[0]  # 同步回写老 3 列作 backward compat
     rule: PriceParsingRule | None = None
     if body.id is not None:
         rule = await session.get(PriceParsingRule, body.id)
         if rule is None or rule.project_id != project_id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "规则不存在")
-        rule.sheet_name = body.sheet_name
-        rule.header_row = body.header_row
-        rule.column_mapping = body.column_mapping
+        rule.sheets_config = sheets_config
+        rule.sheet_name = first["sheet_name"]
+        rule.header_row = first["header_row"]
+        rule.column_mapping = first["column_mapping"]
         rule.created_by_llm = body.created_by_llm
         rule.confirmed = body.confirmed
     else:
         rule = PriceParsingRule(
             project_id=project_id,
-            sheet_name=body.sheet_name,
-            header_row=body.header_row,
-            column_mapping=body.column_mapping,
+            sheets_config=sheets_config,
+            sheet_name=first["sheet_name"],
+            header_row=first["header_row"],
+            column_mapping=first["column_mapping"],
             created_by_llm=body.created_by_llm,
             confirmed=body.confirmed,
         )
@@ -195,9 +200,13 @@ async def put_price_rule_with_refill(
         if rule is None or rule.project_id != project_id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "规则不存在")
 
-        rule.sheet_name = body.sheet_name
-        rule.header_row = body.header_row
-        rule.column_mapping = body.column_mapping
+        # parser-accuracy-fixes P1-5:支持新老 payload
+        sheets_config = body.normalized_sheets_config()
+        first = sheets_config[0]
+        rule.sheets_config = sheets_config
+        rule.sheet_name = first["sheet_name"]
+        rule.header_row = first["header_row"]
+        rule.column_mapping = first["column_mapping"]
         rule.created_by_llm = False  # 人工修正标记
         rule.confirmed = True
         rule.status = "confirmed"

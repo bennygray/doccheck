@@ -220,6 +220,13 @@ async def _classify_bidder_inner(
             if bidder is not None:
                 bidder.identity_info = cleaned
 
+    # parser-accuracy-fixes P0-1:identity 规则校验(LLM 后置)
+    # 规则扫 docx body 找 "投标人(盖章):" 后的公司名,与 LLM 结果比对,
+    # 不一致则覆盖 + 审计 + role_confidence 降级
+    from app.services.parser.identity_validator import apply_identity_validation
+
+    await apply_identity_validation(session, bidder_id)
+
     await session.commit()
     return ClassifyResult(llm_used=True, documents_updated=len(docs))
 

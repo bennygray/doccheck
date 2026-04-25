@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from app.core.config import settings
+from app.services.detect.agents._subprocess import run_isolated
 from app.services.detect.agents.section_sim_impl.models import (
     ChapterBlock,
     ChapterPair,
@@ -33,6 +35,24 @@ from app.services.llm.base import LLMProvider
 _CHAPTER_SAMPLES_LIMIT = 15
 
 
+def compute_all_pair_sims_batch(
+    chapter_pair_data: list[tuple[list[str], list[str]]],
+    threshold: float,
+    max_pairs: int,
+) -> list[list[ParaPair]]:
+    """子进程内批量执行 N 个章节对的 TF-IDF(fix-section-similarity-spawn-loop)。
+
+    必须 module-level(spawn 走 pickle by name,nested 函数不可 pickle)。
+    用法:整个 chapter_pair_data 一次性传给单个 run_isolated 调用,
+    子进程内串行循环 N 次纯计算;jieba 词典 / numpy / sklearn import 仅一次。
+    替换前 scorer per-pair spawn 路径(实测 N=80 撞 300s,批量后 ~55s)。
+    """
+    return [
+        c7_tfidf.compute_pair_similarity(a_paras, b_paras, threshold, max_pairs)
+        for a_paras, b_paras in chapter_pair_data
+    ]
+
+
 async def score_all_chapter_pairs(
     chapters_a: list[ChapterBlock],
     chapters_b: list[ChapterBlock],
@@ -51,23 +71,26 @@ async def score_all_chapter_pairs(
 
     # 1) 每章节对算段落级相似度(CPU 密集,走 executor)
     # harden-async-infra F1:per-task 子进程隔离
-    from app.core.config import settings
-    from app.services.detect.agents._subprocess import run_isolated
-
-    per_chapter_pairs: list[list[ParaPair]] = []
-    for cp in chapter_pairs:
-        ca = chapters_a[cp.a_idx]
-        cb = chapters_b[cp.b_idx]
-        pairs = await run_isolated(
-            c7_tfidf.compute_pair_similarity,
-            list(ca.paragraphs),
-            list(cb.paragraphs),
+    # fix-section-similarity-spawn-loop:批量化 — N 次 spawn(N 次 jieba 冷启动 ~3s/次)
+    # 改为单次 spawn 内串行 N 次纯计算,jieba/numpy/sklearn 只加载一次。
+    if chapter_pairs:
+        chapter_pair_data: list[tuple[list[str], list[str]]] = [
+            (
+                list(chapters_a[cp.a_idx].paragraphs),
+                list(chapters_b[cp.b_idx].paragraphs),
+            )
+            for cp in chapter_pairs
+        ]
+        per_chapter_pairs: list[list[ParaPair]] = await run_isolated(
+            compute_all_pair_sims_batch,
+            chapter_pair_data,
             threshold,
             # 章节内也设上限,防单章节段落爆(粗 max,跨章节再统一截 max_pairs_to_llm)
             max_pairs_to_llm,
             timeout=settings.agent_subprocess_timeout,
         )
-        per_chapter_pairs.append(pairs)
+    else:
+        per_chapter_pairs = []
 
     # 2) 合并所有段落对,按 "章节 title_sim × 段落 sim" 粗排,截前 max_pairs_to_llm
     all_ranked: list[tuple[float, int, ParaPair]] = []

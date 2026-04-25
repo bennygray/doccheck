@@ -34,3 +34,29 @@ def test_llm_call_timeout_env_override(monkeypatch: pytest.MonkeyPatch):
 
     s = Settings(_env_file=None)
     assert s.llm_call_timeout == 60.0
+
+
+def test_llm_timeout_s_default_is_300():
+    """per-call 默认值 = cap 默认值 = 300(fix-llm-timeout-default-followup)。
+
+    archive change config-llm-timeout-default 只改了 cap 默认 60→300,
+    但 factory 实际生效路径是 min(per_call, cap) — 改 cap 不会反向拉高 per_call。
+    本 case 钉 per_call 默认也是 300,确保两个值默认对齐到 300。
+    """
+    from app.core.config import Settings
+
+    s = Settings(_env_file=None)
+    assert s.llm_timeout_s == 300.0, (
+        f"llm_timeout_s 默认值应为 300.0(与 cap 对齐),实际 {s.llm_timeout_s}。"
+        "若故意调整,请同步 openspec/specs/pipeline-error-handling/spec.md "
+        "的 Requirement 'LLM 调用全局 timeout 与 per-call 默认值',并更新 handoff.md。"
+    )
+
+
+def test_llm_timeout_s_env_override(monkeypatch: pytest.MonkeyPatch):
+    """env 覆盖 per-call timeout 仍可压低(部署方手工压小生效)。"""
+    monkeypatch.setenv("LLM_TIMEOUT_S", "60")
+    from app.core.config import Settings
+
+    s = Settings(_env_file=None)
+    assert s.llm_timeout_s == 60.0

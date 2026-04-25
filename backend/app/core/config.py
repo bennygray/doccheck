@@ -36,7 +36,12 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "qwen-plus"  # dashscope 默认;openai 时改 gpt-4o-mini 等
     llm_base_url: str | None = None  # 留空走 provider 默认
-    llm_timeout_s: float = 30.0
+    # per-call 实际超时(每次 LLM 调用 asyncio.wait_for 的 timeout)。
+    # fix-llm-timeout-default-followup:默认从 30 提升到 300,与 cap (llm_call_timeout) 对齐。
+    # 实际生效 = min(llm_timeout_s, llm_call_timeout) — 两个值并联走 min,
+    # 改 cap 不会反向把 per-call 拉高,所以 per-call 默认值同样必须够大。
+    # 想让某次部署快速失败 → admin/llm UI 配 timeout 或设 LLM_TIMEOUT_S=N。
+    llm_timeout_s: float = 300.0
     # 全局 LLM 调用超时上限(harden-async-infra D4):factory 两路径(env/DB)统一 cap
     # config-llm-timeout-default:默认 300s,支撑 ark-code-latest 类慢模型(role_classifier /
     # price_rule_detector 实测 35~132s);60s 在 prod 一贯超时踢关键词兜底放大假阳性

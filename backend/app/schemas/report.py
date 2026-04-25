@@ -42,6 +42,9 @@ class ReportResponse(BaseModel):
     manual_review_comment: str | None = None
     reviewer_id: int | None = None
     reviewed_at: datetime | None = None
+    # CH-2 detect-template-exclusion: 模板簇识别可观测性
+    template_cluster_detected: bool = False
+    template_cluster_adjusted_scores: dict[str, Any] | None = None
 
 
 # ================================================================= C15

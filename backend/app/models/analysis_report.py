@@ -10,6 +10,8 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
@@ -19,9 +21,13 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+
+# JSONB 在 SQLite 单测下降级为 JSON(与 overall_analysis / pair_comparison 同模式)
+_JSONB_OR_JSON = JSONB().with_variant(JSON(), "sqlite")
 
 # 风险等级 3 态,应用层校验
 RISK_LEVELS = frozenset({"high", "medium", "low"})
@@ -61,6 +67,16 @@ class AnalysisReport(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    # CH-2 detect-template-exclusion: 模板簇识别可观测性
+    template_cluster_detected: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+        default=False,
+    )
+    template_cluster_adjusted_scores: Mapped[dict | None] = mapped_column(
+        _JSONB_OR_JSON, nullable=True, default=None
     )
 
     __table_args__ = (

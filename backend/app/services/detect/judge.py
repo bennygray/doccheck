@@ -22,11 +22,18 @@ from sqlalchemy.ext.asyncio import AsyncSession  # noqa: F401
 from app.db.session import async_session
 from app.models.agent_task import AgentTask
 from app.models.analysis_report import AnalysisReport
+from app.models.bid_document import BidDocument
 from app.models.bidder import Bidder
+from app.models.document_metadata import DocumentMetadata
 from app.models.overall_analysis import OverallAnalysis
 from app.models.pair_comparison import PairComparison
 from app.models.project import Project
 from app.services.detect import judge_llm
+from app.services.detect.template_cluster import (
+    TEMPLATE_FILE_ROLES,
+    _apply_template_adjustments,
+    _detect_template_cluster,
+)
 from app.services.llm.base import LLMProvider
 from app.services.parser.pipeline.progress_broker import progress_broker
 
@@ -63,31 +70,57 @@ PAIR_DIMENSIONS: frozenset[str] = frozenset(DIMENSION_WEIGHTS.keys()) - {
 def _compute_dims_and_iron(
     pair_comparisons: Iterable[PairComparison],
     overall_analyses: Iterable[OverallAnalysis],
+    *,
+    adjusted_pcs: dict[int, dict] | None = None,
+    adjusted_oas: dict[int, dict] | None = None,
 ) -> tuple[dict[str, float], bool, list[str]]:
     """共享 helper(C14 抽出避免双重实现):
 
     - per_dim_max[dim]:每维度跨 pair/global 的最高分
     - has_ironclad:任一 PC.is_ironclad 或任一 OA.evidence_json["has_iron_evidence"]=true
     - ironclad_dims:触发铁证的维度名列表(去重排序)
+
+    CH-2 detect-template-exclusion:扩 keyword-only `adjusted_pcs / adjusted_oas`
+    可选参数(向后兼容,默认 None 时行为完全不变);任一非 None 时,score 与
+    is_ironclad/has_iron_evidence 优先读 adjusted dict 缺失回落 ORM raw。
     """
+    use_apcs = adjusted_pcs is not None
+    use_aoas = adjusted_oas is not None
+    apcs = adjusted_pcs or {}
+    aoas = adjusted_oas or {}
+
     per_dim_max: dict[str, float] = {}
     ironclad_dim_set: set[str] = set()
 
     for pc in pair_comparisons:
-        score = float(pc.score) if pc.score is not None else 0.0
-        prev = per_dim_max.get(pc.dimension, 0.0)
-        if score > prev:
+        if use_apcs and pc.id in apcs and "score" in apcs[pc.id]:
+            score = float(apcs[pc.id]["score"])
+        else:
+            score = float(pc.score) if pc.score is not None else 0.0
+        if pc.dimension not in per_dim_max or score > per_dim_max[pc.dimension]:
             per_dim_max[pc.dimension] = score
-        if pc.is_ironclad:
+        if use_apcs and pc.id in apcs and "is_ironclad" in apcs[pc.id]:
+            iron = bool(apcs[pc.id]["is_ironclad"])
+        else:
+            iron = bool(pc.is_ironclad)
+        if iron:
             ironclad_dim_set.add(pc.dimension)
 
     for oa in overall_analyses:
-        score = float(oa.score) if oa.score is not None else 0.0
-        prev = per_dim_max.get(oa.dimension, 0.0)
-        if score > prev:
+        if use_aoas and oa.id in aoas and "score" in aoas[oa.id]:
+            score = float(aoas[oa.id]["score"])
+        else:
+            score = float(oa.score) if oa.score is not None else 0.0
+        if oa.dimension not in per_dim_max or score > per_dim_max[oa.dimension]:
             per_dim_max[oa.dimension] = score
-        ev = getattr(oa, "evidence_json", None) or {}
-        if isinstance(ev, dict) and ev.get("has_iron_evidence") is True:
+        if use_aoas and oa.id in aoas and "has_iron_evidence" in aoas[oa.id]:
+            has_iron = bool(aoas[oa.id]["has_iron_evidence"])
+        else:
+            ev = getattr(oa, "evidence_json", None) or {}
+            has_iron = (
+                isinstance(ev, dict) and ev.get("has_iron_evidence") is True
+            )
+        if has_iron:
             ironclad_dim_set.add(oa.dimension)
 
     has_ironclad = bool(ironclad_dim_set)
@@ -132,6 +165,44 @@ def _compute_formula_total(
     if has_ironclad:
         total = max(total, 85.0)
     return round(total, 2)
+
+
+# ============================================================ CH-2 Template Cluster
+
+
+async def _load_bidder_metadata(
+    session, project_id: int
+) -> dict[int, list[DocumentMetadata]]:
+    """加载 project 下每个 bidder 名下 file_role in TEMPLATE_FILE_ROLES 的 metadata。
+
+    SQL 约束:
+    - Bidder.project_id == project_id and Bidder.deleted_at IS NULL
+    - BidDocument.bidder_id == Bidder.id
+    - BidDocument.file_role in TEMPLATE_FILE_ROLES(排除 qualification PDF 噪音 + other)
+    - DocumentMetadata.bid_document_id == BidDocument.id
+
+    缺 metadata 的文档(metadata 行不存在)自动跳过(LEFT JOIN 后过滤 None)。
+    """
+    stmt = (
+        select(Bidder.id, DocumentMetadata)
+        .join(BidDocument, BidDocument.bidder_id == Bidder.id)
+        .join(
+            DocumentMetadata,
+            DocumentMetadata.bid_document_id == BidDocument.id,
+        )
+        .where(
+            Bidder.project_id == project_id,
+            Bidder.deleted_at.is_(None),
+            BidDocument.file_role.in_(TEMPLATE_FILE_ROLES),
+        )
+    )
+    rows = (await session.execute(stmt)).all()
+    by_bidder: dict[int, list[DocumentMetadata]] = {}
+    for bidder_id, meta in rows:
+        if meta is None:
+            continue
+        by_bidder.setdefault(bidder_id, []).append(meta)
+    return by_bidder
 
 
 # ======================================================== Pure compute_report
@@ -231,23 +302,21 @@ async def judge_and_create_report(
             rules_config.get("risk_levels") if rules_config else None
         )
 
-        # 公式层(compute_report 逻辑展开,供 L-9 复用 per_dim_max / ironclad_dims)
-        per_dim_max, has_ironclad, ironclad_dims = _compute_dims_and_iron(
+        # CH-2 detect-template-exclusion 6 步调用顺序改造
+        # ─────────────────────────────────────────────────────────────
+        # step1: PC + OA 已加载(L218-L224)
+        # step2: 第一次 _compute_dims_and_iron(raw) — 仅供 DEF-OA 写入复用
+        raw_per_dim_max, raw_has_ironclad, raw_ironclad_dims = _compute_dims_and_iron(
             pair_comparisons, overall_analyses
         )
-        formula_total = _compute_formula_total(
-            per_dim_max, has_ironclad, weights=_weights
-        )
-        formula_level = _compute_level(formula_total, risk_levels=_risk_levels)
 
-        # DEF-OA: 为 pair 类维度补写 OA 聚合行
+        # step3: DEF-OA 写入循环(用 raw,符合 D7 审计原则)+ local list 同步
         existing_oa_dims = {oa.dimension for oa in overall_analyses}
         for dim in PAIR_DIMENSIONS:
             if dim in existing_oa_dims:
                 continue  # 幂等: 已有 OA 行则跳过
-            # 从 pair_comparisons 聚合该维度的统计
             dim_pcs = [pc for pc in pair_comparisons if pc.dimension == dim]
-            best_score = per_dim_max.get(dim, 0.0)
+            best_score = raw_per_dim_max.get(dim, 0.0)
             iron_pcs = [pc for pc in dim_pcs if pc.is_ironclad]
             oa = OverallAnalysis(
                 project_id=project_id,
@@ -263,7 +332,52 @@ async def judge_and_create_report(
                 },
             )
             session.add(oa)
-        await session.flush()
+            overall_analyses.append(oa)  # 同步 local list,确保后续 helper 见 11 行
+        await session.flush()  # 7 个 def_oa 全部 flush 拿到 PK
+
+        # step4: load bidder metadata + 模板簇识别
+        try:
+            bidder_metadata_map = await _load_bidder_metadata(
+                session, project_id
+            )
+            clusters = _detect_template_cluster(bidder_metadata_map)
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "detect: template cluster detection failed project=%s v=%s err=%s",
+                project_id,
+                version,
+                exc,
+            )
+            clusters = []
+
+        # step5: adjustment(只有 cluster 命中才产 adjustments;空则走老路径)
+        adjusted_pcs, adjusted_oas, adjustments = _apply_template_adjustments(
+            pair_comparisons, overall_analyses, clusters
+        )
+
+        # step6: cluster 命中时切到 adjusted 版本;否则用 step2 的 raw 版本
+        cluster_active = bool(adjustments)
+        if cluster_active:
+            # step6.1: 第二次 _compute_dims_and_iron(adjusted)
+            per_dim_max, has_ironclad, ironclad_dims = _compute_dims_and_iron(
+                pair_comparisons,
+                overall_analyses,
+                adjusted_pcs=adjusted_pcs,
+                adjusted_oas=adjusted_oas,
+            )
+        else:
+            per_dim_max, has_ironclad, ironclad_dims = (
+                raw_per_dim_max,
+                raw_has_ironclad,
+                raw_ironclad_dims,
+            )
+
+        # step6.2: _compute_formula_total(保留 weights=_weights C17 透传)
+        formula_total = _compute_formula_total(
+            per_dim_max, has_ironclad, weights=_weights
+        )
+        # step6.3: _compute_level(保留 risk_levels=_risk_levels C17 透传)
+        formula_level = _compute_level(formula_total, risk_levels=_risk_levels)
 
         # 项目元信息
         project = await session.get(Project, project_id)
@@ -283,14 +397,20 @@ async def judge_and_create_report(
             "bidder_count": bidder_count,
         }
 
-        # honest-detection-results D1: 证据不足前置判定(铁证短路 + 信号型 agent 白名单)
+        # honest-detection-results D1 + CH-2 step6.4: 证据不足前置判定
+        # cluster 命中走新分母(OA.score 切分母 + adjusted iron);否则走老 AgentTask 分母
         at_stmt = select(AgentTask).where(
             AgentTask.project_id == project_id,
             AgentTask.version == version,
         )
         agent_tasks = list((await session.execute(at_stmt)).scalars().all())
+        evidence_kwargs = (
+            {"adjusted_pcs": adjusted_pcs, "adjusted_oas": adjusted_oas}
+            if cluster_active
+            else {}
+        )
         if not judge_llm._has_sufficient_evidence(
-            agent_tasks, pair_comparisons, overall_analyses
+            agent_tasks, pair_comparisons, overall_analyses, **evidence_kwargs
         ):
             logger.info(
                 "detect: insufficient evidence project=%s v=%s, skip LLM judge",
@@ -302,8 +422,13 @@ async def judge_and_create_report(
             final_conclusion = judge_llm.INSUFFICIENT_EVIDENCE_CONCLUSION
             llm_conclusion = None  # 用于后面 logger 标注
         else:
-            # L-9 LLM 综合研判
+            # step6.5: L-9 LLM 综合研判(summarize 透传 adjusted dict)
             cfg = judge_llm.load_llm_judge_config()
+            l9_kwargs = (
+                {"adjusted_pcs": adjusted_pcs, "adjusted_oas": adjusted_oas}
+                if cluster_active
+                else {}
+            )
             llm_conclusion, llm_suggested = await _run_l9(
                 pair_comparisons,
                 overall_analyses,
@@ -315,6 +440,7 @@ async def judge_and_create_report(
                 project_info=project_info,
                 cfg=cfg,
                 provider=llm_provider,
+                **l9_kwargs,
             )
 
             # clamp(LLM 成功) or 降级(LLM 失败)
@@ -331,6 +457,21 @@ async def judge_and_create_report(
                     final_total, final_level, per_dim_max, ironclad_dims
                 )
 
+        # CH-2: 构造 template_cluster_adjusted_scores JSONB
+        if cluster_active:
+            adjusted_scores_jsonb = {
+                "clusters": [
+                    {
+                        "cluster_key_sample": c.cluster_key_sample,
+                        "bidder_ids": c.bidder_ids,
+                    }
+                    for c in clusters
+                ],
+                "adjustments": list(adjustments),
+            }
+        else:
+            adjusted_scores_jsonb = None
+
         # INSERT AnalysisReport
         report = AnalysisReport(
             project_id=project_id,
@@ -338,6 +479,8 @@ async def judge_and_create_report(
             total_score=Decimal(str(final_total)),
             risk_level=final_level,
             llm_conclusion=final_conclusion,
+            template_cluster_detected=cluster_active,
+            template_cluster_adjusted_scores=adjusted_scores_jsonb,
         )
         session.add(report)
 
@@ -381,8 +524,14 @@ async def _run_l9(
     project_info: dict,
     cfg: judge_llm.LLMJudgeConfig,
     provider: LLMProvider | None,
+    adjusted_pcs: dict[int, dict] | None = None,
+    adjusted_oas: dict[int, dict] | None = None,
 ) -> tuple[str | None, float | None]:
-    """L-9 流水线单独抽:ENABLED=false → 返 (None, None) 走降级;否则调 LLM"""
+    """L-9 流水线单独抽:ENABLED=false → 返 (None, None) 走降级;否则调 LLM。
+
+    CH-2 detect-template-exclusion:扩 adjusted_pcs/adjusted_oas kwarg 透传给
+    summarize,防 LLM 拿污染 raw 值输出高 suggested_total → clamp 拉回污染分。
+    """
     if not cfg.enabled:
         logger.info("L-9 disabled by env, skip")
         return None, None
@@ -397,6 +546,8 @@ async def _run_l9(
         has_ironclad=has_ironclad,
         project_info=project_info,
         top_k=cfg.summary_top_k,
+        adjusted_pcs=adjusted_pcs,
+        adjusted_oas=adjusted_oas,
     )
 
     # provider 注入:测试默认 None + 被 mock 直接 patch call_llm_judge;

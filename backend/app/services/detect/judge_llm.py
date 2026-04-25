@@ -47,27 +47,64 @@ def _has_sufficient_evidence(
     agent_tasks,
     pair_comparisons,
     overall_analyses,
+    *,
+    adjusted_pcs: dict[int, dict] | None = None,
+    adjusted_oas: dict[int, dict] | None = None,
 ) -> bool:
     """honest-detection-results D1:证据充分性判定。
 
-    Step 1 铁证短路:任一 PC.is_ironclad 或 OA.has_iron_evidence → True
-        避免 agent.score=0 但铁证存在时产出 total_score=85 + indeterminate 的矛盾
+    CH-2 detect-template-exclusion:扩 keyword-only `adjusted_pcs / adjusted_oas`
+    可选参数(向后兼容,默认 None 时行为完全不变)。
 
-    Step 2 信号型 agent 全零判定:只看 SIGNAL_AGENTS,过滤 succeeded 的 tasks
-        - 无信号型 succeeded agent → False(证据不足)
-        - 有信号型 agent 至少一个 score>0 → True
-        - 信号型 agent 都是 succeeded 但 score 全 0 → False
+    Step 1 铁证短路:任一 PC.is_ironclad(adjusted) 或 OA.has_iron_evidence(adjusted)
+        → True;avoid agent.score=0 但铁证存在时产出 total_score=85 + indeterminate 矛盾
+
+    Step 2 信号判定:
+        - 老路径(adjusted 全 None):AgentTask.score 分母 + 过滤 succeeded + SIGNAL_AGENTS
+        - 新路径(任一 adjusted dict 非 None):OA.score 分母,过滤 SIGNAL_AGENTS 维度
+          OA + adjusted-or-raw score>0
     """
-    # Step 1:铁证短路
+    use_adjusted = adjusted_pcs is not None or adjusted_oas is not None
+    apcs = adjusted_pcs or {}
+    aoas = adjusted_oas or {}
+
+    # Step 1:铁证短路(读 adjusted iron 优先,缺失回落 raw)
     for pc in pair_comparisons or []:
-        if pc.is_ironclad:
+        adj = apcs.get(pc.id) if use_adjusted else None
+        iron = (
+            adj["is_ironclad"]
+            if adj is not None and "is_ironclad" in adj
+            else pc.is_ironclad
+        )
+        if iron:
             return True
     for oa in overall_analyses or []:
-        ev = getattr(oa, "evidence_json", None) or {}
-        if isinstance(ev, dict) and ev.get("has_iron_evidence") is True:
+        adj = aoas.get(oa.id) if use_adjusted else None
+        if adj is not None and "has_iron_evidence" in adj:
+            has_iron = adj["has_iron_evidence"]
+        else:
+            ev = getattr(oa, "evidence_json", None) or {}
+            has_iron = (
+                isinstance(ev, dict) and ev.get("has_iron_evidence") is True
+            )
+        if has_iron:
             return True
 
-    # Step 2:信号型 agent 判定
+    if use_adjusted:
+        # Step 2 新路径:OA.score 分母(SIGNAL_AGENTS 维度 OA score>0)
+        for oa in overall_analyses or []:
+            if oa.dimension not in SIGNAL_AGENTS:
+                continue
+            adj = aoas.get(oa.id)
+            if adj is not None and "score" in adj:
+                score = float(adj["score"])
+            else:
+                score = float(oa.score) if oa.score is not None else 0.0
+            if score > 0:
+                return True
+        return False
+
+    # Step 2 老路径:AgentTask.score 分母
     signals = [
         t for t in (agent_tasks or [])
         if t.status == "succeeded" and t.agent_name in SIGNAL_AGENTS
@@ -208,11 +245,29 @@ def _shape_evidence_brief(evidence_json: object) -> str:
     return brief
 
 
-def _is_pc_ironclad(pc) -> bool:
+def _is_pc_ironclad(
+    pc,
+    *,
+    adjusted_pcs: dict[int, dict] | None = None,
+) -> bool:
+    """CH-2:adjusted_pcs 非 None 时优先读 adjusted is_ironclad。"""
+    if adjusted_pcs is not None:
+        adj = adjusted_pcs.get(pc.id)
+        if adj is not None and "is_ironclad" in adj:
+            return bool(adj["is_ironclad"])
     return bool(getattr(pc, "is_ironclad", False))
 
 
-def _is_oa_ironclad(oa) -> bool:
+def _is_oa_ironclad(
+    oa,
+    *,
+    adjusted_oas: dict[int, dict] | None = None,
+) -> bool:
+    """CH-2:adjusted_oas 非 None 时优先读 adjusted has_iron_evidence。"""
+    if adjusted_oas is not None:
+        adj = adjusted_oas.get(oa.id)
+        if adj is not None and "has_iron_evidence" in adj:
+            return bool(adj["has_iron_evidence"])
     ev = getattr(oa, "evidence_json", None) or {}
     return isinstance(ev, dict) and ev.get("has_iron_evidence") is True
 
@@ -228,6 +283,8 @@ def summarize(
     has_ironclad: bool,
     project_info: dict | None = None,
     top_k: int = 3,
+    adjusted_pcs: dict[int, dict] | None = None,
+    adjusted_oas: dict[int, dict] | None = None,
 ) -> dict:
     """预聚合结构化摘要(token 稳定 3~8k),喂给 L-9 LLM
 
@@ -270,15 +327,24 @@ def summarize(
             if getattr(pc, "bidder_b_id", None) is not None:
                 bidders.add(pc.bidder_b_id)
 
-        # ironclad_count
-        ironclad_count = sum(1 for pc in pc_list if _is_pc_ironclad(pc))
-        ironclad_count += sum(1 for oa in oa_list if _is_oa_ironclad(oa))
+        # ironclad_count(CH-2:消费 adjusted dict)
+        ironclad_count = sum(
+            1 for pc in pc_list if _is_pc_ironclad(pc, adjusted_pcs=adjusted_pcs)
+        )
+        ironclad_count += sum(
+            1 for oa in oa_list if _is_oa_ironclad(oa, adjusted_oas=adjusted_oas)
+        )
 
         # top_k_examples
         examples: list[dict] = []
         if pc_list:
             # pair 型:score 倒序取 top_k + 铁证 pair 无条件入
+            # CH-2:_pc_score 是 nested function,inline 处理 adjusted dict 兜底
             def _pc_score(pc):
+                if adjusted_pcs is not None:
+                    adj = adjusted_pcs.get(pc.id)
+                    if adj is not None and "score" in adj:
+                        return float(adj["score"])
                 s = getattr(pc, "score", None)
                 return float(s) if s is not None else 0.0
 
@@ -287,7 +353,7 @@ def summarize(
             picked_ids = {id(pc) for pc in picked}
             # 铁证无条件入(不在 top_k 时追加)
             for pc in sorted_pcs:
-                if _is_pc_ironclad(pc) and id(pc) not in picked_ids:
+                if _is_pc_ironclad(pc, adjusted_pcs=adjusted_pcs) and id(pc) not in picked_ids:
                     picked.append(pc)
                     picked_ids.add(id(pc))
 
@@ -297,22 +363,35 @@ def summarize(
                         "bidder_a": getattr(pc, "bidder_a_id", None),
                         "bidder_b": getattr(pc, "bidder_b_id", None),
                         "score": _pc_score(pc),
-                        "is_ironclad": _is_pc_ironclad(pc),
+                        "is_ironclad": _is_pc_ironclad(
+                            pc, adjusted_pcs=adjusted_pcs
+                        ),
                         "evidence_brief": _shape_evidence_brief(
                             getattr(pc, "evidence_json", None)
                         ),
                     }
                 )
         elif oa_list:
-            # global 型:填 1 条 OA 摘要
+            # global 型:填 1 条 OA 摘要(CH-2:消费 adjusted_oas)
             for oa in oa_list:
-                s = getattr(oa, "score", None)
+                if adjusted_oas is not None:
+                    adj = adjusted_oas.get(oa.id)
+                    if adj is not None and "score" in adj:
+                        oa_score = float(adj["score"])
+                    else:
+                        s = getattr(oa, "score", None)
+                        oa_score = float(s) if s is not None else 0.0
+                else:
+                    s = getattr(oa, "score", None)
+                    oa_score = float(s) if s is not None else 0.0
                 examples.append(
                     {
                         "bidder_a": "全局",
                         "bidder_b": "全局",
-                        "score": float(s) if s is not None else 0.0,
-                        "is_ironclad": _is_oa_ironclad(oa),
+                        "score": oa_score,
+                        "is_ironclad": _is_oa_ironclad(
+                            oa, adjusted_oas=adjusted_oas
+                        ),
                         "evidence_brief": _shape_evidence_brief(
                             getattr(oa, "evidence_json", None)
                         ),

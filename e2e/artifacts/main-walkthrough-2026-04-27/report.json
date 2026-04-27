@@ -1,0 +1,211 @@
+{
+  "version": 1,
+  "total_score": 92.0,
+  "risk_level": "high",
+  "llm_conclusion": "本项目加权初判总分85.0分，已达高风险级别。核心铁证在于投标人3385与3386的文本相似度高达83.82%、章节结构相似度达56.6%，均突破铁证阈值，显示投标文件存在高度协同制作痕迹；另价格一致性维度检出25分异常，涉及尾数与金额模式雷同。综合多维证据交叉验证，围标/串标嫌疑极高，建议将总分上调至92.0分并启动专项核查。",
+  "created_at": "2026-04-27T12:28:44.835870Z",
+  "dimensions": [
+    {
+      "dimension": "structure_similarity",
+      "best_score": 100.0,
+      "is_ironclad": true,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "结构铁证命中(字段=1.00、填充=1.00),综合 score=100.0",
+        "结构铁证命中(字段=1.00、填充=1.00),综合 score=100.0",
+        "结构铁证命中(目录 LCS=3/3+3、字段=1.00、填充=1.00),综合 score=100.0"
+      ]
+    },
+    {
+      "dimension": "text_similarity",
+      "best_score": 83.82,
+      "is_ironclad": true,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "该 pair 在监理规范、施工验收规范等国家及行业标准条文以及招标文件给定的项目信息、工期、签署格式上存在大量通用表述与模板雷同；同时在电气安装质量通病防治等非标准化、个性化技术措施中出现高度疑似同源抄袭。",
+        "两家投标文件大量段落符合国家规范条文、监理大纲公开范本及招标文件模板特征；但在工序活动条件监控等个性化长段论述中出现非通用、带相同语病的高度一致，疑似同源抄袭。",
+        "两份投标文件在项目特定日期、封面格式、个性化技术措施及具体案例描述上存在大量高度一致的非通用内容，远超行业规范及通用模板可解释的范围，整体高度疑似同源抄袭；同时混杂部分监理规范及行业通用条文。"
+      ]
+    },
+    {
+      "dimension": "section_similarity",
+      "best_score": 56.6,
+      "is_ironclad": true,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "章节级对比完成,151 对齐章节,未命中铁证",
+        "章节级对比完成,151 对齐章节,未命中铁证",
+        "章节级命中:3 段抄袭 / 408 对齐章节"
+      ]
+    },
+    {
+      "dimension": "style",
+      "best_score": 100.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "发现 2 组风格高度一致投标人"
+      ]
+    },
+    {
+      "dimension": "price_overshoot",
+      "best_score": 100.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "发现 1 家投标超过最高限价(铁证)"
+      ]
+    },
+    {
+      "dimension": "metadata_author",
+      "best_score": 62.5,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "元数据字段命中:author(共 2 条)",
+        "元数据字段命中:author(共 2 条)",
+        "元数据字段命中:author(共 2 条)"
+      ]
+    },
+    {
+      "dimension": "metadata_time",
+      "best_score": 30.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "时间维度命中:created_at_match(共 2 条)",
+        "时间维度命中:created_at_match(共 2 条)",
+        "时间维度命中:created_at_match(共 2 条)"
+      ]
+    },
+    {
+      "dimension": "price_consistency",
+      "best_score": 25.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "报价一致命中:tail;score=25.00",
+        "报价一致命中:tail;score=12.50",
+        "报价一致命中:tail;score=12.50"
+      ]
+    },
+    {
+      "dimension": "metadata_machine",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+        "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+        "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失"
+      ]
+    },
+    {
+      "dimension": "price_anomaly",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "未发现单家异常低价"
+      ]
+    },
+    {
+      "dimension": "error_consistency",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "error_consistency: 无可抽关键词"
+      ]
+    },
+    {
+      "dimension": "image_reuse",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "image_reuse: 小图过滤后无可比图"
+      ]
+    },
+    {
+      "dimension": "price_total_match",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "未发现两家总额完全相等"
+      ]
+    }
+  ],
+  "manual_review_status": null,
+  "manual_review_comment": null,
+  "reviewer_id": null,
+  "reviewed_at": null,
+  "template_cluster_detected": false,
+  "template_cluster_adjusted_scores": null
+}

@@ -72,12 +72,15 @@ docker compose up
 - 命令: `pytest backend/tests/e2e/`
 
 ### L3 UI 级 E2E 测试
-- 工具: Playwright + TypeScript
-- 位置: 项目根 `e2e/`(独立于 frontend)
-- baseURL: 默认 `http://localhost:5173`(Vite dev server);CI/联调用 docker compose 产物
-- fixtures: `e2e/fixtures/`;种子数据脚本 `e2e/seed.ts`
-- 覆盖: 仅 UI 独有场景(SSE 实时进度、文件对比视图、Word 下载交互)
-- 命令: `npm run e2e`(项目根目录)
+- 工具: **Claude Code 自带 Claude_in_Chrome MCP**(navigate / find / click / screenshot / javascript_tool 等)驱动真实浏览器
+- 流程: 每次 change 归档前由 Claude 在 session 内 walk through 该 change 涉及的 UI 路径,截图+证据落 `e2e/artifacts/<change-name>-<YYYY-MM-DD>/`
+- 凭证清单(每个 change 至少):
+  - `README.md`(期望 vs 实际,带对应 commit hash)
+  - 关键路径 `.png`(命名 `<flow>-<bug-or-feature>.png`)
+  - 可选支撑数据(JSON / SQL dump / agent_tasks 状态等)
+- baseURL: `http://localhost:5173`(本地 Vite dev server)
+- 覆盖: 仅 UI 独有场景(SSE 实时进度、状态 Tag 同步、铁证渲染、文件对比视图、Word 下载交互等)
+- **未来:** 若 UI 回归保护需求增长,再单独立 change 引入 Playwright 套件作为 CI 门;当前不做
 
 ### 与 change 的对接
 - change 的 tasks.md 里每条任务必须带标签: `[impl]` / `[L1]` / `[L2]` / `[L3]` / `[manual]`
@@ -87,17 +90,16 @@ docker compose up
 ### 各层 flaky 兜底
 - L1: 必须稳,不允许跳过
 - L2: flaky 隔离到独立 suite,标 `@flaky`,72h 内修复
-- L3: flaky 允许降级为手工+截图凭证(与 `docs/execution-plan.md` §2.3 过程兜底第 3 条对齐)
+- L3: Claude_in_Chrome 驱动 manual + 截图凭证;flaky 不适用(每个 change 重新 walk through;凭证沉淀路径见 L3 节)
 
 ### LLM mock 约定
 - 后端: `backend/tests/fixtures/llm_mock.py`(单一入口,8 个 LLM 调用点共享)
-- 前端: Playwright 用 `page.route` 拦截 LLM 相关 API
+- L3(Claude_in_Chrome 走真实后端):无前端层 mock;LLM 调用走后端 mock 入口或真 LLM,由 change 自己选
 - 真 LLM 调用标 `[manual]`,不进自动化
 
 ### 约定目录
-- L3 artifacts(截图/录屏): `e2e/artifacts/`(加入 .gitignore)
-- 种子数据脚本: `e2e/seed.ts`
-- 测试 fixtures: `e2e/fixtures/`、`backend/tests/fixtures/`
+- L3 artifacts(截图/凭证): `e2e/artifacts/<change-name>-<YYYY-MM-DD>/`(加入 .gitignore)
+- 测试 fixtures: `backend/tests/fixtures/`
 
 ### OpenSpec 集成(覆盖默认 skill 行为)
 
@@ -110,12 +112,12 @@ docker compose up
 
 **apply-change 阶段(实施任务时)**
 - `[L1]`/`[L2]` 任务: 运行对应命令,看到全绿输出后才标 `[x]`,失败则修至通过
-- `[L3]` 任务: 运行 `npm run e2e`,全绿标 `[x]`;若 flaky → 降级为手工+截图,截图路径写入该任务条目作为凭证
+- `[L3]` 任务: Claude 在 session 内用 Claude_in_Chrome 驱动 walk through 涉及的 UI 路径,截图归档到 `e2e/artifacts/<change>-<date>/`,该任务条目里写凭证路径
 - `[manual]` 任务: 人工执行,结果记录在该任务条目后
 
 **archive-change 阶段(归档前)**
 - 归档前必须校验: 所有 `[L1]`/`[L2]`/`[L3]` 任务均 `[x]`
-- L3 降级为手工凭证的,凭证文件必须存在于 `e2e/artifacts/`
+- L3 凭证文件(README.md + 截图)必须存在于 `e2e/artifacts/<change>-<date>/`
 - 任一不满足 → 拒绝归档
 
 (与 `docs/execution-plan.md` §2.3 过程兜底第 3 条对齐,实现同一约束的工具落地)

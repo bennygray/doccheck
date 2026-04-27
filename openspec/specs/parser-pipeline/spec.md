@@ -216,6 +216,38 @@
 - **THEN** `fill_price_from_rule` 读时 fallback 构造 `sheets_config=[{sheet_name,header_row,column_mapping}]` 作为单 sheet 运行;无需用户 re-parse
 ---
 
+### Requirement: 报价 XLSX 选取 fallback 与单 bidder 单类不变量
+
+系统 SHALL 在"报价规则识别"与"报价数据回填"两个阶段为每个 bidder 独立选取参与的 XLSX 文件,采用以下选取规则(fix-unit-price-orphan-fallback):
+
+- **优先规则**:优先选 `file_role='pricing'` 且 `parse_status='identified'` 的 XLSX
+- **Fallback 规则**:若该 bidder 无任何 `file_role='pricing'` 的 XLSX,则 fallback 选 `file_role='unit_price'` 且 `parse_status='identified'` 的 XLSX
+- **不变量**:同一 bidder 在单次 pipeline 运行中**永不同时混合** `pricing` 与 `unit_price` 两类 XLSX(三分支互斥:pricing 优先 / unit_price 兜底 / 都无则跳过报价阶段)
+- **作用面**:此规则对项目内每个 bidder **独立**判定;允许同一项目内不同 bidder 落到不同类(B 用 pricing 数据、A 用 unit_price 数据);**不**做项目级 role 一致化
+
+**动机**:LLM(尤其 DeepSeek 类)对监理/咨询/服务类报价表(首段含"综合单价"字样)有稳定将 `pricing` 误判为 `unit_price` 的倾向。`unit_price` 角色在下游报价管线 0 消费,导致此类 bidder silent failure。Fallback 解决 silent failure,不变量保护下游 `aggregate_bidder_totals` 不受"主表+子表混算"污染(避免 `price_overshoot` / `price_total_match` 等铁证级 detector 误算)。
+
+#### Scenario: 仅 pricing 类 XLSX(主路径)
+- **WHEN** bidder 的 XLSX 文件中至少 1 个被 LLM 判 `file_role='pricing'`,可能同时有/没有 `unit_price` 类 XLSX
+- **THEN** 仅选 `pricing` 类 XLSX 进入规则识别 + 回填;`unit_price` 类(若存在)被忽略;行为与本 change 之前一致
+
+#### Scenario: 仅 unit_price 类 XLSX(fallback)
+- **WHEN** bidder 的 XLSX 文件全部被 LLM 判 `file_role='unit_price'`(无任何 `pricing` 类)且 `parse_status='identified'`
+- **THEN** fallback 选 `unit_price` 类 XLSX 进入规则识别(若该 bidder 是项目内首发)+ 回填;bidder 状态走完整 `pricing → priced/price_partial/price_failed` 路径;**不**卡在 `identified`
+
+#### Scenario: pricing + unit_price 都有(优先 pricing 不混合)
+- **WHEN** 同一 bidder 同时有 1 个 `file_role='pricing'` 的 XLSX 和 1 个 `file_role='unit_price'` 的 XLSX
+- **THEN** **仅** `pricing` 类 XLSX 进入回填;`unit_price` 类 XLSX 被忽略;**不**触发"两份 XLSX 都回填导致 `price_items` 翻倍"风险;`aggregate_bidder_totals` 累加结果只来自 pricing 类
+
+#### Scenario: 既无 pricing 也无 unit_price 类 XLSX(跳过报价阶段)
+- **WHEN** bidder 的所有 XLSX 都不是 `pricing` 也不是 `unit_price` 角色,或没有任何 XLSX
+- **THEN** pipeline 不进入 `pricing` 阶段;bidder.parse_status 稳定在 `identified`(终态);`price_items` 为空(行为与本 change 之前一致)
+
+#### Scenario: 项目内 bidder 落到不同 role(每家独立判定)
+- **WHEN** 项目内 3 家 bidder,B 的 XLSX 被判 `pricing`,A 与 C 的 XLSX 被判 `unit_price`
+- **THEN** B 用 `pricing` 类 XLSX 走规则识别(若 B 是首发)与回填;A 与 C 各自 fallback 用 `unit_price` 类 XLSX 走回填;3 家最终都进入 `priced` 终态;A 与 C 的 `price_items` 与 B 同表(因下游 `aggregate_bidder_totals` 不区分 file_role,仅按 bidder_id 聚合)
+---
+
 ### Requirement: 报价数据回填
 
 系统 SHALL 根据 `price_parsing_rules.sheets_config` 从 bidder 的 XLSX 文件中按**多 sheet 迭代**读取报价项,写入 `price_items` 表。`bidder.parse_status` 根据回填结果置 `priced` / `price_partial` / `price_failed`。
@@ -224,6 +256,7 @@
   1. 规则首次 `confirmed=true` 后自动批量触发
   2. 用户 `PUT /api/projects/{pid}/price-rules/{id}` 修改 sheets_config → 清空该项目所有 `price_items` → 重新回填
   3. 单个 bidder `POST /api/documents/{id}/re-parse` 命中该 bidder 的 XLSX → 仅重跑该 bidder
+- **XLSX 选取**(fix-unit-price-orphan-fallback):遵循 "报价 XLSX 选取 fallback 与单 bidder 单类不变量" Requirement 定义的规则(`pricing` 优先 / `unit_price` fallback / 单 bidder 不混合)
 - **回填逻辑**(多 sheet):
   - 遍历 `rule.sheets_config` 每项 `{sheet_name, header_row, column_mapping}`
   - 对 xlsx 中同名 sheet(严格匹配)从 header_row+1 开始按列字母抽 6 字段;命中不到的 sheet_name 跳过 (记录到 failed_sheets)
@@ -300,7 +333,7 @@
 
 #### Scenario: 无报价表 bidder 停在 identified
 
-- **WHEN** bidder 的所有 bid_documents 中无 `file_role='pricing'` 的 XLSX 文件
+- **WHEN** bidder 的所有 bid_documents 中既无 `file_role='pricing'` 也无 `file_role='unit_price'` 的 XLSX 文件
 - **THEN** pipeline 不进入 `pricing` 阶段;bidder.parse_status 稳定在 `identified`(终态);`price_items` 为空;project progress 不把该 bidder 计入 `pricing_total`
 ---
 
@@ -311,6 +344,7 @@
 - **阶段衔接**:每阶段完成 UPDATE `bidder.parse_status` + publish SSE 事件,下一阶段开始前 re-SELECT 当前状态
 - **失败隔离**:任一阶段异常 → bidder 标该阶段失败态(identify_failed / price_failed)+ parse_error;不影响同项目其他 bidder
 - **re-parse 重跑**:`POST /api/documents/{id}/re-parse` 端点重置该文档所属 bidder 的相关阶段,重新触发 pipeline(pipeline 内部根据当前 parse_status 决定从哪段继续)
+- **报价阶段进入条件**(fix-unit-price-orphan-fallback):bidder 至少有一个 `file_role='pricing'` 或 `file_role='unit_price'`(fallback)的 XLSX(详见 "报价 XLSX 选取 fallback 与单 bidder 单类不变量" Requirement)
 
 #### Scenario: pipeline 完整路径
 
@@ -319,7 +353,7 @@
 
 #### Scenario: pipeline 无报价表路径
 
-- **WHEN** bidder 所有文档均非 `pricing` 角色
+- **WHEN** bidder 所有 XLSX 文档既非 `pricing` 也非 `unit_price` 角色(或根本无 XLSX)
 - **THEN** 状态:`extracted → identifying → identified`(不进 pricing 态)
 
 #### Scenario: pipeline 内容提取失败

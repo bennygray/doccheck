@@ -242,31 +242,58 @@ async def _should_stop_after_identify(bidder_id: int) -> bool:
 
 
 async def _find_pricing_xlsx(bidder_id: int) -> str | None:
-    """首个 pricing 角色的 XLSX,用于 rule 识别(胜出者喂 LLM 的样本)。"""
+    """首个 pricing/unit_price 角色的 XLSX,用于 rule 识别(胜出者喂 LLM 的样本)。
+
+    fix-unit-price-orphan-fallback:按 role 优先级顺序选取,**单 bidder 单类不变量**:
+    - 先找 ``file_role='pricing'``,有则返回首个
+    - 没有再找 ``file_role='unit_price'`` (fallback,兜底 LLM 误判)
+    - 都没有返 None
+    与 ``_find_all_pricing_xlsx`` 必须保持对称(同一 bidder 选出相同 role)。
+    详见 spec ``parser-pipeline`` ADDED Requirement
+    "报价 XLSX 选取 fallback 与单 bidder 单类不变量"。
+    """
     async with async_session() as session:
-        stmt = (
-            select(BidDocument)
-            .where(BidDocument.bidder_id == bidder_id)
-            .where(BidDocument.file_role == "pricing")
-            .where(BidDocument.file_type == ".xlsx")
-            .where(BidDocument.parse_status == "identified")
-            .limit(1)
-        )
-        doc = (await session.execute(stmt)).scalar_one_or_none()
-        return doc.file_path if doc else None
+        for role in ("pricing", "unit_price"):
+            stmt = (
+                select(BidDocument)
+                .where(BidDocument.bidder_id == bidder_id)
+                .where(BidDocument.file_role == role)
+                .where(BidDocument.file_type == ".xlsx")
+                .where(BidDocument.parse_status == "identified")
+                .limit(1)
+            )
+            doc = (await session.execute(stmt)).scalar_one_or_none()
+            if doc is not None:
+                return doc.file_path
+        return None
 
 
 async def _find_all_pricing_xlsx(bidder_id: int) -> list[str]:
+    """所有 pricing/unit_price 角色的 XLSX,用于报价回填遍历。
+
+    fix-unit-price-orphan-fallback:按 role 优先级顺序选取,**单 bidder 单类不变量**:
+    - 先找 ``file_role='pricing'``,有则返回所有 pricing 类(不混合 unit_price)
+    - 没有再找 ``file_role='unit_price'`` (fallback)
+    - 都没有返 []
+    返回的列表内部 **永不混合** 两类 role,保护下游 ``aggregate_bidder_totals``
+    不被"主表+子单价表混算"污染(避免 ``price_overshoot`` /
+    ``price_total_match`` 等铁证级 detector 误算)。
+    与 ``_find_pricing_xlsx`` 必须保持对称(同一 bidder 选出相同 role)。
+    详见 spec ``parser-pipeline`` ADDED Requirement。
+    """
     async with async_session() as session:
-        stmt = (
-            select(BidDocument)
-            .where(BidDocument.bidder_id == bidder_id)
-            .where(BidDocument.file_role == "pricing")
-            .where(BidDocument.file_type == ".xlsx")
-            .where(BidDocument.parse_status == "identified")
-        )
-        docs = (await session.execute(stmt)).scalars().all()
-        return [d.file_path for d in docs]
+        for role in ("pricing", "unit_price"):
+            stmt = (
+                select(BidDocument)
+                .where(BidDocument.bidder_id == bidder_id)
+                .where(BidDocument.file_role == role)
+                .where(BidDocument.file_type == ".xlsx")
+                .where(BidDocument.parse_status == "identified")
+            )
+            docs = (await session.execute(stmt)).scalars().all()
+            if docs:
+                return [d.file_path for d in docs]
+        return []
 
 
 async def _set_bidder_status(bidder_id: int, status: str) -> None:

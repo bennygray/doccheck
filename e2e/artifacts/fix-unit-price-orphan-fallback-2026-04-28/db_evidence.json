@@ -1,0 +1,426 @@
+{
+  "project": {
+    "id": 3066,
+    "name": "e2e-fallback-2026-04-28",
+    "bid_code": "L3-FALLBACK-001",
+    "max_price": 5000000.0,
+    "status": "ready"
+  },
+  "bidders": [
+    {
+      "id": 3431,
+      "name": "供应商A",
+      "parse_status": "priced",
+      "parse_error": null
+    },
+    {
+      "id": 3432,
+      "name": "供应商B",
+      "parse_status": "priced",
+      "parse_error": null
+    },
+    {
+      "id": 3433,
+      "name": "供应商C",
+      "parse_status": "priced",
+      "parse_error": null
+    }
+  ],
+  "documents": [
+    {
+      "id": 2281,
+      "bidder_id": 3431,
+      "file_name": "供应商A.zip",
+      "file_type": ".zip",
+      "file_role": null,
+      "role_confidence": null,
+      "parse_status": "extracted"
+    },
+    {
+      "id": 2282,
+      "bidder_id": 3431,
+      "file_name": "价格标.docx",
+      "file_type": ".docx",
+      "file_role": "pricing",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2283,
+      "bidder_id": 3431,
+      "file_name": "工程监理报价表.xlsx",
+      "file_type": ".xlsx",
+      "file_role": "pricing",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2284,
+      "bidder_id": 3431,
+      "file_name": "技术标.docx",
+      "file_type": ".docx",
+      "file_role": "technical",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2285,
+      "bidder_id": 3431,
+      "file_name": "资信标.docx",
+      "file_type": ".docx",
+      "file_role": "qualification",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2286,
+      "bidder_id": 3432,
+      "file_name": "供应商B.zip",
+      "file_type": ".zip",
+      "file_role": null,
+      "role_confidence": null,
+      "parse_status": "extracted"
+    },
+    {
+      "id": 2287,
+      "bidder_id": 3432,
+      "file_name": "浙江华建--江苏锂源年产24万吨LFP项目工程监理投标文件技术标正本.docx",
+      "file_type": ".docx",
+      "file_role": "technical",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2288,
+      "bidder_id": 3432,
+      "file_name": "浙江华建--江苏锂源年产24万吨LFP项目工程监理投标文件（价格标）.docx",
+      "file_type": ".docx",
+      "file_role": "pricing",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2289,
+      "bidder_id": 3432,
+      "file_name": "浙江华建--江苏锂源年产24万吨LFP项目工程监理投标文件（资信标）.docx",
+      "file_type": ".docx",
+      "file_role": "qualification",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2290,
+      "bidder_id": 3432,
+      "file_name": "浙江华建--江苏锂源年产24万吨LFP项目工程监理报价表.xlsx",
+      "file_type": ".xlsx",
+      "file_role": "pricing",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2291,
+      "bidder_id": 3433,
+      "file_name": "供应商C.zip",
+      "file_type": ".zip",
+      "file_role": null,
+      "role_confidence": null,
+      "parse_status": "extracted"
+    },
+    {
+      "id": 2292,
+      "bidder_id": 3433,
+      "file_name": "附件2 投标文件模板（资信标）.docx",
+      "file_type": ".docx",
+      "file_role": "qualification",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2293,
+      "bidder_id": 3433,
+      "file_name": "附件3 投标文件模板（价格标）.docx",
+      "file_type": ".docx",
+      "file_role": "pricing",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2294,
+      "bidder_id": 3433,
+      "file_name": "附件4 投标文件模板（技术标）正本.docx",
+      "file_type": ".docx",
+      "file_role": "technical",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    },
+    {
+      "id": 2295,
+      "bidder_id": 3433,
+      "file_name": "附件5 工程监理报价表.xlsx",
+      "file_type": ".xlsx",
+      "file_role": "pricing",
+      "role_confidence": "high",
+      "parse_status": "identified"
+    }
+  ],
+  "rules": [
+    {
+      "id": 696,
+      "status": "confirmed",
+      "sheet_name": "报价表",
+      "header_row": 3,
+      "column_mapping": "{\"qty_col\": \"E\", \"code_col\": \"A\", \"name_col\": \"B\", \"unit_col\": \"D\", \"skip_cols\": [\"C\", \"H\"], \"unit_price_col\": \"F\", \"total_price_col\": \"G\"}",
+      "sheets_config": "[{\"header_row\": 3, \"sheet_name\": \"报价表\", \"column_mapping\": {\"qty_col\": \"E\", \"code_col\": \"A\", \"name_col\": \"B\", \"unit_col\": \"D\", \"skip_cols\": [\"C\", \"H\"], \"unit_price_col\": \"F\", \"total_price_col\": \"G\"}}, {\"header_row\": 2, \"sheet_name\": \"监理人员报价单分析表\", \"column_mapping\": {\"qty_col\": \"D\", \"code_col\": \"A\", \"name_col\": \"B\", \"unit_col\": null, \"skip_cols\": [\"C\", \"E\", \"F\"], \"unit_price_col\": \"G\", \"total_price_col\": \"H\"}}]"
+    }
+  ],
+  "price_items_summary": [
+    {
+      "bidder_id": 3431,
+      "count": 7,
+      "total_price": 1368000.0
+    },
+    {
+      "bidder_id": 3432,
+      "count": 7,
+      "total_price": 1458000.0
+    },
+    {
+      "bidder_id": 3433,
+      "count": 7,
+      "total_price": 2024400.0
+    }
+  ],
+  "price_items_sample": [
+    {
+      "bidder_id": 3431,
+      "sheet_name": "报价表",
+      "row_index": 4,
+      "item_code": null,
+      "item_name": "建设工程委托监理",
+      "unit": "项",
+      "quantity": 1.0,
+      "unit_price": 456000.0,
+      "total_price": 456000.0
+    },
+    {
+      "bidder_id": 3431,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 4,
+      "item_code": null,
+      "item_name": "总监理工程师",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 25000.0,
+      "total_price": 150000.0
+    },
+    {
+      "bidder_id": 3431,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 5,
+      "item_code": null,
+      "item_name": "专业监理工程师（土建）",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 15000.0,
+      "total_price": 90000.0
+    },
+    {
+      "bidder_id": 3431,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 6,
+      "item_code": null,
+      "item_name": "专业监理工程师（机电安装）",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 15000.0,
+      "total_price": 60000.0
+    },
+    {
+      "bidder_id": 3431,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 7,
+      "item_code": null,
+      "item_name": "安全监理工程师",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 15000.0,
+      "total_price": 90000.0
+    },
+    {
+      "bidder_id": 3431,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 8,
+      "item_code": null,
+      "item_name": "监理员（兼资料员）",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 11000.0,
+      "total_price": 66000.0
+    },
+    {
+      "bidder_id": 3431,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 9,
+      "item_code": null,
+      "item_name": "汇总",
+      "unit": null,
+      "quantity": null,
+      "unit_price": null,
+      "total_price": 456000.0
+    },
+    {
+      "bidder_id": 3432,
+      "sheet_name": "报价表",
+      "row_index": 4,
+      "item_code": null,
+      "item_name": "建设工程委托监理",
+      "unit": "项",
+      "quantity": 1.0,
+      "unit_price": null,
+      "total_price": 486000.0
+    },
+    {
+      "bidder_id": 3432,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 4,
+      "item_code": null,
+      "item_name": "总监理工程师",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 25000.0,
+      "total_price": 150000.0
+    },
+    {
+      "bidder_id": 3432,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 5,
+      "item_code": null,
+      "item_name": "专业监理工程师（土建）",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 16500.0,
+      "total_price": 99000.0
+    },
+    {
+      "bidder_id": 3432,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 6,
+      "item_code": null,
+      "item_name": "专业监理工程师（机电安装）",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 16500.0,
+      "total_price": 66000.0
+    },
+    {
+      "bidder_id": 3432,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 7,
+      "item_code": null,
+      "item_name": "安全监理工程师",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 16500.0,
+      "total_price": 99000.0
+    },
+    {
+      "bidder_id": 3432,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 8,
+      "item_code": null,
+      "item_name": "监理员（兼资料员）",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 12000.0,
+      "total_price": 72000.0
+    },
+    {
+      "bidder_id": 3432,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 9,
+      "item_code": null,
+      "item_name": "汇总",
+      "unit": null,
+      "quantity": null,
+      "unit_price": null,
+      "total_price": 486000.0
+    },
+    {
+      "bidder_id": 3433,
+      "sheet_name": "报价表",
+      "row_index": 4,
+      "item_code": null,
+      "item_name": "建设工程委托监理",
+      "unit": "项",
+      "quantity": 1.0,
+      "unit_price": 674800.0,
+      "total_price": 674800.0
+    },
+    {
+      "bidder_id": 3433,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 4,
+      "item_code": null,
+      "item_name": "总监理工程师",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 30000.0,
+      "total_price": 180000.0
+    },
+    {
+      "bidder_id": 3433,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 5,
+      "item_code": null,
+      "item_name": "专业监理工程师（土建）",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 25000.0,
+      "total_price": 150000.0
+    },
+    {
+      "bidder_id": 3433,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 6,
+      "item_code": null,
+      "item_name": "专业监理工程师（机电安装）",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 25000.0,
+      "total_price": 100000.0
+    },
+    {
+      "bidder_id": 3433,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 7,
+      "item_code": null,
+      "item_name": "安全监理工程师",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 25000.0,
+      "total_price": 150000.0
+    },
+    {
+      "bidder_id": 3433,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 8,
+      "item_code": null,
+      "item_name": "监理员（兼资料员）",
+      "unit": null,
+      "quantity": 1.0,
+      "unit_price": 15800.0,
+      "total_price": 94800.0
+    },
+    {
+      "bidder_id": 3433,
+      "sheet_name": "监理人员报价单分析表",
+      "row_index": 9,
+      "item_code": null,
+      "item_name": "汇总",
+      "unit": null,
+      "quantity": null,
+      "unit_price": null,
+      "total_price": 674800.0
+    }
+  ]
+}

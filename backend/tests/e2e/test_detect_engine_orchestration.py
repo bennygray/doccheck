@@ -84,7 +84,7 @@ async def test_run_detection_happy_path(
                 select(AgentTask).where(AgentTask.project_id == pid)
             )
         ).scalars().all()
-        assert len(tasks) == 11
+        assert len(tasks) == 13  # fix-bug-triple +2 global
         assert all(
             t.status in ("succeeded", "failed", "timeout", "skipped")
             for t in tasks

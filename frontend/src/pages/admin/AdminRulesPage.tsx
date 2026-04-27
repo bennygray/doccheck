@@ -42,8 +42,15 @@ const DIM_LABELS: Record<string, string> = {
   language_style: "语言风格",
   software_metadata: "软件元数据",
   pricing_pattern: "报价模式",
-  price_ceiling: "报价天花板",
+  // fix-bug-triple-and-direction-high 决策 3A:UI key 不变(零 SystemConfig 迁移),
+  // 中文 label 修语义错位 — 既有 price_ceiling 实际控制 price_anomaly engine
+  // (异常低价检测,direction='low'),非"超过最高限价"。新加的 price_overshoot
+  // 才是真"超过最高限价"识别。
+  price_ceiling: "异常低价偏离",
   operation_time: "操作时间",
+  // fix-bug-triple-and-direction-high 新增 2 维 UI label
+  price_total_match: "投标总额完全相等",
+  price_overshoot: "超过最高限价",
 };
 
 const THRESHOLD_LABELS: Record<string, string> = {

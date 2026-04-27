@@ -116,6 +116,14 @@ export default function ProjectDetailPage() {
 
   const sse = useParseProgress(Number.isFinite(projectId) ? projectId : null);
 
+  // fix-bug-triple-and-direction-high P7:lift useDetectProgress 到父组件,
+  // 让 Tag 渲染处(STATUS_LABELS Tag,line ~346)能拿到 detect.projectStatus 实时同步。
+  // HeroDetectArea / StartDetectButton 改 props 接收 detect 实例,refetch prop chain
+  // 必须显式传(StartDetectButton onStarted 闭包要用)。
+  const detect = useDetectProgress(
+    Number.isFinite(projectId) ? projectId : null,
+  );
+
   const reloadProject = useCallback(async () => {
     if (!id) return;
     try {
@@ -343,11 +351,15 @@ export default function ProjectDetailPage() {
                 {project.name}
               </Typography.Title>
               <Tag
-                color={STATUS_COLORS[project.status] ?? "default"}
+                color={
+                  STATUS_COLORS[detect.projectStatus ?? project.status] ??
+                  "default"
+                }
                 data-testid="project-status"
                 style={{ margin: 0 }}
               >
-                {STATUS_LABELS[project.status] ?? project.status}
+                {STATUS_LABELS[detect.projectStatus ?? project.status] ??
+                  (detect.projectStatus ?? project.status)}
               </Tag>
             </div>
 
@@ -438,6 +450,7 @@ export default function ProjectDetailPage() {
               projectId={project.id}
               project={project}
               bidders={mergedBidders}
+              detect={detect}
               onReloadProject={() => void reloadProject()}
               onGoReport={(v) => navigate(`/reports/${project.id}/${v}`)}
             />
@@ -755,16 +768,21 @@ function HeroDetectArea({
   projectId,
   project,
   bidders,
+  detect,
   onReloadProject,
   onGoReport,
 }: {
   projectId: number;
   project: ProjectDetail;
   bidders: Bidder[];
+  /**
+   * fix-bug-triple-and-direction-high P7:detect 实例从父组件 ProjectDetailPage 传入
+   * (lift hook),让 Tag 渲染处能拿到 detect.projectStatus 实时同步。
+   */
+  detect: ReturnType<typeof useDetectProgress>;
   onReloadProject: () => void;
   onGoReport: (version: number) => void;
 }) {
-  const detect = useDetectProgress(projectId);
   // 刚点"启动检测",SSE 事件还没到时撑开占位面板
   const [justStarted, setJustStarted] = useState(false);
 
@@ -793,7 +811,7 @@ function HeroDetectArea({
     <div data-testid="detect-section">
       <StartDetectButton
         projectId={projectId}
-        projectStatus={detect.projectStatus || project.status}
+        projectStatus={detect.projectStatus ?? project.status}
         // 用实时 bidders(SSE 合并后),避免 project.bidders 过期导致按钮误禁用
         bidders={bidders.map((b) => ({
           id: b.id,

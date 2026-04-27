@@ -2,7 +2,7 @@
  * C6/C14/C15 ReportPage —— 检测报告总览(可视化强化版)
  *
  * 视觉:
- *  - Hero 行双栏:左 Gauge 圆盘(总分+风险) + 右 Radar 雷达(11 维度风险形状)
+ *  - Hero 行双栏:左 Gauge 圆盘(总分+风险) + 右 Radar 雷达(13 维度风险形状)
  *  - LLM 结论卡(降级时 Alert 前缀哨兵)
  *  - 人工复核卡
  *  - 维度列表:每行带横向 Progress 条 + 色分三档 + 铁证高亮
@@ -64,6 +64,9 @@ const DIMENSION_LABELS: Record<string, string> = {
   error_consistency: "错误一致性",
   image_reuse: "图片复用",
   style: "语言风格",
+  // fix-bug-triple-and-direction-high 新增 2 维
+  price_total_match: "投标总额完全相等",
+  price_overshoot: "超过最高限价",
 };
 
 /** 雷达图轴标签(短名,省空间) */
@@ -79,6 +82,9 @@ const DIMENSION_SHORT: Record<string, string> = {
   error_consistency: "错误",
   image_reuse: "图片",
   style: "风格",
+  // fix-bug-triple-and-direction-high 新增 2 维
+  price_total_match: "总额相等",
+  price_overshoot: "超限",
 };
 
 function scoreColor(score: number): string {

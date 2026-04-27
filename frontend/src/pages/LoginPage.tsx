@@ -28,7 +28,7 @@ const FEATURES = [
   {
     icon: <SafetyCertificateOutlined />,
     title: "多维度围标检测",
-    desc: "11 维度算法 + LLM 综合研判,文本 / 报价 / 元数据 / 风格全覆盖",
+    desc: "13 维度算法 + LLM 综合研判,文本 / 报价 / 元数据 / 风格全覆盖",
   },
   {
     icon: <AuditOutlined />,

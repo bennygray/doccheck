@@ -139,6 +139,32 @@ async def run_detection(project_id: int, version: int) -> None:
             version,
             exc,
         )
+        # fix-bug-triple-and-direction-high P1/HH:crash 路径回滚 status="ready" + publish
+        # status_changed + error,保证前端 UI 能感知异常退出(对称 parser 侧 error event)。
+        try:
+            from app.models.project import Project
+
+            async with async_session() as _crash_session:
+                project = await _crash_session.get(Project, project_id)
+                if project is not None and project.status == "analyzing":
+                    project.status = "ready"
+                    await _crash_session.commit()
+            await progress_broker.publish(
+                project_id,
+                "project_status_changed",
+                {"new_status": "ready"},
+            )
+            await progress_broker.publish(
+                project_id,
+                "error",
+                {"stage": "engine", "message": str(exc)[:500]},
+            )
+        except Exception as rollback_exc:  # noqa: BLE001 - 二级兜底,不抛
+            logger.exception(
+                "detect: crash rollback failed project=%s: %s",
+                project_id,
+                rollback_exc,
+            )
     finally:
         logger.info("detect: run_detection end project=%s v=%s", project_id, version)
 

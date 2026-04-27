@@ -61,7 +61,7 @@ async def test_status_after_start(
     body = resp.json()
     assert body["version"] == 1
     assert body["project_status"] == "analyzing"
-    assert len(body["agent_tasks"]) == 11  # C12: 7 pair + 4 global
+    assert len(body["agent_tasks"]) == 13  # fix-bug-triple: 7 pair + 6 global
     assert all(t["status"] == "pending" for t in body["agent_tasks"])
 
 

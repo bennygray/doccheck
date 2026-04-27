@@ -46,7 +46,7 @@ def test_empty_inputs_returns_zero_low():
 
 
 def test_all_dimensions_100_high():
-    """C12 后 11 维度,权重和 = 1.00,全 100 → total = 100。"""
+    """fix-bug-triple 后 13 维度,权重和 = 1.00,全 100 → total = 100。"""
     pcs = [
         _pc("text_similarity", 100),
         _pc("section_similarity", 100),
@@ -61,6 +61,8 @@ def test_all_dimensions_100_high():
         _oa("style", 100),
         _oa("image_reuse", 100),
         _oa("price_anomaly", 100),  # C12 新增 global 维度
+        _oa("price_total_match", 100),  # fix-bug-triple 新增
+        _oa("price_overshoot", 100),  # fix-bug-triple 新增
     ]
     total, level = compute_report(pcs, oas)
     assert total == 100.0
@@ -207,7 +209,7 @@ def test_compute_report_signature_unchanged():
 
 
 def test_dimension_weights_sum_and_keys_unchanged():
-    """DIMENSION_WEIGHTS 11 维度 + 权重和 = 1.00"""
+    """fix-bug-triple 后 DIMENSION_WEIGHTS 13 维度 + 权重和 = 1.00"""
     assert round(sum(DIMENSION_WEIGHTS.values()), 4) == 1.0
     expected_keys = {
         "text_similarity",
@@ -221,6 +223,8 @@ def test_dimension_weights_sum_and_keys_unchanged():
         "error_consistency",
         "style",
         "image_reuse",
+        "price_total_match",  # fix-bug-triple-and-direction-high
+        "price_overshoot",  # fix-bug-triple-and-direction-high
     }
     assert set(DIMENSION_WEIGHTS.keys()) == expected_keys
 

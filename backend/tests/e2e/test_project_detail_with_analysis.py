@@ -71,7 +71,7 @@ async def test_detail_analysis_populated_after_start(
     assert body["analysis"] is not None
     assert body["analysis"]["current_version"] == 1
     assert body["analysis"]["project_status"] == "analyzing"
-    assert body["analysis"]["agent_task_count"] == 11
+    assert body["analysis"]["agent_task_count"] == 13  # fix-bug-triple +2 global
     assert body["analysis"]["latest_report"] is None
 
 

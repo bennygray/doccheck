@@ -18,8 +18,9 @@ from app.services.detect.context import (
 PreflightFn = Callable[[AgentContext], Awaitable[PreflightResult]]
 RunFn = Callable[[AgentContext], Awaitable[AgentRunResult]]
 
-# C12 扩至 11;与 `len(AGENT_REGISTRY)` 一致性由 L1 test 断言
-EXPECTED_AGENT_COUNT: int = 11
+# C12 扩至 11;fix-bug-triple-and-direction-high 扩至 13(+price_total_match/price_overshoot)。
+# 与 `len(AGENT_REGISTRY)` 一致性由 L1 test 断言
+EXPECTED_AGENT_COUNT: int = 13
 
 
 class AgentSpec(NamedTuple):

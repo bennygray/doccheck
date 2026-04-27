@@ -80,8 +80,8 @@ async def test_report_existing_200(
     assert body["version"] == 1
     assert body["risk_level"] == "medium"
     assert body["llm_conclusion"] == ""
-    # 11 维度(C12 新增 price_anomaly)
-    assert len(body["dimensions"]) == 11
+    # 13 维度(C12 新增 price_anomaly + fix-bug-triple price_total_match/price_overshoot)
+    assert len(body["dimensions"]) == 13
     dim_names = {d["dimension"] for d in body["dimensions"]}
     assert "text_similarity" in dim_names
     assert "error_consistency" in dim_names

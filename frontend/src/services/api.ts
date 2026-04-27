@@ -351,7 +351,7 @@ export const api = {
 
   // ---------------------------------------------------------- C15
 
-  /** GET /reports/{version}/dimensions — 11 维度明细 */
+  /** GET /reports/{version}/dimensions — 13 维度明细 */
   getReportDimensions: (
     projectId: number | string,
     version: number | string,

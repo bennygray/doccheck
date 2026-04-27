@@ -1,7 +1,12 @@
-"""SystemConfig JSON ↔ 引擎参数映射 (C17 admin-users)
+"""SystemConfig JSON ↔ 引擎参数映射 (C17 admin-users + fix-bug-triple-and-direction-high)
 
-requirements.md §8 的面向用户维度名（10 个）与代码内部维度名（11 个）不一致。
-本模块提供双向映射，使 SystemConfig JSON 面向用户，引擎读取时做转换。
+面向用户维度名(12 个,含 2 个新维度)与代码内部维度名(13 个)的双向映射。
+本模块使 SystemConfig JSON 面向用户,引擎读取时做转换。
+
+fix-bug-triple-and-direction-high:
+- price_ceiling 既有 UI 名继续指 price_anomaly engine(决策 2A 零迁移,UI label 改为
+  "异常低价偏离" 修语义错位,见 AdminRulesPage.tsx)
+- 新加 price_total_match / price_overshoot 两个 UI 维度,1:1 映射到同名 engine
 """
 
 from __future__ import annotations
@@ -9,7 +14,7 @@ from __future__ import annotations
 from app.services.admin.rules_defaults import DEFAULT_RULES_CONFIG
 
 # requirements.md §8 维度名 → 代码 DIMENSION_WEIGHTS key
-# 注意一对多：software_metadata → metadata_author; operation_time → metadata_time
+# 注意一对多:software_metadata → metadata_author; operation_time → metadata_time
 # pricing_pattern → section_similarity + structure_similarity (共享 enabled)
 _DIM_TO_ENGINE: dict[str, list[str]] = {
     "hardware_fingerprint": ["metadata_machine"],
@@ -20,8 +25,11 @@ _DIM_TO_ENGINE: dict[str, list[str]] = {
     "language_style": ["style"],
     "software_metadata": ["metadata_author"],
     "pricing_pattern": ["section_similarity", "structure_similarity"],
-    "price_ceiling": ["price_anomaly"],
+    "price_ceiling": ["price_anomaly"],  # 历史命名占位,实指异常低价检测
     "operation_time": ["metadata_time"],
+    # fix-bug-triple-and-direction-high 新增 2 维(1:1 映射):
+    "price_total_match": ["price_total_match"],
+    "price_overshoot": ["price_overshoot"],
 }
 
 

@@ -114,9 +114,13 @@ export function useParseProgress(
         } else if (
           eventType === "bidder_price_filled" ||
           eventType === "project_price_rule_ready" ||
-          eventType === "document_role_classified"
+          eventType === "document_role_classified" ||
+          eventType === "project_status_changed"
         ) {
-          // 这些事件需要重新拉数据(files/roles/items)
+          // 这些事件需要重新拉数据(files/roles/items/project.status)
+          // fix-bug-triple-and-direction-high P8:project_status_changed 是 parser 侧
+          // 既有 publish(project_status_sync.py),原本前端无 listener 是 dead publish。
+          // 顺手补上,让消费方(ProjectDetailPage)能通过 refetch 拿到最新 project.status。
           void refetch();
         }
       };
@@ -127,6 +131,7 @@ export function useParseProgress(
       "document_role_classified",
       "project_price_rule_ready",
       "bidder_price_filled",
+      "project_status_changed",
       "error",
       "heartbeat",
     ];

@@ -24,8 +24,8 @@ from app.services.detect.registry import AGENT_REGISTRY
 pytestmark = pytest.mark.asyncio
 
 
-async def test_registry_size_11():
-    assert len(AGENT_REGISTRY) == 11
+async def test_registry_size_13():
+    assert len(AGENT_REGISTRY) == 13
 
 
 async def test_dummy_pair_run_writes_pair_comparison(

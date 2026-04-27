@@ -88,7 +88,7 @@ export function ComparePage() {
     if (!projectId || !version) return;
     setLoading(true);
     api
-      // 上限提到 500:10 家 = 45 对 × 11 维度 = 495 行
+      // 上限提到 500:10 家 = 45 对 × 13 维度 = 495 行
       .getReportPairs(projectId, version, "score_desc", 500)
       .then((r) => {
         setItems(r.items);

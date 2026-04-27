@@ -3,7 +3,7 @@
  *
  * 三态切换:
  *  - starting(刚启动,agentTasks 可能为空):骨架占位 + "检测正在启动..."
- *  - running(有 agentTasks,未全完成):总进度条 + 11 维度九宫格 + 最近事件行
+ *  - running(有 agentTasks,未全完成):总进度条 + 13 维度九宫格 + 最近事件行
  *  - completed(全完成):绿底成功卡 + 大 CTA "查看报告"
  *
  * 静默离线提示:lastEventAt 超 10s 未变 + !connected → 琥珀 banner
@@ -293,7 +293,7 @@ export function DetectProgressIndicator({
         />
       )}
 
-      {/* 11 维度九宫格 */}
+      {/* 13 维度九宫格 */}
       {total > 0 && (
         <div
           style={{

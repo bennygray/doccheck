@@ -10,7 +10,7 @@ from app.services.admin.rules_mapper import config_to_engine_params
 
 
 def test_dimension_mapping_correct():
-    """默认配置映射后，所有 11 个引擎维度都有值。"""
+    """默认配置映射后,所有 13 个引擎维度都有值(fix-bug-triple +2 新维度)。"""
     params = config_to_engine_params(DEFAULT_RULES_CONFIG)
     expected_dims = {
         "metadata_machine",
@@ -24,6 +24,8 @@ def test_dimension_mapping_correct():
         "structure_similarity",
         "price_anomaly",
         "metadata_time",
+        "price_total_match",  # fix-bug-triple-and-direction-high 新增
+        "price_overshoot",  # fix-bug-triple-and-direction-high 新增
     }
     assert set(params["weights"].keys()) == expected_dims
     assert set(params["enabled"].keys()) == expected_dims
@@ -36,7 +38,7 @@ def test_missing_field_fallback():
     params = config_to_engine_params(None)
     assert params["risk_levels"]["high"] == 70
     assert params["risk_levels"]["medium"] == 40
-    assert len(params["weights"]) == 11
+    assert len(params["weights"]) == 13
 
 
 def test_weights_normalized():

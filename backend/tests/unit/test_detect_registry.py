@@ -14,20 +14,20 @@ from app.services.detect.registry import (
 )
 
 
-def test_registry_has_11_agents():
-    """C12 扩注册表:10 → 11(新增 global 型 price_anomaly)。"""
+def test_registry_has_13_agents():
+    """fix-bug-triple 扩注册表:11 → 13(新增 price_total_match / price_overshoot)。"""
     from app.services.detect.registry import EXPECTED_AGENT_COUNT
 
-    assert len(AGENT_REGISTRY) == 11
+    assert len(AGENT_REGISTRY) == 13
     assert len(AGENT_REGISTRY) == EXPECTED_AGENT_COUNT
 
 
-def test_registry_split_7_pair_4_global():
-    """C12 后:pair 7 + global 4(新增 price_anomaly)。"""
+def test_registry_split_7_pair_6_global():
+    """fix-bug-triple 后:pair 7 + global 6(新增 price_total_match + price_overshoot)。"""
     pair = [s for s in AGENT_REGISTRY.values() if s.agent_type == "pair"]
     glob = [s for s in AGENT_REGISTRY.values() if s.agent_type == "global"]
     assert len(pair) == 7
-    assert len(glob) == 4
+    assert len(glob) == 6
 
 
 def test_registry_expected_names():
@@ -43,6 +43,8 @@ def test_registry_expected_names():
         "style",
         "image_reuse",
         "price_anomaly",  # C12 新增
+        "price_total_match",  # fix-bug-triple-and-direction-high 新增
+        "price_overshoot",  # fix-bug-triple-and-direction-high 新增
     }
     assert set(AGENT_REGISTRY.keys()) == expected
 
@@ -83,7 +85,7 @@ def test_get_agent_unknown_returns_none():
 
 def test_get_all_agents_returns_list():
     all_agents = get_all_agents()
-    assert len(all_agents) == 11
+    assert len(all_agents) == 13
 
 
 def test_duplicate_register_raises():
@@ -110,11 +112,11 @@ def test_duplicate_register_raises():
 
 
 def test_c14_agent_count_unchanged():
-    """C14 detect-llm-judge 不动注册表;11 Agent 数量保持不变"""
+    """fix-bug-triple 后:13 Agent;此测试名保留向后追溯,实际锁住扩展后的常量。"""
     from app.services.detect.registry import EXPECTED_AGENT_COUNT
 
-    assert EXPECTED_AGENT_COUNT == 11
-    assert len(get_all_agents()) == 11
+    assert EXPECTED_AGENT_COUNT == 13
+    assert len(get_all_agents()) == 13
 
 
 def test_c14_agent_run_result_contract_unchanged():
@@ -125,10 +127,10 @@ def test_c14_agent_run_result_contract_unchanged():
 
 
 def test_c14_dimension_weights_sum_and_keys():
-    """DIMENSION_WEIGHTS 11 键 + 权重和 = 1.00(C12 调整值,C14 不改)"""
+    """fix-bug-triple 后:DIMENSION_WEIGHTS 13 键 + 权重和 = 1.00"""
     from app.services.detect.judge import DIMENSION_WEIGHTS
 
-    assert len(DIMENSION_WEIGHTS) == 11
+    assert len(DIMENSION_WEIGHTS) == 13
     assert round(sum(DIMENSION_WEIGHTS.values()), 4) == 1.0
     expected = {
         "text_similarity",
@@ -142,6 +144,8 @@ def test_c14_dimension_weights_sum_and_keys():
         "error_consistency",
         "style",
         "image_reuse",
+        "price_total_match",
+        "price_overshoot",
     }
     assert set(DIMENSION_WEIGHTS.keys()) == expected
 

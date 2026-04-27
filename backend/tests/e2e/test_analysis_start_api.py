@@ -62,7 +62,7 @@ async def test_start_2_bidders_201_11_tasks(
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["version"] == 1
-    assert body["agent_task_count"] == 11
+    assert body["agent_task_count"] == 13  # fix-bug-triple +2 global
 
     async with async_session() as s:
         rows = list(
@@ -70,7 +70,7 @@ async def test_start_2_bidders_201_11_tasks(
                 await s.execute(select(AgentTask).where(AgentTask.project_id == pid))
             ).scalars().all()
         )
-        assert len(rows) == 11
+        assert len(rows) == 13  # fix-bug-triple +2 global
         # 状态全 pending(INFRA_DISABLE_DETECT=1 跳过自动调度)
         assert all(r.status == "pending" for r in rows)
         # project 进 analyzing
@@ -86,7 +86,7 @@ async def test_start_3_bidders_25_tasks(
     client = await auth_client(reviewer_token)
     resp = await client.post(f"/api/projects/{pid}/analysis/start")
     assert resp.status_code == 201
-    assert resp.json()["agent_task_count"] == 25
+    assert resp.json()["agent_task_count"] == 27  # fix-bug-triple +2 global × 3 bidder = +2
 
 
 async def test_start_1_bidder_400(

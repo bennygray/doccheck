@@ -240,6 +240,7 @@ export type ParseProgressEventType =
   | "document_role_classified"
   | "project_price_rule_ready"
   | "bidder_price_filled"
+  | "project_status_changed"
   | "error"
   | "heartbeat";
 
@@ -322,7 +323,9 @@ export type DetectEventType =
   | "snapshot"
   | "agent_status"
   | "report_ready"
-  | "heartbeat";
+  | "heartbeat"
+  | "project_status_changed"
+  | "error";
 
 export interface DetectEvent {
   event_type: DetectEventType;

@@ -58,6 +58,19 @@ DEFAULT_RULES_CONFIG: dict = {
             "window_minutes": 30,
             "min_bidders": 3,
         },
+        # fix-bug-triple-and-direction-high:2 个新 global 维度。
+        # weight=0 是有意为之 — 检测信号通过 evidence["has_iron_evidence"] 短路升 high,
+        # 不依赖 SystemConfig weight(决策 2A 零迁移设计)。
+        "price_total_match": {
+            "enabled": True,
+            "weight": 0,
+            "llm_enabled": False,
+        },
+        "price_overshoot": {
+            "enabled": True,
+            "weight": 0,
+            "llm_enabled": False,
+        },
     },
     "risk_levels": {"high": 70, "medium": 40},
     # honest-detection-results N2: 与 parser/llm/role_keywords.py 保持 key 集合一致,

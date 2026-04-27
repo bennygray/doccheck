@@ -95,7 +95,7 @@ def test_context_basic_structure():
     assert ctx["report"]["total_score"] == 75.5
     assert ctx["report"]["risk_level"] == "medium"
     assert ctx["review"] is None
-    # 11 维度全覆盖,顺序匹配
+    # 13 维度全覆盖,顺序匹配(fix-bug-triple-and-direction-high +2 新维度)
     assert [d["name"] for d in ctx["dimensions"]] == list(DIMENSION_WEIGHTS.keys())
     assert all(d["best_score"] == 0.0 for d in ctx["dimensions"])
 

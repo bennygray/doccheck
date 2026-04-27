@@ -289,7 +289,7 @@ def summarize(
     """预聚合结构化摘要(token 稳定 3~8k),喂给 L-9 LLM
 
     规则:
-    - 覆盖 11 维度(哪怕 skip 也列出,top_k_examples=[])
+    - 覆盖 13 维度(哪怕 skip 也列出,top_k_examples=[])
     - top_k 按 score 倒序;铁证 pair/OA 无条件入 top_k(哪怕不在前 k)
     - global 型 Agent 的 top_k_examples 仅 1 条 OA 摘要(bidder_a/b 填 "全局")
     """
@@ -423,7 +423,7 @@ def summarize(
 
 
 _JUDGE_SYSTEM = (
-    "你是投标围标/串标综合研判专家。基于给定的 11 维度证据摘要和加权公式初步结论,"
+    "你是投标围标/串标综合研判专家。基于给定的 13 维度证据摘要和加权公式初步结论,"
     "产出一段自然语言的综合研判结论(≤200 字),并给出一个建议总分(suggested_total)。\n"
     "\n"
     "重要约束:\n"
@@ -450,7 +450,7 @@ def _build_user_prompt(summary: dict, formula_total: float) -> str:
         f"加权公式初步总分 formula_total={formula_total}(级别 "
         f"{summary.get('formula', {}).get('level', 'unknown')})。\n\n"
         f"建议总分区间 [{formula_total}, 100]。\n\n"
-        f"11 维度证据摘要(JSON):\n{summary_json}"
+        f"13 维度证据摘要(JSON):\n{summary_json}"
     )
 
 

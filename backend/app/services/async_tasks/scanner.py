@@ -172,6 +172,17 @@ async def _recover_agent_run(session: AsyncSession, task: AsyncTask) -> None:
         project = await session.get(Project, project_id)
         if project is not None and project.status == "analyzing":
             project.status = "ready"
+            # fix-bug-triple-and-direction-high P1:scanner stuck-recovery 也要 publish,
+            # 修补 project-status-sync spec §"项目状态变更发送 SSE 事件"既有违反点。
+            from app.services.parser.pipeline.progress_broker import (
+                progress_broker,
+            )
+
+            await progress_broker.publish(
+                project_id,
+                "project_status_changed",
+                {"new_status": "ready"},
+            )
 
 
 __all__ = ["scan_and_recover"]

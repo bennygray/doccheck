@@ -40,7 +40,12 @@ from app.services.parser.pipeline.progress_broker import progress_broker
 logger = logging.getLogger(__name__)
 
 
-# 11 维度权重,合计 1.00(D4 占位值;C14 保持 C12 调整后的值,实战反馈调参留 follow-up)
+# 13 维度权重,合计 1.00。
+# fix-bug-triple-and-direction-high I-Weight-1:多维度均摊释放 0.06 给 2 个新 global Agent
+# (price_total_match / price_overshoot 各 0.03),避免单一维度权重砍幅过大。
+# 释放来源:error_consistency 0.12→0.10(-0.02) / style 0.08→0.07(-0.01) /
+# image_reuse 0.05→0.02(-0.03)。新 2 维实际不依赖权重生效(由 evidence
+# has_iron_evidence 短路升 high),设 0.03 是为加权综合分有少量贡献。
 DIMENSION_WEIGHTS: dict[str, float] = {
     "text_similarity": 0.12,
     "section_similarity": 0.10,
@@ -50,17 +55,22 @@ DIMENSION_WEIGHTS: dict[str, float] = {
     "metadata_machine": 0.10,
     "price_consistency": 0.10,  # C12 释放部分权重给 price_anomaly
     "price_anomaly": 0.07,  # C12 新增
-    "error_consistency": 0.12,  # 铁证维度,权重最高之一
-    "style": 0.08,
-    "image_reuse": 0.05,  # C12 释放部分权重给 price_anomaly
+    "error_consistency": 0.10,  # fix-bug-triple I-Weight-1:0.12→0.10 释放 0.02
+    "style": 0.07,  # fix-bug-triple I-Weight-1:0.08→0.07 释放 0.01
+    "image_reuse": 0.02,  # fix-bug-triple I-Weight-1:0.05→0.02 释放 0.03
+    "price_total_match": 0.03,  # fix-bug-triple 新增,任意两家总额相等(铁证)
+    "price_overshoot": 0.03,  # fix-bug-triple 新增,任一超过最高限价(铁证)
 }
 
 # 7 个 pair 类维度(由 pair agent 写 PairComparison,judge 补写 OA 聚合行)
+# fix-bug-triple:price_total_match / price_overshoot 是新加 global,从 PAIR_DIMENSIONS 排除
 PAIR_DIMENSIONS: frozenset[str] = frozenset(DIMENSION_WEIGHTS.keys()) - {
     "error_consistency",
     "price_anomaly",
     "style",
     "image_reuse",
+    "price_total_match",
+    "price_overshoot",
 }
 
 
@@ -491,6 +501,15 @@ async def judge_and_create_report(
 
         await session.commit()
         await session.refresh(report)
+
+    # fix-bug-triple-and-direction-high P3:project_status_changed MUST 先于 report_ready 推送,
+    # 避免前端 race(Tag 已切"已完成" 但 latestReport 未到导致报告入口缺失)。
+    if project is not None:
+        await progress_broker.publish(
+            project_id,
+            "project_status_changed",
+            {"new_status": "completed"},
+        )
 
     # 推送 report_ready
     await progress_broker.publish(

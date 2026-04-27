@@ -231,6 +231,10 @@ async def test_s2_llm_tries_lower_ironclad_guarded(
             ("style", score, None),
             ("image_reuse", score, None),
             ("price_anomaly", score, None),
+            # fix-bug-triple-and-direction-high:补 2 个新 global Agent OA,
+            # 让 formula_total 仍 ≈ 88(权重和=1,各维 score=88 → 加权 88)
+            ("price_total_match", score, None),
+            ("price_overshoot", score, None),
         ],
     )
 

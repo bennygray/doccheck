@@ -542,7 +542,7 @@ function RadarCard({
         维度风险分布
       </Typography.Title>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        11 个维度的得分雷达;越外圈分数越高,形状越偏哪侧表示该类型风险越突出
+        13 个维度的得分雷达;越外圈分数越高,形状越偏哪侧表示该类型风险越突出
       </Typography.Text>
       <div style={{ marginTop: 8 }}>
         <Radar {...config} />

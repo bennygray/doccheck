@@ -41,6 +41,8 @@ const DIMENSION_LABELS: Record<string, string> = {
   error_consistency: "错误一致性",
   image_reuse: "图片复用",
   style: "语言风格",
+  price_total_match: "投标总额完全相等",
+  price_overshoot: "超过最高限价",
 };
 
 const STATUS_META: Record<
@@ -160,7 +162,7 @@ export function DetectProgressIndicator({
               检测已启动,正在初始化...
             </Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              正在调度 11 个维度检测 agent,首批进度几秒内出现
+              正在调度 13 个维度检测 agent,首批进度几秒内出现
             </Typography.Text>
           </div>
         </Space>

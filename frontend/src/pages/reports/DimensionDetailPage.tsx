@@ -62,6 +62,8 @@ const DIMENSION_LABELS: Record<string, string> = {
   error_consistency: "错误一致性",
   image_reuse: "图片复用",
   style: "语言风格",
+  price_total_match: "投标总额完全相等",
+  price_overshoot: "超过最高限价",
 };
 
 /** 每维度的证据跳转路径 */

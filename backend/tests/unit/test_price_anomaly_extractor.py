@@ -76,6 +76,8 @@ async def _seed_project(bidder_totals: list[tuple[str, list[Decimal]]]) -> int:
         await s.flush()
 
         # PriceParsingRule 是 project 级(非 document 级),共享
+        # fix-multi-sheet-price-double-count:sheets_config 含 sheet_role='main'
+        # 让 aggregate_bidder_totals 的新 EXISTS JSONB filter 通过
         rule = PriceParsingRule(
             project_id=project.id,
             sheet_name="报价明细",
@@ -88,6 +90,15 @@ async def _seed_project(bidder_totals: list[tuple[str, list[Decimal]]]) -> int:
                 "unit_price_col": 4,
                 "total_price_col": 5,
             },
+            sheets_config=[{
+                "sheet_name": "报价明细",
+                "sheet_role": "main",
+                "header_row": 1,
+                "column_mapping": {
+                    "code_col": 0, "name_col": 1, "unit_col": 2,
+                    "qty_col": 3, "unit_price_col": 4, "total_price_col": 5,
+                },
+            }],
             status="confirmed",
         )
         s.add(rule)

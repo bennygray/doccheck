@@ -18,8 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bidder import Bidder
 from app.models.price_item import PriceItem
+from app.models.price_parsing_rule import PriceParsingRule
 from app.services.detect.agents.anomaly_impl.config import AnomalyConfig
 from app.services.detect.agents.anomaly_impl.models import BidderPriceSummary
+from app.services.detect.agents.anomaly_impl.sheet_role_filter import (
+    is_main_sheet_clause,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,8 @@ async def aggregate_bidder_totals(
       → 这种 bidder 本身没有有效报价,直接过滤掉
     - 按 bidder_id 升序,截断 max_bidders
     """
+    # fix-multi-sheet-price-double-count:JOIN PriceParsingRule + 仅 SUM sheet_role='main' 的行
+    # backward compat:老数据缺 sheet_role 字段,COALESCE 默认 main(行为同改前)
     stmt = (
         select(
             Bidder.id,
@@ -45,9 +51,14 @@ async def aggregate_bidder_totals(
         )
         .select_from(Bidder)
         .join(PriceItem, PriceItem.bidder_id == Bidder.id)
+        .join(
+            PriceParsingRule,
+            PriceParsingRule.id == PriceItem.price_parsing_rule_id,
+        )
         .where(
             Bidder.project_id == project_id,
             Bidder.deleted_at.is_(None),
+            is_main_sheet_clause(),
         )
         .group_by(Bidder.id, Bidder.name)
         .order_by(Bidder.id.asc())

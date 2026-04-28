@@ -94,6 +94,9 @@ e2e/artifacts/*
 # fix-unit-price-orphan-fallback L3 manual 凭证
 !e2e/artifacts/fix-unit-price-orphan-fallback-*
 !e2e/artifacts/fix-unit-price-orphan-fallback-*/**
+# fix-multi-sheet-price-double-count L3 manual 凭证
+!e2e/artifacts/fix-multi-sheet-price-double-count-*
+!e2e/artifacts/fix-multi-sheet-price-double-count-*/**
 # Playwright outputDir 在 artifacts 下独立子目录,整个忽略
 e2e/artifacts/playwright-output/
 e2e/node_modules/

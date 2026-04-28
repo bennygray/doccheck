@@ -32,6 +32,9 @@ REQUIRED_MAPPING_KEYS = {
     "total_price_col",
 }
 
+# fix-multi-sheet-price-double-count B:sheet_role 三值枚举
+VALID_SHEET_ROLES: frozenset[str] = frozenset({"main", "breakdown", "summary"})
+
 _PREVIEW_ROWS = 8
 
 
@@ -170,15 +173,58 @@ async def detect_price_rule(
         # 规范化 skip_cols
         if "skip_cols" not in cm or not isinstance(cm["skip_cols"], list):
             cm["skip_cols"] = []
+        # fix-multi-sheet-price-double-count B:sheet_role 解析 + enum 校验
+        # invalid 或缺失 → 暂置 None,后续 _apply_sheet_role_defaults 兜底
+        raw_role = item.get("sheet_role")
+        if raw_role is None:
+            sheet_role: str | None = None
+        elif isinstance(raw_role, str) and raw_role in VALID_SHEET_ROLES:
+            sheet_role = raw_role
+        else:
+            logger.warning(
+                "price_rule_detector: invalid sheet_role=%r sheet=%r → default later",
+                raw_role, sn,
+            )
+            sheet_role = None
         sheets_config.append(
-            {"sheet_name": sn, "header_row": hr, "column_mapping": cm}
+            {
+                "sheet_name": sn,
+                "sheet_role": sheet_role,  # 可能 None,下面统一兜底
+                "header_row": hr,
+                "column_mapping": cm,
+            }
         )
 
     if not sheets_config:
         logger.warning("price_rule_detector: no valid sheets after validation")
         return None
 
+    # fix-multi-sheet-price-double-count B:sheet_role 缺失兜底
+    # 单 sheet:默认 main(zero risk)
+    # 多 sheet:第一个 main,后续 breakdown(常见"主表+明细"模式 last-resort)
+    _apply_sheet_role_defaults(sheets_config)
+
     return PriceRuleDraft(sheets_config=sheets_config)
+
+
+def _apply_sheet_role_defaults(sheets_config: list[dict[str, Any]]) -> None:
+    """对 sheet_role 为 None 的项填默认值。原地修改。
+
+    fix-multi-sheet-price-double-count B:LLM 漏 / 非法 sheet_role 时的兜底:
+    - 单 sheet:默认 main
+    - 多 sheet:第一个 main,后续 breakdown
+    LLM 已正确给值的项不被覆盖。
+    """
+    if not sheets_config:
+        return
+    if len(sheets_config) == 1:
+        if sheets_config[0]["sheet_role"] is None:
+            sheets_config[0]["sheet_role"] = "main"
+        return
+    # 多 sheet:仅对未给值的项填默认
+    for idx, item in enumerate(sheets_config):
+        if item["sheet_role"] is None:
+            item["sheet_role"] = "main" if idx == 0 else "breakdown"
 
 
 def _col_letter(idx: int) -> str:
@@ -211,4 +257,9 @@ def _parse_llm_json(text: str) -> dict[str, Any] | None:
         return None
 
 
-__all__ = ["detect_price_rule", "PriceRuleDraft", "REQUIRED_MAPPING_KEYS"]
+__all__ = [
+    "detect_price_rule",
+    "PriceRuleDraft",
+    "REQUIRED_MAPPING_KEYS",
+    "VALID_SHEET_ROLES",
+]

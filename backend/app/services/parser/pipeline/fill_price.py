@@ -26,6 +26,18 @@ logger = logging.getLogger(__name__)
 # 任一 text 字段(code/name/unit)长度 ≥ 此值且其他字段全空 → 判备注行
 PRICE_REMARK_SKIP_MIN_LEN = 100
 
+# fix-multi-sheet-price-double-count A:汇总行 deterministic skip 关键字
+# item_name 以任一关键字开头/完全等于 + 数值字段 ≤ 1 个非空 → skip
+# 真分项保护:若数值字段 ≥ 2 个非空(qty+up+tp 任两个),不杀
+PRICE_SUMMARY_KEYWORDS: tuple[str, ...] = (
+    "合计",
+    "汇总",
+    "小计",
+    "总计",
+    "总额",
+    "总价",
+)
+
 
 @dataclass
 class FillResult:
@@ -203,6 +215,19 @@ def _extract_row(
             others_num_empty = all(x is None for x in num_fields)
             if others_text_empty and others_num_empty:
                 return None
+
+    # fix-multi-sheet-price-double-count A:汇总行 deterministic skip
+    # item_name 以任一汇总关键字开头/完全等于 + unit_price 为空 → skip
+    # 真分项保护:unit_price 非空 → 真分项(单价 = 合价 / 数量),不杀
+    # 例如"合计 qty=28 up=None tp=456000"(合计行,qty 是大杂烩)→ skip
+    # 例如"合计费用 qty=10 up=1000 tp=10000"(真分项)→ 不杀
+    if item_name:
+        name_stripped = str(item_name).strip()
+        for kw in PRICE_SUMMARY_KEYWORDS:
+            if name_stripped == kw or name_stripped.startswith(kw):
+                if up_raw is None:
+                    return None
+                break  # 命中关键字但有 unit_price → 真分项,继续后续处理
 
     # parser-accuracy-fixes P1-7:item_code 序号列识别
     # 若 item_code 匹配 ^\d+$(纯数字整数)且本行其他字段至少一个非空 → 判序号列污染,置空

@@ -24,6 +24,7 @@ from app.models.document_metadata import DocumentMetadata
 from app.models.document_text import DocumentText
 from app.models.pair_comparison import PairComparison
 from app.models.price_item import PriceItem
+from app.models.price_parsing_rule import PriceParsingRule
 from app.models.project import Project, get_visible_projects_stmt
 from app.models.user import User
 from app.schemas.compare import (
@@ -418,16 +419,36 @@ async def compare_price(
             )
         )
 
-    # 5) 总报价行
+    # 5) 总报价行 — fix-multi-sheet-price-double-count:仅 SUM sheet_role='main' 行
+    # 单一真相源:与 aggregate_bidder_totals 共用 sheet_role 过滤逻辑
+    # backward compat:老数据缺 sheet_role 字段 → 默认 main(行为同改前)
+    rule_rows = (
+        await session.execute(
+            select(PriceParsingRule).where(PriceParsingRule.project_id == project_id)
+        )
+    ).scalars().all()
+    # main_sheets[(rule_id, sheet_name)] = True  (in set)
+    main_sheets: set[tuple[int, str]] = set()
+    for rule in rule_rows:
+        for cfg in (rule.sheets_config or []):
+            sn = cfg.get("sheet_name")
+            role = cfg.get("sheet_role", "main")  # 缺字段默认 main(backward compat)
+            if sn and role == "main":
+                main_sheets.add((rule.id, sn))
+
     totals: list[PriceCell] = []
     total_prices: list[float] = []
     for bid in bidder_ids:
         bid_total = Decimal(0)
         has_any = False
         for pi in pi_rows:
-            if pi.bidder_id == bid and pi.total_price is not None:
-                bid_total += pi.total_price
-                has_any = True
+            if pi.bidder_id != bid or pi.total_price is None:
+                continue
+            # main sheet 过滤(与 aggregate_bidder_totals 同源)
+            if (pi.price_parsing_rule_id, pi.sheet_name) not in main_sheets:
+                continue
+            bid_total += pi.total_price
+            has_any = True
         tp = float(bid_total) if has_any else None
         totals.append(PriceCell(bidder_id=bid, total_price=tp))
         if tp is not None:

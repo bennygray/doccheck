@@ -1,0 +1,211 @@
+{
+  "version": 1,
+  "total_score": 92.0,
+  "risk_level": "high",
+  "llm_conclusion": "本案加权公式初判85.0分（high），已触发text_similarity、section_similarity两项铁证维度。三家企业投标文件文本相似度高达90.79，且3719与另外两家均达铁证阈值；section_similarity亦出现56.57的铁证得分。价格一致性维度存在25分异常。综合判断，三家企业涉嫌协同编制投标文件，围标串标风险极高。",
+  "created_at": "2026-04-28T08:18:47.565068Z",
+  "dimensions": [
+    {
+      "dimension": "structure_similarity",
+      "best_score": 100.0,
+      "is_ironclad": true,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "结构铁证命中(字段=1.00、填充=1.00),综合 score=100.0",
+        "结构铁证命中(字段=1.00、填充=1.00),综合 score=100.0",
+        "结构铁证命中(目录 LCS=3/3+3、字段=1.00、填充=1.00),综合 score=100.0"
+      ]
+    },
+    {
+      "dimension": "text_similarity",
+      "best_score": 90.79,
+      "is_ironclad": true,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "整体上，两家投标文件的高相似段落主要为响应招标文件的template及监理行业通用generic表述；但在现场签证管理（idx 11、12）和合同条款具体举例（idx 15、21）等个性化内容中出现高度同源表述，存在明显plagiarism痕迹。",
+        "A、B技术标大量内容雷同源于监理规范、施工验收标准及招标文件格式等公开模板与行业通用表述，属行业常态；但在个别非标准技术措施中出现个性化高度一致的表述，存在同源抄袭风险。",
+        "大量技术实施方案、管理制度及项目特定日期呈现非通用、个性化的高度一致，且出现同音错字（产竽）等同源特征，整体高度疑似同源抄袭（围标）。"
+      ]
+    },
+    {
+      "dimension": "section_similarity",
+      "best_score": 56.57,
+      "is_ironclad": true,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "章节级对比完成,151 对齐章节,未命中铁证",
+        "章节级对比完成,151 对齐章节,未命中铁证",
+        "章节级命中:3 段抄袭 / 408 对齐章节"
+      ]
+    },
+    {
+      "dimension": "style",
+      "best_score": 77.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "发现 1 组风格高度一致投标人"
+      ]
+    },
+    {
+      "dimension": "metadata_author",
+      "best_score": 62.5,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "元数据字段命中:author(共 2 条)",
+        "元数据字段命中:author(共 2 条)",
+        "元数据字段命中:author(共 2 条)"
+      ]
+    },
+    {
+      "dimension": "metadata_time",
+      "best_score": 30.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "时间维度命中:created_at_match(共 2 条)",
+        "时间维度命中:created_at_match(共 2 条)",
+        "时间维度命中:created_at_match(共 2 条)"
+      ]
+    },
+    {
+      "dimension": "price_consistency",
+      "best_score": 25.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "报价一致命中:tail;score=25.00",
+        "报价一致命中:tail;score=12.50",
+        "报价一致命中:tail;score=12.50"
+      ]
+    },
+    {
+      "dimension": "metadata_machine",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+        "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+        "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失"
+      ]
+    },
+    {
+      "dimension": "price_anomaly",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "未发现单家异常低价"
+      ]
+    },
+    {
+      "dimension": "error_consistency",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "error_consistency: 无可抽关键词"
+      ]
+    },
+    {
+      "dimension": "image_reuse",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "image_reuse: 小图过滤后无可比图"
+      ]
+    },
+    {
+      "dimension": "price_total_match",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "未发现两家总额完全相等"
+      ]
+    },
+    {
+      "dimension": "price_overshoot",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "未发现超限投标"
+      ]
+    }
+  ],
+  "manual_review_status": null,
+  "manual_review_comment": null,
+  "reviewer_id": null,
+  "reviewed_at": null,
+  "template_cluster_detected": false,
+  "template_cluster_adjusted_scores": null
+}

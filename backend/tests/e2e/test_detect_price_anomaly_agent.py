@@ -45,18 +45,22 @@ async def _seed(
         await s.commit()
         await s.refresh(p)
 
+        # fix-multi-sheet-price-double-count:sheets_config 含 sheet_role='main'
+        _cm = {
+            "code_col": "A", "name_col": "B", "unit_col": "C",
+            "qty_col": "D", "unit_price_col": "E", "total_price_col": "F",
+        }
         rule = PriceParsingRule(
             project_id=p.id,
             sheet_name="default",
             header_row=1,
-            column_mapping={
-                "code_col": "A",
-                "name_col": "B",
-                "unit_col": "C",
-                "qty_col": "D",
-                "unit_price_col": "E",
-                "total_price_col": "F",
-            },
+            column_mapping=_cm,
+            sheets_config=[{
+                "sheet_name": "default",
+                "sheet_role": "main",
+                "header_row": 1,
+                "column_mapping": _cm,
+            }],
             status="confirmed",
         )
         s.add(rule)

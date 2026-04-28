@@ -106,11 +106,13 @@ async def setup(client):
         ))
 
         # 报价规则(FK 依赖)
+        # fix-multi-sheet-price-double-count:sheets_config 含 sheet_role='main'
         rule = PriceParsingRule(
             project_id=project.id,
             sheet_name="Sheet1",
             header_row=0,
             column_mapping={"item_name": 0, "unit_price": 1},
+            sheets_config=[{"sheet_name": "Sheet1", "sheet_role": "main"}],
         )
         s.add(rule)
         await s.flush()

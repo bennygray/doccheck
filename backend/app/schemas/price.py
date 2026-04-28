@@ -102,6 +102,12 @@ class PriceParsingRuleWrite(BaseModel):
                     raise ValueError(
                         f"sheets_config[{i}].column_mapping 缺少必需键: {sorted(missing)}"
                     )
+                # fix-multi-sheet-price-double-count B:sheet_role 校验(可选字段,缺则后端默认 main)
+                role = item.get("sheet_role")
+                if role is not None and role not in ("main", "breakdown", "summary"):
+                    raise ValueError(
+                        f"sheets_config[{i}].sheet_role 非法,必须 main/breakdown/summary"
+                    )
         # 校验老 payload 三字段齐全 + column_mapping 必需键
         if has_old:
             if not self.sheet_name or self.header_row is None or self.column_mapping is None:
@@ -112,12 +118,22 @@ class PriceParsingRuleWrite(BaseModel):
         return self
 
     def normalized_sheets_config(self) -> list[dict[str, Any]]:
-        """统一输出 sheets_config 数组(老 payload 包装成单 sheet)。"""
+        """统一输出 sheets_config 数组(老 payload 包装成单 sheet)。
+
+        fix-multi-sheet-price-double-count:每项 sheet_role 缺则默认 'main'(backward compat)。
+        """
         if self.sheets_config is not None:
-            return self.sheets_config
+            # 副本 + 默认 sheet_role='main'(若缺)
+            normalized: list[dict[str, Any]] = []
+            for item in self.sheets_config:
+                copied = dict(item)
+                copied.setdefault("sheet_role", "main")
+                normalized.append(copied)
+            return normalized
         return [
             {
                 "sheet_name": self.sheet_name,
+                "sheet_role": "main",
                 "header_row": self.header_row,
                 "column_mapping": self.column_mapping,
             }

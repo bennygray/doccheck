@@ -27,6 +27,7 @@ from app.services.parser.pipeline.fill_price import fill_price_from_rule
 from app.services.parser.pipeline.progress_broker import progress_broker
 from app.services.parser.pipeline.project_status_sync import try_transition_project_ready
 from app.services.parser.pipeline.rule_coordinator import acquire_or_wait_rule
+from app.services.parser.pipeline.sheet_role_validator import validate_sheet_roles
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,17 @@ async def run_pipeline(
             logger.exception("fill_price failed bidder=%d path=%s", bidder_id, path)
             failed.append(str(Path(path).name))
 
+    # fix-multi-sheet-price-double-count F:数值兜底校验 sheet_role
+    # 若 LLM 误判(都标 main 但 SUM 相等),根据行数纠正
+    # 修正 → UPDATE rule.sheets_config + 写 audit_log
+    try:
+        await _run_sheet_role_validator(bidder_id, rule.id)
+    except Exception:
+        logger.exception(
+            "sheet_role validator failed bidder=%d rule=%d (non-fatal)",
+            bidder_id, rule.id,
+        )
+
     # 终态判定 (β 方案)
     if succeeded and not failed:
         final_status = "priced"
@@ -294,6 +306,46 @@ async def _find_all_pricing_xlsx(bidder_id: int) -> list[str]:
             if docs:
                 return [d.file_path for d in docs]
         return []
+
+
+async def _run_sheet_role_validator(bidder_id: int, rule_id: int) -> None:
+    """fix-multi-sheet-price-double-count F:数值兜底校验 sheet_role。
+
+    在某 bidder 报价回填完成后调用,根据该 bidder 的 price_items 行数+SUM 关系,
+    检查 LLM 给的 sheet_role 是否合理;若发现"两 sheet SUM 相等但都标 main",
+    根据行数纠正(行少为 main, 行多为 breakdown);UPDATE rule.sheets_config。
+    决策记录在 logger.warning(audit log 字段不匹配自动场景,本 change 不动 schema)。
+    """
+    from app.models.price_item import PriceItem
+    from app.models.price_parsing_rule import PriceParsingRule
+    from sqlalchemy.orm.attributes import flag_modified
+
+    async with async_session() as session:
+        rule = await session.get(PriceParsingRule, rule_id)
+        if rule is None or not rule.sheets_config:
+            return
+
+        items = (
+            await session.execute(
+                select(PriceItem).where(PriceItem.bidder_id == bidder_id)
+            )
+        ).scalars().all()
+        if not items:
+            return
+
+        original = list(rule.sheets_config)
+        fixed, decisions = validate_sheet_roles(original, items)
+        if not decisions:
+            return
+
+        rule.sheets_config = fixed
+        # JSONB 列改 list 内部时 SQLAlchemy 不知道,显式 flag_modified
+        flag_modified(rule, "sheets_config")
+        await session.commit()
+        logger.info(
+            "sheet_role validator applied %d fix(es) on rule=%d bidder=%d: %s",
+            len(decisions), rule_id, bidder_id, "; ".join(decisions),
+        )
 
 
 async def _set_bidder_status(bidder_id: int, status: str) -> None:

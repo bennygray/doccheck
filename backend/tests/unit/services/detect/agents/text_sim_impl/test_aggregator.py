@@ -123,8 +123,9 @@ def test_evidence_json_degraded():
 
 
 def test_evidence_json_samples_truncated_to_limit():
-    pairs = [_pair(i, sim=0.9 - i * 0.01) for i in range(50)]
-    judgments = {i: "plagiarism" for i in range(50)}
+    # text-sim-exact-match-bypass: _SAMPLES_LIMIT 30 → 60 (与 cap 同步;L3 实测 80 timeout 折中到 60)
+    pairs = [_pair(i, sim=0.9 - i * 0.001) for i in range(100)]
+    judgments = {i: "plagiarism" for i in range(100)}
     ev = build_evidence_json(
         doc_role="technical",
         doc_id_a=1,
@@ -134,5 +135,5 @@ def test_evidence_json_samples_truncated_to_limit():
         judgments=judgments,
         ai_meta={"overall": "", "confidence": ""},
     )
-    assert len(ev["samples"]) == 30
-    assert ev["pairs_total"] == 50
+    assert len(ev["samples"]) == 60
+    assert ev["pairs_total"] == 100

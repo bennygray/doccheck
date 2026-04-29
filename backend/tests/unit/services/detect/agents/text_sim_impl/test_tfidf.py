@@ -49,9 +49,14 @@ def test_compute_pair_similarity_unrelated_no_pairs():
 
 
 def test_compute_pair_similarity_threshold_filter():
-    """threshold 边界:相同段落 sim=1.0,threshold=2.0 → 无 pair。"""
-    text = "本项目采用先进的人工智能技术方案"
-    pairs = compute_pair_similarity([text], [text], 2.0, 30)
+    """threshold 边界:cosine 路径 sim=1.0 但 threshold=2.0 → 无 pair。
+
+    text-sim-exact-match-bypass: hash 旁路命中独立于 threshold,
+    本测段间加微小后缀避开 hash 命中,只测 cosine 路径的 threshold 行为。
+    """
+    a = "本项目采用先进的人工智能技术方案 alpha"
+    b = "本项目采用先进的人工智能技术方案 beta"
+    pairs = compute_pair_similarity([a], [b], 2.0, 30)
     assert pairs == []
 
 
@@ -70,6 +75,17 @@ def test_compute_pair_similarity_sorted_desc():
 
 
 def test_compute_pair_similarity_max_pairs_truncate():
-    base = "本项目技术方案采用人工智能算法实现自动化检测和证据收集"
-    pairs = compute_pair_similarity([base] * 5, [base] * 5, 0.5, 3)
+    """cosine 候选受 max_pairs 截断;hash 命中段(若存在)不受 cap 影响。
+
+    text-sim-exact-match-bypass: 段间加微小差异避开 hash 命中,只测 cosine 截断。
+    """
+    a_paras = [
+        f"本项目技术方案采用人工智能算法实现自动化检测和证据收集 alpha-{i}"
+        for i in range(5)
+    ]
+    b_paras = [
+        f"本项目技术方案采用人工智能算法实现自动化检测和证据收集 beta-{i}"
+        for i in range(5)
+    ]
+    pairs = compute_pair_similarity(a_paras, b_paras, 0.5, 3)
     assert len(pairs) == 3

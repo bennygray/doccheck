@@ -181,13 +181,15 @@ async def compare_text(
     )
 
     # 6) 把合并 sample 拆回原文段级 match
-    # 构建 text → paragraph_index 的精确查找(原文段字符串唯一时直接命中)
-    left_text_map: dict[str, int] = {
-        p.text.strip(): p.paragraph_index for p in left_paragraphs
-    }
-    right_text_map: dict[str, int] = {
-        p.text.strip(): p.paragraph_index for p in right_paragraphs
-    }
+    # text-sim-exact-match-bypass UI 修正:同字符串多次出现时记录所有 paragraph_index,
+    # 派生 match 时笛卡尔积(用户故意复制粘贴 → A 多处 + B 多处都要高亮);
+    # 旧实现 dict 后覆盖前导致 NEW A [11] 注入段被 [682] 覆盖,UI 只在 682 高亮、11 不高亮。
+    left_text_map: dict[str, list[int]] = {}
+    for p in left_paragraphs:
+        left_text_map.setdefault(p.text.strip(), []).append(p.paragraph_index)
+    right_text_map: dict[str, list[int]] = {}
+    for p in right_paragraphs:
+        right_text_map.setdefault(p.text.strip(), []).append(p.paragraph_index)
 
     for s in samples_raw:
         raw_a_text = s.get("a_text") or ""
@@ -220,25 +222,28 @@ async def compare_text(
             _fallback()
             continue
 
-        # 配对策略:按顺序 zip,逐对建立 match(合并时左右通常等长 2:2)
+        # 配对策略:按顺序 zip,逐对建立 match(合并时左右通常等长 2:2);
+        # text-sim-exact-match-bypass UI 修正:同字符串多次出现 → 笛卡尔积派生 match
         emitted = 0
         pair_len = min(len(a_parts), len(b_parts))
         for k in range(pair_len):
-            a_idx = left_text_map.get(a_parts[k])
-            b_idx = right_text_map.get(b_parts[k])
-            if a_idx is None or b_idx is None:
+            a_indices = left_text_map.get(a_parts[k]) or []
+            b_indices = right_text_map.get(b_parts[k]) or []
+            if not a_indices or not b_indices:
                 continue
-            matches.append(
-                TextMatch(
-                    a_idx=a_idx,
-                    b_idx=b_idx,
-                    sim=s.get("sim", 0.0),
-                    label=s.get("label"),
-                    a_text=a_parts[k],
-                    b_text=b_parts[k],
-                )
-            )
-            emitted += 1
+            for a_idx in a_indices:
+                for b_idx in b_indices:
+                    matches.append(
+                        TextMatch(
+                            a_idx=a_idx,
+                            b_idx=b_idx,
+                            sim=s.get("sim", 0.0),
+                            label=s.get("label"),
+                            a_text=a_parts[k],
+                            b_text=b_parts[k],
+                        )
+                    )
+                    emitted += 1
         # 一个 split 都没拆出来 → 保底回原合并 idx
         if emitted == 0:
             _fallback()

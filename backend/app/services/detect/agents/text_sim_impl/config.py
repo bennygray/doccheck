@@ -3,7 +3,7 @@
 3 个 env 均可在运行时调整:
 - TEXT_SIM_MIN_DOC_CHARS       默认 300   单文档总字符 < 此值 preflight skip
 - TEXT_SIM_PAIR_SCORE_THRESHOLD 默认 0.70  段落对 cosine 相似度 ≥ 此值才进 LLM 候选
-- TEXT_SIM_MAX_PAIRS_TO_LLM    默认 30    单 pair 最多发送的段落对数(防 token 爆炸)
+- TEXT_SIM_MAX_PAIRS_TO_LLM    默认 60    cosine 候选段对最多发送给 LLM 的数量(text-sim-exact-match-bypass:30→60 折中,L3 实测 80 在大文档下触发 300s timeout)
 
 读取在每次 run() 调用时进行;L1 测试用 monkeypatch.setenv() 覆盖。
 """
@@ -29,9 +29,9 @@ def pair_score_threshold() -> float:
 
 def max_pairs_to_llm() -> int:
     try:
-        return int(os.environ.get("TEXT_SIM_MAX_PAIRS_TO_LLM", "30"))
+        return int(os.environ.get("TEXT_SIM_MAX_PAIRS_TO_LLM", "60"))
     except ValueError:
-        return 30
+        return 60
 
 
 __all__ = ["min_doc_chars", "pair_score_threshold", "max_pairs_to_llm"]

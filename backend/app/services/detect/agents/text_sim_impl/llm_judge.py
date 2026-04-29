@@ -35,6 +35,41 @@ _SYSTEM_PROMPT = (
     "请仅返回 JSON,不要解释文本,不要加 markdown 代码块。"
 )
 
+# text-sim-exact-match-bypass D5: token 估算 + 溢出 truncate
+# 经验比例:中英文混合 prompt 下 1 token ≈ 1.5 字符(GBK 中文偏保守,英文偏多)
+_TOKEN_PER_CHAR = 1 / 1.5
+# 主流 32K 上下文模型,response 留 8K → prompt 上限 24K token
+_PROMPT_TOKEN_BUDGET = 24_000
+
+
+def _estimate_prompt_tokens(pairs: list[ParaPair]) -> int:
+    """粗估 prompt token 数;按 a_text + b_text 字符总长 / 1.5 估算。
+
+    系统 prompt 与 user 模板固定开销 ~ 200 字 ≈ 130 token,可忽略。
+    """
+    total_chars = sum(len(p.a_text) + len(p.b_text) for p in pairs)
+    return int(total_chars * _TOKEN_PER_CHAR)
+
+
+def _truncate_for_token_budget(
+    pairs: list[ParaPair], budget: int = _PROMPT_TOKEN_BUDGET
+) -> tuple[list[ParaPair], bool]:
+    """按 sim 降序保留,直到累积 token ≤ budget;返 (truncated, was_truncated)。
+
+    pairs 调用时已按 sim 降序;truncate 时保高质量 pair 在前。
+    """
+    if not pairs or _estimate_prompt_tokens(pairs) <= budget:
+        return pairs, False
+    kept: list[ParaPair] = []
+    used = 0
+    for p in pairs:
+        per = int((len(p.a_text) + len(p.b_text)) * _TOKEN_PER_CHAR)
+        if used + per > budget:
+            break
+        kept.append(p)
+        used += per
+    return kept, True
+
 
 def build_prompt(
     bidder_a_name: str,
@@ -150,6 +185,18 @@ async def call_llm_judge(
     if provider is None or not pairs:
         return {}, None
 
+    # text-sim-exact-match-bypass D5: prompt token 溢出兜底
+    original_count = len(pairs)
+    pairs, truncated = _truncate_for_token_budget(pairs)
+    if truncated:
+        logger.warning(
+            "text_sim_llm_judge prompt truncated to fit token budget %d "
+            "(kept %d/%d pairs)",
+            _PROMPT_TOKEN_BUDGET,
+            len(pairs),
+            original_count,
+        )
+
     messages = build_prompt(bidder_a_name, bidder_b_name, doc_role, pairs)
 
     # harden-async-infra N7:text_similarity 有本地 TF-IDF 兜底(agent 返 degraded
@@ -172,6 +219,11 @@ async def call_llm_judge(
         parsed = parse_response(result.text, len(pairs))
         if parsed is not None:
             judgments, meta = parsed
+            if truncated:
+                meta = dict(meta)
+                meta["prompt_truncated"] = True
+                meta["prompt_kept_pairs"] = len(pairs)
+                meta["prompt_total_pairs"] = original_count
             return judgments, meta
         logger.warning(
             "text_sim_llm_judge parse failed attempt=%s text_head=%r",

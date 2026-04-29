@@ -84,6 +84,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
     from app.core.config import settings
     from app.services.detect.agents._subprocess import run_isolated
 
+    # text-sim-exact-match-bypass D3: hash 旁路在 compute_pair_similarity 内嵌实施
+    # (raw body 段 hash 命中已尝试但触发 LLM 单维度 timeout,回退到合并段路径;
+    #  47 字 < MIN_PARAGRAPH_CHARS=50 被合并稀释属已知短段限制,留 v2 ngram 路径处理)
     pairs = await run_isolated(
         tfidf.compute_pair_similarity,
         seg_a.paragraphs,
@@ -93,29 +96,62 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         timeout=settings.agent_subprocess_timeout,
     )
 
-    # 3) LLM 定性判定(无超阈值段对 → 跳 LLM,judgments 空但不算降级)
-    if pairs:
-        judgments, ai_meta = await llm_judge.call_llm_judge(
+    # 3) LLM 定性判定(text-sim-exact-match-bypass: hash 命中段不送 LLM,只送 cosine 候选)
+    cosine_pairs = [p for p in pairs if p.match_kind != "exact_match"]
+    if cosine_pairs:
+        cosine_judgments, ai_meta = await llm_judge.call_llm_judge(
             ctx.llm_provider,
             ctx.bidder_a.name,
             ctx.bidder_b.name,
             doc_role,
-            pairs,
+            cosine_pairs,
         )
     else:
-        judgments, ai_meta = {}, {"overall": "未检出超阈值段落对", "confidence": "high"}
+        cosine_judgments, ai_meta = (
+            {},
+            {"overall": "未检出超阈值段落对", "confidence": "high"},
+        )
 
-    # 4) 汇总 score + is_ironclad
+    # 把 cosine_pairs idx 内的 judgments 映射回 pairs 全局 idx(hash 段在前面占据 [0..exact_n))
+    exact_n = len(pairs) - len(cosine_pairs)
+    judgments: dict[int, str] = {
+        i + exact_n: v for i, v in cosine_judgments.items()
+    }
+
+    # 4) 汇总 score + is_ironclad(text-sim-exact-match-bypass: ironclad 加 ≥50 字 exact_match 门槛)
+    degraded = ai_meta is None
     score = aggregator.aggregate_pair_score(pairs, judgments)
-    is_ironclad = aggregator.compute_is_ironclad(judgments)
+    is_ironclad = aggregator.compute_is_ironclad(
+        judgments, pairs=pairs, degraded=degraded
+    )
 
-    # 5) evidence_json
+    # 5) evidence_json — text-sim-exact-match-bypass UI 修正:
+    # pairs 的 a_idx/b_idx 是 merged 段索引,前端 TextComparePage 用 DocumentText.paragraph_index
+    # 做高亮映射。在写 evidence 前用 segmenter 暴露的 anchor 把 merged idx 转回 raw paragraph_index,
+    # 否则 leftMatchMap.get(p.paragraph_index) 永远查不到 → UI 不高亮。
+    a_anchors = seg_a.merged_anchor_paragraph_index
+    b_anchors = seg_b.merged_anchor_paragraph_index
+    pairs_for_evidence = []
+    from app.services.detect.agents.text_sim_impl.models import ParaPair
+    for p in pairs:
+        a_idx_raw = a_anchors[p.a_idx] if 0 <= p.a_idx < len(a_anchors) else p.a_idx
+        b_idx_raw = b_anchors[p.b_idx] if 0 <= p.b_idx < len(b_anchors) else p.b_idx
+        pairs_for_evidence.append(
+            ParaPair(
+                a_idx=a_idx_raw,
+                b_idx=b_idx_raw,
+                a_text=p.a_text,
+                b_text=p.b_text,
+                sim=p.sim,
+                match_kind=p.match_kind,
+            )
+        )
     evidence = aggregator.build_evidence_json(
         doc_role=doc_role,
         doc_id_a=seg_a.doc_id or 0,
         doc_id_b=seg_b.doc_id or 0,
         threshold=threshold,
-        pairs=pairs,
+        pairs=pairs_for_evidence,
         judgments=judgments,
         ai_meta=ai_meta,
     )

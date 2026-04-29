@@ -39,8 +39,12 @@ class SegmentResult(NamedTuple):
 
     doc_role: str | None   # 选中的 file_role;无可比对文档时 None
     doc_id: int | None     # 选中的 BidDocument.id;无时 None
-    paragraphs: list[str]  # 合并短段后的段落列表
+    paragraphs: list[str]  # 合并短段后的段落列表(供 TFIDF + LLM 上下文)
     total_chars: int       # 所有段落字符总数
+    raw_paragraphs: list[str] = []  # 合并前 body 原始段(供 hash 旁路;text-sim-exact-match-bypass)
+    # text-sim-exact-match-bypass UI 修正:每个合并段 anchor 到第一个 raw 段的 DocumentText.paragraph_index;
+    # build_evidence_json 把 a_idx/b_idx 从 merged 体系转回 raw paragraph_index,前端 UI 才能高亮
+    merged_anchor_paragraph_index: list[int] = []
 
 
 async def load_paragraphs_for_roles(
@@ -71,20 +75,29 @@ async def load_paragraphs_for_roles(
 
     doc_id = row
 
-    # 只取 body 段落,按 paragraph_index 升序
+    # 只取 body 段落,按 paragraph_index 升序;同时保留 paragraph_index 用于 UI 映射
     stmt = (
-        select(DocumentText.text)
+        select(DocumentText.text, DocumentText.paragraph_index)
         .where(
             DocumentText.bid_document_id == doc_id,
             DocumentText.location == "body",
         )
         .order_by(DocumentText.paragraph_index.asc())
     )
-    texts = [t for (t,) in (await session.execute(stmt)).all() if t and t.strip()]
-    merged = _merge_short_paragraphs(texts, MIN_PARAGRAPH_CHARS)
+    rows = [(t, idx) for (t, idx) in (await session.execute(stmt)).all() if t and t.strip()]
+    raw = [t.strip() for t, _ in rows]
+    raw_paragraph_indices = [idx for _, idx in rows]
+    merged, merged_anchor_idx = _merge_short_paragraphs_with_anchor(
+        raw, raw_paragraph_indices, MIN_PARAGRAPH_CHARS
+    )
     total = sum(len(p) for p in merged)
     return SegmentResult(
-        doc_role=role, doc_id=doc_id, paragraphs=merged, total_chars=total
+        doc_role=role,
+        doc_id=doc_id,
+        paragraphs=merged,
+        total_chars=total,
+        raw_paragraphs=raw,
+        merged_anchor_paragraph_index=merged_anchor_idx,
     )
 
 
@@ -107,6 +120,46 @@ async def choose_shared_role(
     roles_b = {r for (r,) in (await session.execute(stmt)).all() if r}
     shared = roles_a & roles_b
     return [r for r in ROLE_PRIORITY if r in shared]
+
+
+def _merge_short_paragraphs_with_anchor(
+    texts: list[str],
+    paragraph_indices: list[int],
+    min_chars: int,
+) -> tuple[list[str], list[int]]:
+    """合并短段并保留每个合并段对应的"第一个" raw 段的 paragraph_index 作为 anchor。
+
+    text-sim-exact-match-bypass UI 修正:
+    - 算法层用 merged 段做 TFIDF/cosine,但 evidence_json.samples 写入时
+      要把 a_idx/b_idx 从 merged 体系转回 raw paragraph_index 体系,
+      前端 TextComparePage 才能用 leftMatchMap.get(p.paragraph_index) 命中高亮。
+    """
+    if not texts:
+        return [], []
+    merged: list[str] = []
+    anchors: list[int] = []
+    buf = ""
+    buf_anchor: int | None = None
+    for t, idx in zip(texts, paragraph_indices):
+        s = t.strip()
+        if not s:
+            continue
+        if buf_anchor is None:
+            buf_anchor = idx
+        buf = (buf + "\n" + s).strip() if buf else s
+        if len(buf) >= min_chars:
+            merged.append(buf)
+            anchors.append(buf_anchor)
+            buf = ""
+            buf_anchor = None
+    if buf:
+        if merged:
+            merged[-1] = merged[-1] + "\n" + buf
+            # anchor 保持第一段的;不更新
+        else:
+            merged.append(buf)
+            anchors.append(buf_anchor or 0)
+    return merged, anchors
 
 
 def _merge_short_paragraphs(texts: list[str], min_chars: int) -> list[str]:

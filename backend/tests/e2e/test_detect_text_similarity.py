@@ -44,7 +44,9 @@ _TECH_A = (
     "实现对投标文件的自动化分析和围标行为识别。"
     "系统具备高并发处理能力,支持多投标人并行检测。"
 )
-_TECH_B_COPY = _TECH_A  # 抄袭:一字不改
+# text-sim-exact-match-bypass:抄袭测试用"近似抄袭"(改 1 字),避开 hash 旁路命中,
+# 仍走 cosine + LLM judge 路径(原"一字不改"设置会被 hash 旁路截走不调 LLM)
+_TECH_B_COPY = _TECH_A.replace("人工智能技术方案", "人工智慧技术方案")
 _TECH_B_INDEPENDENT = (
     "饮食搭配应当均衡,多吃蔬菜水果,富含维生素和膳食纤维,"
     "有助于身体健康。早睡早起有益于身心调节,保持心情愉悦。"

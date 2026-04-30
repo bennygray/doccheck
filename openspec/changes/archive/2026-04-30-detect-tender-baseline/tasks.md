@@ -120,5 +120,5 @@
 ## 9. 归档准备
 
 - [x] 9.1 [L1][L2][L3] 全部测试,全绿(backend e2e 323 + unit 1370 / frontend vitest 145 / L3 7 张截图凭证)
-- [ ] 9.2 [manual] 更新 `docs/handoff.md`:当前里程碑 + 当前 change + 先前 change 状态;在"演进路径备忘"补登 tender baseline 已上线
-- [ ] 9.3 [manual] git commit(对齐 CLAUDE.md "archive 自动 commit" 约定):commit message `归档 change: detect-tender-baseline(M5)`,**不 push**(用户单独指示)
+- [x] 9.2 [manual] `docs/handoff.md` 已更新(commit 5adf439):当前 change → detect-tender-baseline §7+§8 完成 / 前一 change → text-sim-exact-match-bypass / 最新 commit 指针更新
+- [x] 9.3 [manual] git commit(对齐 CLAUDE.md "archive 自动 commit" 约定):commit message `归档 change: detect-tender-baseline(M5)`,**不 push**(用户单独指示)

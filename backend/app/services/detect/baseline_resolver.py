@@ -515,6 +515,38 @@ async def get_excluded_segment_hashes_with_source(
     )
 
 
+async def get_excluded_price_item_ids(
+    session: "AsyncSession",
+    project_id: int,
+) -> set[int]:
+    """detect-tender-baseline §6 (D15):返 project 下命中 tender BOQ baseline 的
+    PriceItem.id 集合。
+
+    SQL 拼装归属本模块(spec ADD Req "SQL 拼装归属契约":detector 不直拼 baseline SQL,
+    避免 baseline 业务泄漏到 detector 层)。`price_anomaly.run()` 拿到此集合后透传给
+    `aggregate_bidder_totals(excluded_price_item_ids=...)`(D15)。
+
+    BOQ-only:此函数仅适用于 BOQ 维度(price_anomaly / price_consistency 等);
+    section/text 维度走 segment_hash 集合,不走此 SQL。
+
+    无 tender / 空 boq_baseline_hashes / 该 project 下无命中行 → 返空 set(短路安全)。
+    """
+    tender_hashes = await _load_tender_boq_hashes(session, project_id)
+    if not tender_hashes:
+        return set()
+    stmt = (
+        select(PriceItem.id)
+        .join(Bidder, Bidder.id == PriceItem.bidder_id)
+        .where(
+            Bidder.project_id == project_id,
+            Bidder.deleted_at.is_(None),
+            PriceItem.boq_baseline_hash.is_not(None),
+            PriceItem.boq_baseline_hash.in_(tender_hashes),
+        )
+    )
+    return set((await session.execute(stmt)).scalars().all())
+
+
 __all__ = [
     "BaselineResolution",
     "SegmentBaselineHashes",
@@ -529,4 +561,5 @@ __all__ = [
     "resolve_baseline",
     "produce_baseline_adjustments",
     "get_excluded_segment_hashes_with_source",
+    "get_excluded_price_item_ids",
 ]

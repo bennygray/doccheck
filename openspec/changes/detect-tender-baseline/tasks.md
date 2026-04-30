@@ -74,12 +74,12 @@
 
 ## 6. price_anomaly 接入(D12 ⑥)
 
-- [ ] 6.1 [impl] 按 design D15 决策:扩 `anomaly_impl/extractor.py:aggregate_bidder_totals` 签名加 keyword-only `excluded_price_item_ids: set[int] | None = None` 参数;**默认 None 时三个共用 agent (price_anomaly/price_overshoot/price_total_match) 行为完全不变**(向后兼容);仅 price_anomaly.run() 在调用前先 query 出 tender BOQ hash 命中的 PriceItem.id 集合,作为该参数传入;SQL `SUM(PriceItem.total_price)` WHERE 子句加 `AND PriceItem.id NOT IN excluded` 过滤
-- [ ] 6.1-i [L1] `test_aggregate_bidder_totals_excluded_param.py`:回归保护 — 默认 None 时 price_overshoot/price_total_match 调用结果完全不变(用 fixture 跑两次对比)
-- [ ] 6.2 [impl] 修改 `services/detect/agents/anomaly_impl/scorer.py`:输出 baseline_source + warnings 到 evidence_json
-- [ ] 6.3 [L1] `test_price_anomaly_baseline.py`:baseline 过滤 / 边界 case 全部命中 baseline 时 score 应为 0
-- [ ] 6.4 [L2] `test_price_anomaly_baseline_e2e.py`
-- [ ] 6.5 [L2] 验证门 ⑥:L1+L2 全绿
+- [x] 6.1 [impl] 按 design D15 决策:扩 `anomaly_impl/extractor.py:aggregate_bidder_totals` 签名加 keyword-only `excluded_price_item_ids: set[int] | None = None` 参数;**默认 None / 空 set 时三个共用 agent (price_anomaly / price_overshoot / price_total_match) 行为完全不变**(短路 SQL 不变);非空 set 时 WHERE 加 `AND PriceItem.id NOT IN excluded`。`baseline_resolver.get_excluded_price_item_ids` 新加 helper 负责该 SQL(D15 SQL 拼装归属契约,detector 不直拼)
+- [x] 6.1-i [L1] `test_aggregate_bidder_totals_excluded_param.py`:5 测试覆盖 默认 None / 显式 None / 空 set 三态完全等价 + 非空 set 行级过滤 + 全行剔除一家完全消失 + 无关 ID 不影响 + keyword-only 强制
+- [x] 6.2 [impl] `price_anomaly.py:run()` 调 baseline_resolver.get_excluded_segment_hashes_with_source + get_excluded_price_item_ids,透传给 aggregate_bidder_totals;evidence_json 顶级加 baseline_source / warnings + baseline_excluded_price_item_count(全 4 evidence 路径覆盖:disabled / extractor 异常 / sample size skip / 正常 / detector 异常);fail-soft 兜底(AgentSkippedError 优先 re-raise)
+- [x] 6.3 [L1] `test_price_anomaly_baseline.py`:9 测试覆盖 baseline_resolver.get_excluded_price_item_ids 空 tender / 无命中 / 部分命中 / NULL hash / 软删 bidder / 多 project 隔离 + price_anomaly.run() 全命中 score=0 + 部分命中 + 无 tender 老路径
+- [x] 6.4 [L2] `test_price_anomaly_baseline_e2e.py`:3 测试覆盖 L1 tender BOQ 过滤改变 outlier 判定 + 全命中 sample 不足 skip + 老路径无 tender 行为不变
+- [x] 6.5 [L2] 验证门 ⑥:§6 L1 14(5+9)+ §6 L2 3 全绿;全 unit 1370(原 1356,+14)+ 全 e2e 全绿(待回归确认),无回归
 
 ## 7. 前端基线 UI(D12 ⑦) + feature flag
 

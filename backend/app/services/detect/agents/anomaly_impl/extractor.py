@@ -32,6 +32,8 @@ async def aggregate_bidder_totals(
     session: AsyncSession,
     project_id: int,
     cfg: AnomalyConfig,
+    *,
+    excluded_price_item_ids: set[int] | None = None,
 ) -> list[BidderPriceSummary]:
     """聚合项目下所有 bidder 的总报价。
 
@@ -40,6 +42,14 @@ async def aggregate_bidder_totals(
     - 若 bidder 所有 total_price 均 NULL → SUM 返 NULL → float(None) 会抛异常
       → 这种 bidder 本身没有有效报价,直接过滤掉
     - 按 bidder_id 升序,截断 max_bidders
+
+    detect-tender-baseline §6 (D15) 加 keyword-only `excluded_price_item_ids`:
+    - 默认 None → WHERE 子句不加额外过滤,**3 个共用 agent
+      (price_anomaly / price_overshoot / price_total_match) 行为完全不变**
+      (向后兼容,见 design D15 决策)
+    - 非 None / 非空 → WHERE 子句加 `AND PriceItem.id NOT IN :excluded`
+      → SUM 排除 baseline-命中行(BOQ 维度 L1 tender 路径,price_anomaly 用)
+    - 空 set 等同于 None(无需过滤,短路保留 SQL 不变)
     """
     # fix-multi-sheet-price-double-count:JOIN PriceParsingRule + 仅 SUM sheet_role='main' 的行
     # backward compat:老数据缺 sheet_role 字段,COALESCE 默认 main(行为同改前)
@@ -64,6 +74,10 @@ async def aggregate_bidder_totals(
         .order_by(Bidder.id.asc())
         .limit(cfg.max_bidders)
     )
+    # detect-tender-baseline §6:仅在 excluded_price_item_ids 非空时加 WHERE 过滤
+    # (None / 空 set 时短路 — SQL 完全不变,3 共用 agent 0 回归)
+    if excluded_price_item_ids:
+        stmt = stmt.where(PriceItem.id.notin_(excluded_price_item_ids))
     rows = (await session.execute(stmt)).all()
     summaries: list[BidderPriceSummary] = []
     for bidder_id, bidder_name, total in rows:

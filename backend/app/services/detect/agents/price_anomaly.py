@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 
+from app.services.detect import baseline_resolver
 from app.services.detect.agents._preflight_helpers import (
     project_has_priced_bidders,
 )
@@ -80,6 +81,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             "algorithm": _ALGORITHM,
             "enabled": False,
             "outliers": [],
+            # detect-tender-baseline §6:即使 disabled,evidence schema 也带 baseline 字段
+            "baseline_source": "none",
+            "warnings": [],
         }
         await write_overall_analysis_row(
             ctx, dimension=_DIMENSION, score=0.0, evidence=evidence
@@ -90,10 +94,39 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             evidence_json=evidence,
         )
 
+    # detect-tender-baseline §6 (D15):加载 BOQ 项级 baseline excluded price_item_ids
+    # + tender baseline_source / warnings;BOQ 维度仅走 L1 tender 路径(L2 共识不适用,
+    # D5 决策);fail-soft:失败返空集 + source='none',不阻 detector
+    try:
+        baseline_segs = await baseline_resolver.get_excluded_segment_hashes_with_source(
+            ctx.session, ctx.project_id, "price_anomaly"
+        )
+        baseline_source = baseline_segs.baseline_source
+        baseline_warnings = list(baseline_segs.warnings)
+        excluded_ids = await baseline_resolver.get_excluded_price_item_ids(
+            ctx.session, ctx.project_id
+        )
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise,防 helper 抛 AgentSkippedError 被
+        # 通用 except 吞成 failed 绕过 skipped 语义(harden-async-infra H2 同型)
+        raise
+    except Exception as exc:  # noqa: BLE001 - baseline 失败 fail-soft 不阻 detector
+        logger.error(
+            "price_anomaly: baseline_resolver failed project=%s err=%s",
+            ctx.project_id,
+            exc,
+        )
+        baseline_source = "none"
+        baseline_warnings = []
+        excluded_ids = set()
+
     # 2) extractor + detector 全包在 try:异常路径统一 evidence.error
     try:
         summaries = await aggregate_bidder_totals(
-            ctx.session, ctx.project_id, cfg
+            ctx.session, ctx.project_id, cfg,
+            # detect-tender-baseline §6:透传 baseline excluded_ids 到 SUM 子句
+            # (空 set 时 extractor 内部短路 — SQL 完全不变 → 0 回归)
+            excluded_price_item_ids=excluded_ids,
         )
     except AgentSkippedError:
         # agent-skipped-error-guard:前置 re-raise
@@ -111,6 +144,10 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             "participating_subdims": [],
             "error": f"{type(e).__name__}: {str(e)[:200]}",
             "config": _config_dict(cfg),
+            # detect-tender-baseline §6:错误路径 evidence 也带 baseline 字段
+            "baseline_source": baseline_source,
+            "warnings": baseline_warnings,
+            "baseline_excluded_price_item_count": len(excluded_ids),
         }
         await write_overall_analysis_row(
             ctx, dimension=_DIMENSION, score=0.0, evidence=evidence
@@ -134,6 +171,10 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             "participating_subdims": [],
             "skip_reason": "sample_size_below_min",
             "config": _config_dict(cfg),
+            # detect-tender-baseline §6:skip 哨兵路径 evidence 也带 baseline 字段
+            "baseline_source": baseline_source,
+            "warnings": baseline_warnings,
+            "baseline_excluded_price_item_count": len(excluded_ids),
         }
         await write_overall_analysis_row(
             ctx, dimension=_DIMENSION, score=0.0, evidence=evidence
@@ -163,6 +204,10 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             "participating_subdims": [],
             "error": f"{type(e).__name__}: {str(e)[:200]}",
             "config": _config_dict(cfg),
+            # detect-tender-baseline §6:detector 异常路径 evidence 也带 baseline 字段
+            "baseline_source": baseline_source,
+            "warnings": baseline_warnings,
+            "baseline_excluded_price_item_count": len(excluded_ids),
         }
         await write_overall_analysis_row(
             ctx, dimension=_DIMENSION, score=0.0, evidence=evidence
@@ -193,6 +238,10 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         "llm_explanation": None,
         "participating_subdims": ["mean"],
         "config": _config_dict(cfg),
+        # detect-tender-baseline §6:正常路径 evidence 顶级 baseline 字段
+        "baseline_source": baseline_source,
+        "warnings": baseline_warnings,
+        "baseline_excluded_price_item_count": len(excluded_ids),
     }
     await write_overall_analysis_row(
         ctx, dimension=_DIMENSION, score=score, evidence=evidence

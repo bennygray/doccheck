@@ -38,6 +38,12 @@ class DocumentText(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     # body | header | footer | textbox | table_row | sheet
     location: Mapped[str] = mapped_column(String(32), nullable=False)
+    # detect-tender-baseline D2:归一化(NFKC + \s+→' ' + strip)后段文本的 SHA256 hexdigest
+    # 段长度归一化后 < 5 字符的段 MUST 设 NULL(spec detect-framework "短段守门")
+    # 历史段落 NULL,baseline_resolver lazy 跳过
+    segment_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -215,7 +215,7 @@ async def create_bidder(
         )
         await session.commit()
         if archive_row is not None:
-            await trigger_extract(bidder.id)
+            await trigger_extract(bidder_id=bidder.id)
     else:
         await session.commit()
 
@@ -245,7 +245,7 @@ async def upload_to_bidder(
     await session.commit()
 
     if archive_row is not None:
-        await trigger_extract(bidder.id)
+        await trigger_extract(bidder_id=bidder.id)
         return UploadResult(
             bidder_id=bidder.id,
             archive_filename=archive_row.file_name,

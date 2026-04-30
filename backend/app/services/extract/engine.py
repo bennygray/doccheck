@@ -63,19 +63,100 @@ def _is_extract_disabled() -> bool:
 # ----------------------------------------------------------------- 协程 entry
 
 async def trigger_extract(
-    bidder_id: int,
+    *,
+    bidder_id: int | None = None,
+    tender_id: int | None = None,
     password: str | None = None,
 ) -> asyncio.Task[None] | None:
-    """非阻塞触发后台解压。
+    """非阻塞触发后台解压(detect-tender-baseline D13 keyword-only + 二选一)。
+
+    Args:
+        bidder_id: 投标人路径(原 C4 行为);与 tender_id 二选一
+        tender_id: 招标文件路径(detect-tender-baseline 新增);与 bidder_id 二选一
+        password: 加密包密码(目前仅 bidder 路径支持)
 
     Returns:
         ``asyncio.Task`` 句柄(测试可 ``await`` 等待)或 None(已 disable)。
+
+    Raises:
+        ValueError: bidder_id 与 tender_id 同时给值或同时空(D13 二选一约束)
     """
+    if (bidder_id is None) == (tender_id is None):
+        raise ValueError(
+            "trigger_extract requires exactly one of bidder_id / tender_id"
+        )
     if _is_extract_disabled():
-        logger.info("INFRA_DISABLE_EXTRACT=1, skip auto-extract for bidder=%s", bidder_id)
+        target = f"bidder={bidder_id}" if bidder_id else f"tender={tender_id}"
+        logger.info("INFRA_DISABLE_EXTRACT=1, skip auto-extract for %s", target)
         return None
-    # 关键:不复用请求级 session,extract_archive 内部自开
-    return asyncio.create_task(extract_archive(bidder_id, password=password))
+    # 关键:不复用请求级 session,内部协程自开
+    if bidder_id is not None:
+        return asyncio.create_task(
+            extract_archive(bidder_id, password=password)
+        )
+    # tender 路径(D13 + 1.8b minimal)
+    return asyncio.create_task(_extract_tender_archive(tender_id))
+
+
+async def _extract_tender_archive(
+    tender_id: int,
+    session_factory: Callable[[], Any] = async_session,
+) -> None:
+    """detect-tender-baseline 1.8b minimal:tender 解析独立路径。
+
+    职责:
+    1. 从 TenderDocument 拿 file_path
+    2. 解压 zip(若是)→ 取 docx/xlsx
+    3. 用 docx_parser/xlsx_parser 提取段文本 + 表格行
+    4. 计算每段 segment_hash(NFKC + \\s+→' ' + strip + sha256;< 5 字跳过)
+    5. 计算每行 BOQ boq_baseline_hash(若 xlsx 是工程量清单结构)
+    6. 写 TenderDocument.segment_hashes / boq_baseline_hashes JSONB,parse_status='extracted'
+
+    **MUST NOT** 调用 trigger_pipeline(tender 不进 run_pipeline 流水线)。
+    **MUST NOT** 调用任何 LLM(file_role 固定 'tender',不走 role_classifier)。
+
+    解析失败 → parse_status='failed' + parse_error,fail-soft 不 raise(detector 自降级)。
+    """
+    # 延迟 import 避免顶层循环依赖
+    from app.models.tender_document import TenderDocument
+    from app.services.extract._tender_parser import parse_tender_archive
+
+    async with session_factory() as session:
+        tender = await session.get(TenderDocument, tender_id)
+        if tender is None:
+            logger.warning("tender_id=%s not found, skip extract", tender_id)
+            return
+
+        try:
+            tender.parse_status = "parsing"
+            await session.commit()
+
+            seg_hashes, boq_hashes = await asyncio.to_thread(
+                parse_tender_archive, tender.file_path
+            )
+
+            tender.segment_hashes = seg_hashes
+            tender.boq_baseline_hashes = boq_hashes
+            tender.parse_status = "extracted"
+            tender.parse_error = None
+            await session.commit()
+            logger.info(
+                "tender %s extracted: %d segments, %d BOQ hashes",
+                tender_id,
+                len(seg_hashes),
+                len(boq_hashes),
+            )
+        except Exception as exc:  # fail-soft 不抛
+            logger.exception("tender %s parse failed", tender_id)
+            try:
+                await session.rollback()
+                tender = await session.get(TenderDocument, tender_id)
+                if tender is not None:
+                    tender.parse_status = "failed"
+                    tender.parse_error = str(exc)[:500]
+                    await session.commit()
+            except Exception:  # session 异常兜底,不再传播
+                logger.exception("tender %s parse_status=failed write failed", tender_id)
 
 
 # ----------------------------------------------------------- 核心 extract_archive

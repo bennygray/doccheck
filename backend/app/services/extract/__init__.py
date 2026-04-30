@@ -1,11 +1,16 @@
 """C4 extract service - 异步压缩包解压。
 
 边界:
-- 入口 ``trigger_extract(bidder_id, password=None)``:asyncio 后台协程
-- 内部 ``extract_archive(bidder_id, password, session_factory)``:核心循环
+- 入口 ``trigger_extract(*, bidder_id=None, tender_id=None, password=None)``:
+  asyncio 后台协程;keyword-only,bidder_id 与 tender_id 二选一
+  (detect-tender-baseline D13)
+- bidder 路径:核心循环 ``extract_archive(bidder_id, password, session_factory)``
+- tender 路径:``_extract_tender_archive(tender_id, ...)``(本 change 新增)
 - ``INFRA_DISABLE_EXTRACT=1`` 跳过自动起协程,L2 测试 fixture 手动 await
 
-详细决策见 ``openspec/changes/file-upload/design.md`` D4 / D5 / D6。
+详细决策见:
+- ``openspec/changes/file-upload/design.md`` D4 / D5 / D6(原 bidder 路径)
+- ``openspec/changes/detect-tender-baseline/design.md`` D13(tender 路径)
 """
 
 from app.services.extract.engine import extract_archive, trigger_extract

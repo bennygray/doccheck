@@ -242,18 +242,63 @@ def _extract_row(
     unit_price = _parse_decimal(up_raw, scale=2)
     total_price = _parse_decimal(tp_raw, scale=2)
 
+    item_name_clipped = _clip(item_name, 500)
+    unit_clipped = _clip(unit, 50)
     return PriceItem(
         bidder_id=bidder_id,
         price_parsing_rule_id=rule_id,
         sheet_name=sheet_name,
         row_index=row_index,
         item_code=_clip(item_code, 200),
-        item_name=_clip(item_name, 500),
-        unit=_clip(unit, 50),
+        item_name=item_name_clipped,
+        unit=unit_clipped,
         quantity=quantity,
         unit_price=unit_price,
         total_price=total_price,
+        # detect-tender-baseline D5:BOQ 项级 baseline hash,
+        # key = (项目名 + 描述 + 单位 + Decimal.normalize(工程量)),不含价格
+        boq_baseline_hash=_compute_boq_baseline_hash(
+            item_name_clipped, item_code, unit_clipped, quantity
+        ),
     )
+
+
+def _compute_boq_baseline_hash(
+    item_name: str | None,
+    description: object,
+    unit: str | None,
+    quantity: object,
+) -> str | None:
+    """detect-tender-baseline D5:BOQ 行级 baseline hash。
+
+    key = sha256(nfkc_strip(item_name) + '|' + nfkc_strip(description) + '|'
+                 + nfkc_strip(unit) + '|' + Decimal.normalize(quantity))
+
+    项目名或工程量为空 → 返 None(行不完整,baseline_resolver lazy 跳过)。
+    """
+    import hashlib
+    import unicodedata
+    from decimal import Decimal, InvalidOperation
+
+    def _norm(s: object) -> str:
+        if s is None:
+            return ""
+        return unicodedata.normalize("NFKC", str(s).strip())
+
+    name_norm = _norm(item_name)
+    if not name_norm:
+        return None
+    if quantity is None:
+        return None
+    try:
+        qty_str = str(Decimal(str(quantity).strip()).normalize())
+    except (InvalidOperation, ValueError):
+        return None
+
+    desc_norm = _norm(description)
+    unit_norm = _norm(unit)
+    key = f"{name_norm}|{desc_norm}|{unit_norm}|{qty_str}"
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
 def _clip(s: object | None, max_len: int) -> str | None:

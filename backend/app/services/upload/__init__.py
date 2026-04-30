@@ -4,7 +4,7 @@
 不负责解压(那是 extract service 的事)。
 """
 
-from app.services.upload.storage import save_archive
+from app.services.upload.storage import save_archive, save_tender_archive
 from app.services.upload.validator import (
     FileTooLarge,
     UnsupportedMediaType,
@@ -15,5 +15,6 @@ __all__ = [
     "FileTooLarge",
     "UnsupportedMediaType",
     "save_archive",
+    "save_tender_archive",
     "validate_archive_file",
 ]

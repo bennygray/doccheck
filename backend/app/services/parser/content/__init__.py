@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from pathlib import Path
 
@@ -20,12 +21,24 @@ from app.models.document_image import DocumentImage
 from app.models.document_metadata import DocumentMetadata
 from app.models.document_sheet import DocumentSheet
 from app.models.document_text import DocumentText
+from app.services.detect.agents.text_sim_impl.tfidf import _normalize
 from app.services.parser.content.docx_parser import extract_docx
 from app.services.parser.content.image_parser import extract_images_from_docx
 from app.services.parser.content.metadata_parser import extract_metadata
 from app.services.parser.content.xlsx_parser import extract_xlsx
 
 logger = logging.getLogger(__name__)
+
+# detect-tender-baseline D2:段级 hash 短段守门(归一化后字符长度 < 此值返 NULL)
+_SEGMENT_HASH_MIN_LEN = 5
+
+
+def _compute_segment_hash(text: str) -> str | None:
+    """归一化(NFKC + \\s+→' ' + strip)+ sha256;短段返 None,baseline_resolver lazy 跳过。"""
+    norm = _normalize(text)
+    if len(norm) < _SEGMENT_HASH_MIN_LEN:
+        return None
+    return hashlib.sha256(norm.encode("utf-8")).hexdigest()
 
 _SUPPORTED = {".docx", ".xlsx"}
 _SKIPPED = {".doc", ".xls", ".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".gif"}
@@ -114,6 +127,9 @@ async def _extract_content_inner(
                         paragraph_index=block.paragraph_index,
                         text=block.text,
                         location=block.location,
+                        # detect-tender-baseline D2:段级 hash 入库,
+                        # baseline_resolver 直接 SQL 比对而不复算
+                        segment_hash=_compute_segment_hash(block.text),
                     )
                 )
             # 嵌入图
@@ -145,6 +161,7 @@ async def _extract_content_inner(
                         paragraph_index=i,
                         text=sheet.merged_text,
                         location="sheet",
+                        segment_hash=_compute_segment_hash(sheet.merged_text),
                     )
                 )
                 # C9 新增:DocumentSheet 整表 + 合并单元格(结构维度用)

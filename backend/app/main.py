@@ -157,6 +157,14 @@ app.include_router(
     prefix="/api/projects/{project_id}/bidders",
     tags=["bidders"],
 )
+# detect-tender-baseline 招标文件上传 / 列表 / 软删
+from app.api.routes import tender as _tender_routes  # noqa: E402
+
+app.include_router(
+    _tender_routes.router,
+    prefix="/api/projects/{project_id}/tender",
+    tags=["tender"],
+)
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 # C4 报价配置/规则 路由共用 /api/projects 前缀,与 projects 路由错开 path
 app.include_router(price.router, prefix="/api/projects", tags=["price"])

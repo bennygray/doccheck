@@ -42,6 +42,12 @@ class PriceItem(Base):
     quantity: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     unit_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     total_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    # detect-tender-baseline D5/D7:BOQ 项级 baseline hash,key = sha256(项目名+描述+单位+Decimal.normalize(工程量))
+    # **不含**单价/合价/总价(单价是应标方差异化输入)
+    # 历史 NULL,baseline_resolver 跳过
+    boq_baseline_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

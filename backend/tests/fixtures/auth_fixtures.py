@@ -46,6 +46,8 @@ async def _delete_all() -> None:
     顺序: bid_documents → bidders → price_parsing_rules → project_price_configs
             → projects → users。新表加进来必须按 FK 顺序往前插入。
     """
+    from app.models.tender_document import TenderDocument
+
     async with async_session() as s:
         # C6: async_tasks 无 FK,先清无妨
         await s.execute(delete(AsyncTask))
@@ -62,6 +64,8 @@ async def _delete_all() -> None:
         await s.execute(delete(DocumentText))
         await s.execute(delete(BidDocument))
         await s.execute(delete(Bidder))
+        # detect-tender-baseline: tender_documents FK 到 projects,先清
+        await s.execute(delete(TenderDocument))
         await s.execute(delete(PriceParsingRule))
         await s.execute(delete(ProjectPriceConfig))
         await s.execute(delete(Project))

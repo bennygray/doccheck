@@ -119,4 +119,62 @@ async def save_archive(
                 pass
 
 
-__all__ = ["save_archive"]
+async def save_tender_archive(
+    project_id: int,
+    tender_id: int,
+    upload_file: UploadFile,
+) -> tuple[Path, str, int]:
+    """detect-tender-baseline D1/D7:tender 招标文件流式落盘 + 计算 MD5。
+
+    与 ``save_archive`` 相同的流式 + 原子写 + safe_basename 行为,仅落盘路径不同:
+    ``uploads/<pid>/tender/<tender_id>/<md5[:16]>_<safe_name>``
+
+    Args:
+        project_id: 用于路径分桶
+        tender_id: 用于路径分桶(替代 bidder_id 的位置)
+        upload_file: 已通过 ``validate_archive_file`` 的 UploadFile
+
+    Returns:
+        ``(final_path, md5_hex, total_bytes)``
+
+    Raises:
+        OSError: 磁盘写入失败 / 目录创建失败
+    """
+    target_dir = (
+        Path(settings.upload_dir) / str(project_id) / "tender" / str(tender_id)
+    ).resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = _safe_basename(upload_file.filename or "tender_archive")
+    partial_path = target_dir / f".{os.getpid()}_{safe_name}.partial"
+
+    md5 = hashlib.md5(usedforsecurity=False)
+    total_bytes = 0
+
+    cleanup_path: Path | None = partial_path
+    try:
+        with partial_path.open("wb") as fp:
+            while True:
+                chunk = await upload_file.read(_CHUNK_BYTES)
+                if not chunk:
+                    break
+                md5.update(chunk)
+                fp.write(chunk)
+                total_bytes += len(chunk)
+            fp.flush()
+            os.fsync(fp.fileno())
+
+        md5_hex = md5.hexdigest()
+        final_path = target_dir / f"{md5_hex[:16]}_{safe_name}"
+        os.replace(partial_path, final_path)
+        cleanup_path = None
+        return final_path, md5_hex, total_bytes
+    finally:
+        if cleanup_path is not None and cleanup_path.exists():
+            try:
+                cleanup_path.unlink()
+            except OSError:
+                pass
+
+
+__all__ = ["save_archive", "save_tender_archive"]

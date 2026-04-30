@@ -22,6 +22,7 @@ from app.models.price_item import PriceItem  # noqa: F401
 from app.models.price_parsing_rule import PriceParsingRule  # noqa: F401
 from app.models.project import Project  # noqa: F401
 from app.models.system_config import SystemConfig  # noqa: F401
+from app.models.tender_document import TenderDocument  # noqa: F401
 from app.models.user import User  # noqa: F401
 
 __all__ = [
@@ -44,5 +45,6 @@ __all__ = [
     "Project",
     "ProjectPriceConfig",
     "SystemConfig",
+    "TenderDocument",
     "User",
 ]

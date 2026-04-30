@@ -117,7 +117,7 @@ async def decrypt_document(
     bidder.parse_error = None
     await session.commit()
 
-    await trigger_extract(bidder.id, password=password)
+    await trigger_extract(bidder_id=bidder.id, password=password)
     return {"detail": "已触发重新解压"}
 
 

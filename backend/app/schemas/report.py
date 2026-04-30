@@ -50,6 +50,9 @@ class ReportResponse(BaseModel):
 # ================================================================= C15
 
 
+BaselineSourceLiteral = Literal["tender", "consensus", "metadata_cluster", "none"]
+
+
 class ReportDimensionDetail(BaseModel):
     """GET /reports/{version}/dimensions 单行。"""
 
@@ -58,6 +61,11 @@ class ReportDimensionDetail(BaseModel):
     is_ironclad: bool
     evidence_summary: str
     manual_review_json: dict[str, Any] | None = None
+    # detect-tender-baseline §2:baseline_source 顶级字段;
+    # 老 evidence 缺该字段时默认 "none"(向后兼容)
+    baseline_source: BaselineSourceLiteral = "none"
+    # detect-tender-baseline §2:warnings 数组,含 baseline_unavailable_low_bidder_count 等
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ReportDimensionsResponse(BaseModel):
@@ -72,6 +80,8 @@ class PairComparisonItem(BaseModel):
     score: float
     is_ironclad: bool
     evidence_summary: str | None = None
+    # detect-tender-baseline §2:PC 级 baseline 来源(老数据缺该字段默认 "none")
+    baseline_source: BaselineSourceLiteral = "none"
 
 
 class PairsResponse(BaseModel):

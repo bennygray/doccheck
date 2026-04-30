@@ -28,9 +28,10 @@ from app.models.document_metadata import DocumentMetadata
 from app.models.overall_analysis import OverallAnalysis
 from app.models.pair_comparison import PairComparison
 from app.models.project import Project
-from app.services.detect import judge_llm
+from app.services.detect import baseline_resolver, judge_llm
 from app.services.detect.template_cluster import (
     TEMPLATE_FILE_ROLES,
+    Adjustment,
     _apply_template_adjustments,
     _detect_template_cluster,
 )
@@ -360,13 +361,44 @@ async def judge_and_create_report(
             )
             clusters = []
 
-        # step5: adjustment(只有 cluster 命中才产 adjustments;空则走老路径)
+        # detect-tender-baseline §2 step5.1: baseline_resolver 生产者
+        # 按 dimension 分组调 produce_baseline_adjustments;tender > consensus > none
+        # 优先级在 _apply_template_adjustments 内合并阶段处理。
+        baseline_adjustments: list[Adjustment] = []
+        try:
+            dims_in_pcs = sorted({pc.dimension for pc in pair_comparisons})
+            for dim in dims_in_pcs:
+                dim_pcs = [pc for pc in pair_comparisons if pc.dimension == dim]
+                if not dim_pcs:
+                    continue
+                baseline_adjustments.extend(
+                    await baseline_resolver.produce_baseline_adjustments(
+                        session, project_id, dim, dim_pcs
+                    )
+                )
+        except Exception as exc:  # noqa: BLE001 - fail-soft,不阻塞 judge
+            logger.error(
+                "detect: baseline_resolver failed project=%s v=%s err=%s",
+                project_id,
+                version,
+                exc,
+            )
+            baseline_adjustments = []
+
+        # step5.2: adjustment(metadata cluster 自产 + baseline 喂入合并应用)
         adjusted_pcs, adjusted_oas, adjustments = _apply_template_adjustments(
-            pair_comparisons, overall_analyses, clusters
+            pair_comparisons,
+            overall_analyses,
+            clusters,
+            extra_adjustments=baseline_adjustments,
         )
 
-        # step6: cluster 命中时切到 adjusted 版本;否则用 step2 的 raw 版本
+        # step6: 任一 adjustment(metadata cluster 或 baseline)命中时切到 adjusted 版本
+        # detect-tender-baseline §2:adjustments 已合并 metadata + baseline,
+        # cluster_active 现在表达的是"adjustments 活跃",而 metadata cluster 单独由
+        # bool(clusters) 判断(供 AnalysisReport.template_cluster_detected 使用)。
         cluster_active = bool(adjustments)
+        metadata_cluster_active = bool(clusters)
         if cluster_active:
             # step6.1: 第二次 _compute_dims_and_iron(adjusted)
             per_dim_max, has_ironclad, ironclad_dims = _compute_dims_and_iron(
@@ -467,7 +499,9 @@ async def judge_and_create_report(
                     final_total, final_level, per_dim_max, ironclad_dims
                 )
 
-        # CH-2: 构造 template_cluster_adjusted_scores JSONB
+        # CH-2 / detect-tender-baseline §2:构造 template_cluster_adjusted_scores JSONB
+        # 任一 adjustment(metadata cluster 或 baseline)命中时,该 JSONB 非空。
+        # clusters 字段可能为空(纯 baseline 命中场景),adjustments 是合并后的清单。
         if cluster_active:
             adjusted_scores_jsonb = {
                 "clusters": [
@@ -489,7 +523,9 @@ async def judge_and_create_report(
             total_score=Decimal(str(final_total)),
             risk_level=final_level,
             llm_conclusion=final_conclusion,
-            template_cluster_detected=cluster_active,
+            # template_cluster_detected 仅表"metadata 簇识别成功",不含 baseline-only 命中
+            # (baseline 命中通过 evidence_json.baseline_source 表达,前端 Badge 区分)
+            template_cluster_detected=metadata_cluster_active,
             template_cluster_adjusted_scores=adjusted_scores_jsonb,
         )
         session.add(report)

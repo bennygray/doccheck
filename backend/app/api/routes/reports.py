@@ -253,6 +253,59 @@ async def get_report_dimensions(
         if pc.is_ironclad:
             iron[pc.dimension] = True
 
+    # detect-tender-baseline §2:每维度 baseline_source 取最强 source
+    # priority: tender(3) > consensus(2) > metadata_cluster(1) > none(0)
+    # 数据源:① OA/PC 的 evidence_json.baseline_source(detector §3+ 写入)
+    #        ② AnalysisReport.template_cluster_adjusted_scores.adjustments[].baseline_source
+    # warnings 数组同样按维度合并(去重保序)。
+    baseline_priority = {"tender": 3, "consensus": 2, "metadata_cluster": 1, "none": 0}
+    baseline_source: dict[str, str] = defaultdict(lambda: "none")
+    warnings_by_dim: dict[str, list[str]] = defaultdict(list)
+
+    def _bump_source(dim: str, src: str | None) -> None:
+        if not src:
+            return
+        if baseline_priority.get(src, -1) > baseline_priority.get(
+            baseline_source[dim], 0
+        ):
+            baseline_source[dim] = src
+
+    def _extend_warnings(dim: str, ws: list[str] | None) -> None:
+        if not ws:
+            return
+        for w in ws:
+            if w and w not in warnings_by_dim[dim]:
+                warnings_by_dim[dim].append(w)
+
+    for oa in oa_rows:
+        if isinstance(oa.evidence_json, dict):
+            _bump_source(oa.dimension, oa.evidence_json.get("baseline_source"))
+            _extend_warnings(oa.dimension, oa.evidence_json.get("warnings"))
+    for pc in pc_rows:
+        if isinstance(pc.evidence_json, dict):
+            _bump_source(pc.dimension, pc.evidence_json.get("baseline_source"))
+            _extend_warnings(pc.dimension, pc.evidence_json.get("warnings"))
+
+    # AnalysisReport.template_cluster_adjusted_scores 兜底(detector 未写时仍可推导)
+    if isinstance(ar.template_cluster_adjusted_scores, dict):
+        for adj in ar.template_cluster_adjusted_scores.get("adjustments", []) or []:
+            if not isinstance(adj, dict):
+                continue
+            dim = adj.get("dimension")
+            if not dim:
+                continue
+            # baseline_source 直接来自 adjustment 字段;否则按 reason 反推
+            src = adj.get("baseline_source")
+            if not src:
+                reason = adj.get("reason", "")
+                if reason == "tender_match":
+                    src = "tender"
+                elif reason == "consensus_match":
+                    src = "consensus"
+                elif reason and reason.startswith("template_cluster"):
+                    src = "metadata_cluster"
+            _bump_source(dim, src)
+
     # 构造响应,顺序 = DIMENSION_WEIGHTS
     items: list[ReportDimensionDetail] = []
     for dim in DIMENSION_WEIGHTS.keys():
@@ -263,6 +316,8 @@ async def get_report_dimensions(
                 is_ironclad=iron.get(dim, False),
                 evidence_summary=_evidence_summary(best_evidence.get(dim), None),
                 manual_review_json=review.get(dim),
+                baseline_source=baseline_source.get(dim, "none"),
+                warnings=warnings_by_dim.get(dim, []),
             )
         )
     return ReportDimensionsResponse(dimensions=items)
@@ -313,6 +368,12 @@ async def get_report_pairs(
             score=float(pc.score) if pc.score is not None else 0.0,
             is_ironclad=bool(pc.is_ironclad),
             evidence_summary=_evidence_summary(pc.evidence_json, None),
+            # detect-tender-baseline §2:老 evidence 缺该字段时默认 "none"
+            baseline_source=(
+                (pc.evidence_json or {}).get("baseline_source", "none")
+                if isinstance(pc.evidence_json, dict)
+                else "none"
+            ),
         )
         for pc in rows
     ]

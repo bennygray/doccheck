@@ -29,19 +29,19 @@
 
 ## 2. 基础逻辑(D12 ②):baseline_resolver + judge 注入点
 
-- [ ] 2.1 [impl] 新建 `backend/app/services/detect/baseline_resolver.py`:`resolve_baseline(session, project_id, dimension, raw_pairs) -> BaselineResolution(excluded_pair_ids, baseline_source, warnings)`,三级降级 L1/L2/L3;**dimension ∈ {price_consistency, price_anomaly} 时仅走 L1,L2 共识不适用**
-- [ ] 2.2 [impl] baseline_resolver 内:tender hash 加载 + 跨 bidder 共识计数(distinct bidder set,按 file_role 分组,unknown/other 不计)+ 优先级合并 `tender > consensus > metadata_cluster > none`;**L3 ≤2 投标方时 excluded_pair_ids=空集 + 仅产 warnings**(不产 Adjustment,不抑制 ironclad)
-- [ ] 2.3a [impl] baseline_resolver 加 `produce_baseline_adjustments(session, project_id, dimension, raw_pairs) -> list[Adjustment]`:**当生产者**直接产 `tender_match`/`consensus_match` Adjustment(score=0 + is_ironclad=False + evidence_extras.baseline_source)
-- [ ] 2.3b [impl] 修改 `services/detect/template_cluster.py:_apply_template_adjustments` 签名扩 `extra_adjustments: list[Adjustment] = []` 参数(**当纯执行器**);内部把 metadata_cluster 自产的 + 外部喂入的合并,同 PC.id 取最强 source
-- [ ] 2.3c [impl] 扩 `Adjustment.reason` 枚举加 `tender_match` / `consensus_match` 2 值;**不在 template_cluster 内新增 if/elif baseline 业务分支**(reason 由调用方决定)
-- [ ] 2.4 [impl] 修改 `services/detect/judge.py` step5:① 调 `_detect_template_cluster()` ② 调 `baseline_resolver.produce_baseline_adjustments()` ③ 调 `_apply_template_adjustments(..., extra_adjustments=baseline_adjustments)` 一次性合并
-- [ ] 2.5 [impl] 扩 `PairComparison.evidence_json` schema:加顶级 `baseline_source` 字段 + `warnings` 字段(数组,含 baseline_unavailable_low_bidder_count 等)
-- [ ] 2.6 [L1] `test_baseline_resolver_l1.py`:tender hash 命中 / 多 source 优先级
-- [ ] 2.7 [L1] `test_baseline_resolver_l2.py`:共识 ≥3 / ≤2 边界 / file_role 分组
-- [ ] 2.8 [L1] `test_baseline_resolver_l3.py`:投标方 ≤2 警示 + warnings 字段
-- [ ] 2.9 [L1] `test_template_cluster_baseline_integration.py`:2 新 reason 分支 + 老 metadata_cluster 路径不变(回归保护)
-- [ ] 2.10 [L2] `test_judge_baseline_injection_e2e.py`:judge 6 步 + step5 注入 + adjusted dict 透传 + reports API 含 baseline_source
-- [ ] 2.11 [L2] 验证门 ②:L1 baseline_resolver 全绿 + L2 judge 集成全绿
+- [x] 2.1 [impl] 新建 `backend/app/services/detect/baseline_resolver.py`:`resolve_baseline(session, project_id, dimension, raw_pairs) -> BaselineResolution(excluded_pair_ids, baseline_source, warnings)`,三级降级 L1/L2/L3;**dimension ∈ {price_consistency, price_anomaly} 时仅走 L1,L2 共识不适用**
+- [x] 2.2 [impl] baseline_resolver 内:tender hash 加载 + 跨 bidder 共识计数(distinct bidder set,按 file_role 分组,unknown/other 不计)+ 优先级合并 `tender > consensus > metadata_cluster > none`;**L3 ≤2 投标方时 excluded_pair_ids=空集 + 仅产 warnings**(不产 Adjustment,不抑制 ironclad)
+- [x] 2.3a [impl] baseline_resolver 加 `produce_baseline_adjustments(session, project_id, dimension, raw_pairs) -> list[Adjustment]`:**当生产者**直接产 `tender_match`/`consensus_match` Adjustment(score=0 + is_ironclad=False + evidence_extras.baseline_source)
+- [x] 2.3b [impl] 修改 `services/detect/template_cluster.py:_apply_template_adjustments` 签名扩 `extra_adjustments: list[Adjustment] = []` 参数(**当纯执行器**);内部把 metadata_cluster 自产的 + 外部喂入的合并,同 PC.id 取最强 source
+- [x] 2.3c [impl] 扩 `Adjustment.reason` 枚举加 `tender_match` / `consensus_match` 2 值;**不在 template_cluster 内新增 if/elif baseline 业务分支**(reason 由调用方决定)
+- [x] 2.4 [impl] 修改 `services/detect/judge.py` step5:① 调 `_detect_template_cluster()` ② 调 `baseline_resolver.produce_baseline_adjustments()` ③ 调 `_apply_template_adjustments(..., extra_adjustments=baseline_adjustments)` 一次性合并
+- [x] 2.5 [impl] 扩 `PairComparison.evidence_json` schema:加顶级 `baseline_source` 字段 + `warnings` 字段(数组,含 baseline_unavailable_low_bidder_count 等);schemas/report.py 加 `BaselineSourceLiteral` + ReportDimensionDetail.baseline_source/warnings + PairComparisonItem.baseline_source;reports API `/dimensions` 端点按维度合并 evidence_json + AnalysisReport.template_cluster_adjusted_scores 推导 baseline_source(detector §3+ 写入 evidence_json 后直接读)
+- [x] 2.6 [L1] `test_baseline_resolver_l1.py`:tender hash 命中 / 多 source 优先级(13 测试全绿)
+- [x] 2.7 [L1] `test_baseline_resolver_l2.py`:共识 ≥3 / ≤2 边界 / file_role 分组(11 测试全绿)
+- [x] 2.8 [L1] `test_baseline_resolver_l3.py`:投标方 ≤2 警示 + warnings 字段(4 测试全绿)
+- [x] 2.9 [L1] `test_template_cluster_baseline_integration.py`:2 新 reason 分支 + 老 metadata_cluster 路径不变(10 测试全绿,回归保护)
+- [x] 2.10 [L2] `test_judge_baseline_injection_e2e.py`:judge 6 步 + step5 注入 + adjusted dict 透传 + reports API 含 baseline_source(5 测试全绿)
+- [x] 2.11 [L2] 验证门 ②:L1 baseline_resolver+integration 38 测试全绿 + L2 judge_baseline_injection 5 测试全绿(全 unit 1302 + 全 e2e 304 全绿,无回归)
 
 ## 3. text_similarity 接入(D12 ③) + L3 最小集
 

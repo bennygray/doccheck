@@ -70,6 +70,9 @@ class Adjustment(TypedDict, total=False):
 
     scope="pc": pair 必填 / oa_id null / raw_is_ironclad bool / raw_has_iron_evidence null
     scope="global_oa" / "def_oa": pair null / oa_id 必填 / raw_is_ironclad null / raw_has_iron_evidence bool
+
+    detect-tender-baseline §2 扩 reason:tender_match / consensus_match;
+    baseline_source 字段(可选)只在 reason ∈ {tender_match, consensus_match} 时填。
     """
 
     scope: Literal["pc", "global_oa", "def_oa"]
@@ -86,7 +89,27 @@ class Adjustment(TypedDict, total=False):
         "template_cluster_excluded_all_members",
         "template_cluster_downgrade_suppressed_by_ironclad",
         "def_oa_aggregation_after_template_exclusion",
+        "tender_match",
+        "consensus_match",
     ]
+    # detect-tender-baseline §2:tender_match/consensus_match 时填,
+    # 其他 reason(metadata_cluster 路径)不填。
+    baseline_source: Literal["tender", "consensus"]
+
+
+# detect-tender-baseline §2:reason → priority(数值越大越强);
+# 同 PC 多 adjustment 命中时仅保留 priority 最高的一条
+# (spec ADD Req "baseline_resolver 与 template_cluster 协同契约":
+# tender_match=3 > consensus_match=2 > template_cluster_*=1)
+_REASON_PRIORITY: dict[str, int] = {
+    "tender_match": 3,
+    "consensus_match": 2,
+    "template_cluster_excluded": 1,
+    "template_cluster_downgraded": 1,
+    "template_cluster_excluded_all_members": 1,
+    "template_cluster_downgrade_suppressed_by_ironclad": 1,
+    "def_oa_aggregation_after_template_exclusion": 1,
+}
 
 
 @dataclass
@@ -248,10 +271,33 @@ def _is_full_coverage(
     return set(clusters[0].bidder_ids) == all_bidder_ids
 
 
+def _baseline_adjustment_to_pc_dict(adj: "Adjustment") -> dict:
+    """Translate baseline (tender_match/consensus_match) Adjustment 为 adjusted_pcs[pc.id] 条目。
+
+    spec ADD Req "baseline_resolver 与 template_cluster 协同契约" tender_match/consensus_match
+    score 语义:score=0.0 + is_ironclad=False(从触发集剔除)+
+    evidence_extras.template_cluster_excluded=True + baseline_source ∈ {tender, consensus}。
+    """
+    raw_score = adj.get("raw_score", 0.0)
+    raw_iron = adj.get("raw_is_ironclad", False)
+    return {
+        "score": float(adj.get("adjusted_score", 0.0)),
+        "is_ironclad": False,
+        "evidence_extras": {
+            "template_cluster_excluded": True,
+            "baseline_source": adj.get("baseline_source", "none"),
+            "raw_score": raw_score,
+            "raw_is_ironclad": raw_iron,
+        },
+    }
+
+
 def _apply_template_adjustments(
     pair_comparisons: list,
     overall_analyses: list,
     clusters: list[TemplateCluster],
+    *,
+    extra_adjustments: list[Adjustment] | None = None,
 ) -> tuple[AdjustedPCs, AdjustedOAs, list[Adjustment]]:
     """对受污染维度产 adjusted dict + adjustments 清单(不回写 DB)。
 
@@ -259,6 +305,11 @@ def _apply_template_adjustments(
         pair_comparisons: PC 行 list(SQLAlchemy ORM 实例,只读不改)
         overall_analyses: OA 行 list(全 11 行,DEF-OA 已 flush 拿到 PK)
         clusters: 模板簇识别结果
+        extra_adjustments: detect-tender-baseline §2 加,baseline_resolver 喂入的
+            tender_match/consensus_match Adjustment list。同 PC.id 多 source
+            命中时,按 _REASON_PRIORITY 取最强 source(tender > consensus >
+            metadata_cluster > none),低 priority 条目被丢弃。
+            **向后兼容**:不传(或传 None/[])时行为完全等价于 detect-template-exclusion 归档时。
 
     Returns:
         (adjusted_pcs, adjusted_oas, adjustments):
@@ -269,8 +320,10 @@ def _apply_template_adjustments(
     adjusted_pcs: AdjustedPCs = {}
     adjusted_oas: AdjustedOAs = {}
     adjustments: list[Adjustment] = []
+    extras = list(extra_adjustments or [])
 
-    if not clusters:
+    # 无 cluster 也无 extra → 短路返空(老路径)
+    if not clusters and not extras:
         return adjusted_pcs, adjusted_oas, adjustments
 
     # project 全部 bidder_ids:取 PC bidder + cluster bidder 并集
@@ -405,6 +458,61 @@ def _apply_template_adjustments(
                     "reason": "template_cluster_excluded_all_members",
                 }
             )
+
+    # ============================================================ Merge extras (baseline)
+
+    # detect-tender-baseline §2:合并 baseline_resolver 喂入的 tender_match/consensus_match;
+    # 同 PC.id 多 source 命中时按 _REASON_PRIORITY 取最强(tender > consensus > metadata_*)
+    if extras:
+        # 索引已存在的 PC-scope adjustments by (dimension, frozenset{a,b}) → list index
+        pc_adj_index: dict[tuple[str, frozenset[int]], int] = {}
+        for i, adj in enumerate(adjustments):
+            if adj.get("scope") != "pc":
+                continue
+            pair_ids = adj.get("pair")
+            if not pair_ids:
+                continue
+            key = (adj["dimension"], frozenset(pair_ids))
+            pc_adj_index[key] = i
+
+        # PC.id 查找:(dimension, frozenset{a,b}) → pc.id
+        pc_id_lookup: dict[tuple[str, frozenset[int]], int] = {}
+        for pc in pair_comparisons:
+            a = getattr(pc, "bidder_a_id", None)
+            b = getattr(pc, "bidder_b_id", None)
+            if a is None or b is None:
+                continue
+            key = (pc.dimension, frozenset({a, b}))
+            pc_id_lookup[key] = pc.id
+
+        for extra in extras:
+            if extra.get("scope") != "pc":
+                continue  # baseline 仅产 pc-scope adjustments
+            pair_ids = extra.get("pair")
+            if not pair_ids:
+                continue
+            key = (extra["dimension"], frozenset(pair_ids))
+            pc_id = pc_id_lookup.get(key)
+            if pc_id is None:
+                # extra 引用的 PC 不在 raw pair_comparisons 中(seed 漏)→ 静默跳过
+                continue
+
+            extra_priority = _REASON_PRIORITY.get(extra.get("reason", ""), 0)
+            existing_idx = pc_adj_index.get(key)
+            if existing_idx is not None:
+                existing_priority = _REASON_PRIORITY.get(
+                    adjustments[existing_idx].get("reason", ""), 0
+                )
+                if extra_priority <= existing_priority:
+                    continue  # 保留现有(metadata_cluster) — 但 extras 优先级更高才覆盖
+                # extra priority 更高 → 覆盖 metadata_cluster 自产条目
+                adjustments[existing_idx] = extra
+            else:
+                adjustments.append(extra)
+                pc_adj_index[key] = len(adjustments) - 1
+
+            # apply to adjusted_pcs(覆盖式;baseline 优先于 metadata_cluster)
+            adjusted_pcs[pc_id] = _baseline_adjustment_to_pc_dict(extra)
 
     # ============================================================ DEF-OA aggregation
 

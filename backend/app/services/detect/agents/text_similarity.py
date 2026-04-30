@@ -16,6 +16,8 @@ import logging
 from decimal import Decimal
 
 from app.models.pair_comparison import PairComparison
+from app.services.detect import baseline_resolver
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.agents.text_sim_impl import (
     aggregator,
     config,
@@ -118,11 +120,38 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         i + exact_n: v for i, v in cosine_judgments.items()
     }
 
-    # 4) 汇总 score + is_ironclad(text-sim-exact-match-bypass: ironclad 加 ≥50 字 exact_match 门槛)
+    # detect-tender-baseline §3:加载 baseline 段级 hash 集合(L1 tender / L2 共识 / L3 警示)
+    # fail-soft:任何异常返空 baseline,不阻塞 detector(L3 立场:基线缺失 ≠ 信号无效)
+    try:
+        baseline_segs = await baseline_resolver.get_excluded_segment_hashes_with_source(
+            ctx.session, ctx.project_id, "text_similarity"
+        )
+        baseline_hash_to_source = baseline_segs.hash_to_source
+        baseline_excluded = set(baseline_segs.hash_to_source.keys())
+        baseline_warnings = list(baseline_segs.warnings)
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise,防未来 helper 抛 AgentSkippedError 被
+        # 通用 except 吞成 failed 绕过 skipped 语义(harden-async-infra H2 同型隐患)
+        raise
+    except Exception as exc:  # noqa: BLE001 - baseline 失败 fail-soft 不阻 detector
+        logger.error(
+            "text_similarity: baseline_resolver failed project=%s err=%s",
+            ctx.project_id,
+            exc,
+        )
+        baseline_hash_to_source = {}
+        baseline_excluded = set()
+        baseline_warnings = []
+
+    # 4) 汇总 score + is_ironclad(text-sim-exact-match-bypass: ironclad 加 ≥50 字 exact_match 门槛;
+    #    detect-tender-baseline §3:baseline 命中段跳过 ironclad 触发,段仍计入 score)
     degraded = ai_meta is None
     score = aggregator.aggregate_pair_score(pairs, judgments)
     is_ironclad = aggregator.compute_is_ironclad(
-        judgments, pairs=pairs, degraded=degraded
+        judgments,
+        pairs=pairs,
+        degraded=degraded,
+        baseline_excluded_segment_hashes=baseline_excluded,
     )
 
     # 5) evidence_json — text-sim-exact-match-bypass UI 修正:
@@ -154,6 +183,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         pairs=pairs_for_evidence,
         judgments=judgments,
         ai_meta=ai_meta,
+        # detect-tender-baseline §3:段级 baseline_matched / baseline_source 写入
+        baseline_hash_to_source=baseline_hash_to_source,
+        baseline_warnings=baseline_warnings,
     )
 
     # 6) 写 PairComparison 行

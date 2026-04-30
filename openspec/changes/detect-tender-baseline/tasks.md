@@ -45,15 +45,15 @@
 
 ## 3. text_similarity 接入(D12 ③) + L3 最小集
 
-- [ ] 3.1 [impl] 修改 `services/detect/agents/text_similarity.py:run()` 调 baseline_resolver,把 excluded_pair_ids 传给 aggregator
-- [ ] 3.2 [impl] 修改 `text_sim_impl/aggregator.py:compute_is_ironclad` 签名加 `baseline_excluded_segment_hashes: set[str] | None = None` 入参(段级 hash 集合,而非 PC 级 baseline_source);逐段判断 **`hashlib.sha256(_normalize(p.a_text).encode("utf-8")).hexdigest()`**(算法与 D2 口径统一)∈ 该集合则**跳过该段的 ironclad 触发**(段仍计入 score);text_similarity.py:run() 内调 baseline_resolver 拿到段级 excluded hash set 后传入
-- [ ] 3.2b [impl] 修改 `text_sim_impl/aggregator.py:build_evidence_json`:samples[i] 加 `baseline_matched: bool`(该段 hash 是否 ∈ excluded set)+ `baseline_source: str ∈ {tender, consensus, none}`(段级 source);PC 顶级 baseline_source 取所有命中段的最强 source(供 Badge 用);**前端无需复算 hash**,直接读 samples[i].baseline_matched 决定段级灰底/Tag
-- [ ] 3.3 [impl] 修改 `text_sim_impl/aggregator.py:build_evidence_json` 写入 baseline_source 字段
-- [ ] 3.4 [L1] `test_text_sim_baseline_integration.py`:① tender 命中段不升 ironclad ② consensus 命中段不升 ③ baseline_source='none' 且原触发条件成立时 **MUST 升** ironclad(原行为不变)④ **L3 ≤2 投标方时 MUST 仍升 ironclad(基线缺失 ≠ 信号无效)** ⑤ PC 内部分段命中 baseline 时按未命中段判 ironclad
-- [ ] 3.5 [L1] `test_text_sim_legacy_compat.py`:老 evidence 无 baseline_source 字段 fallback
-- [ ] 3.6 [L2] `test_text_sim_baseline_e2e.py`:tender 上传 → 检测 → evidence baseline_source='tender' 段被剔除 ironclad
-- [ ] 3.7 [L3] **L3 最小集**:此时前端 tender 上传 UI 还未做(7.x 在 ⑦ 才做),因此最小集**仅后端 API + DB 状态截图**:用 curl/httpie 调 `POST /api/projects/{pid}/tender` 上传本次模板 zip(C:\Users\7way\Desktop\测试\模板.zip),启动检测得 v=新,验证 text_similarity 维度不再误报铁证;UI 截图凭证留 8.x 完整集;后端凭证(API 响应 + DB dump + evidence_json)落 `e2e/artifacts/detect-tender-baseline-{date}/text-sim-minimum-set/`
-- [ ] 3.8 [L2] 验证门 ③:L1+L2+L3 最小集全绿才进 ④,**最小集发现方向错可早停**
+- [x] 3.1 [impl] 修改 `services/detect/agents/text_similarity.py:run()` 调 baseline_resolver,拿段级 excluded hash set + hash→source 映射;fail-soft 兜底(AgentSkippedError 优先 re-raise,其他异常返空 baseline 不阻 detector)
+- [x] 3.2 [impl] 修改 `text_sim_impl/aggregator.py:compute_is_ironclad` 签名扩 `baseline_excluded_segment_hashes: set[str] | None = None`(keyword-only);≥50 字 exact_match 段逐段查 `hashlib.sha256(_normalize(p.a_text).encode("utf-8")).hexdigest()` ∈ 该集合 → 跳过该段 ironclad 触发(段仍计入 score)
+- [x] 3.2b [impl] `text_sim_impl/aggregator.py:build_evidence_json`:samples[i] 加 `baseline_matched: bool` + `baseline_source: str ∈ {tender, consensus, none}`(段级);PC 顶级 baseline_source 取所有命中段最强 source(tender > consensus > none);前端直读 samples[i].baseline_matched,不复算 hash
+- [x] 3.3 [impl] `text_sim_impl/aggregator.py:build_evidence_json` 写顶级 baseline_source + warnings 字段(baseline_warnings 入参 propagated 自 baseline_resolver L3 警示)
+- [x] 3.4 [L1] `test_text_sim_baseline_integration.py`:19 测试覆盖 ① tender 跳过 ironclad ② consensus 跳过 ③ baseline 空集时原行为不变 ④ L3 ≤2 投标方仍升 ironclad ⑤ 部分命中不豁免整 PC + 段级 / PC 顶级字段写入 + baseline_resolver.get_excluded_segment_hashes_with_source 三级降级
+- [x] 3.5 [L1] `test_text_sim_legacy_compat.py`:11 测试覆盖 不传 baseline kwarg 行为完全等价 §3 前 + 老 PC.evidence_json 缺字段 fallback `get('baseline_source','none')` 默认值 + section_similarity 老 call site 兼容
+- [x] 3.6 [L2] `test_text_sim_baseline_e2e.py`:5 测试覆盖 L1 tender 命中段被剔除 ironclad / L2 共识命中段被剔除 / L3 ≤2 仍升 ironclad + warnings 写入 / 部分命中仍升 ironclad / 老路径 baseline_source='none' + warnings=[]
+- [ ] 3.7 [L3] **L3 最小集**:前端 tender 上传 UI 未做(7.x 在 ⑦ 才做),最小集**仅后端 API + DB 状态截图**:curl/httpie `POST /api/projects/{pid}/tender` 上传 `C:\Users\7way\Desktop\测试\模板.zip`,启动检测验证 text_similarity 维度不误报铁证;后端凭证(API 响应 + DB dump + evidence_json)落 `e2e/artifacts/detect-tender-baseline-{date}/text-sim-minimum-set/`;**真 LLM 调用,需用户成本确认后执行**
+- [x] 3.8 [L2] 验证门 ③:L1 §3 30 测试 + 全 unit 1332 + L2 §3 5 + 全 e2e 全绿;L3 最小集 3.7 待用户审批后执行(可能旁路:细看 L1+L2 已覆盖 hash 生效路径,L3 仅作客户演示 zip 主路径验证)
 
 ## 4. section_similarity 接入(D12 ④)
 

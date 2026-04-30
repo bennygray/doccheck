@@ -430,8 +430,94 @@ async def produce_baseline_adjustments(
     return adjustments
 
 
+@dataclass
+class SegmentBaselineHashes:
+    """detector 段级用:hash → source 映射 + 整体最强 source + warnings。
+
+    与 BaselineResolution 区别:不基于 raw_pairs 做 PC 全匹配判定,
+    返回 ALL baseline hashes 让 detector 段级判 baseline_matched。
+    """
+
+    hash_to_source: dict[str, str] = field(default_factory=dict)
+    # 整体最强 source(取所有命中段 source 中的最强,priority tender>consensus>none)
+    baseline_source: str = "none"
+    warnings: list[str] = field(default_factory=list)
+
+
+_SOURCE_PRIORITY: dict[str, int] = {"tender": 3, "consensus": 2, "none": 0}
+
+
+async def get_excluded_segment_hashes_with_source(
+    session: "AsyncSession",
+    project_id: int,
+    dimension: str,
+) -> SegmentBaselineHashes:
+    """detector 段级 API:返回该 dimension 下的 baseline hash → source 映射。
+
+    detector 段级 ironclad 跳过 + evidence_json.samples[i] baseline_matched 用此映射;
+    PC-level wholesale 兜底由 produce_baseline_adjustments 单独负责(judge step5)。
+
+    三级降级与 resolve_baseline 一致:
+    - L1 tender: project 有 ≥1 份 extracted TenderDocument → 返 tender_hashes
+    - L2 consensus: 无 tender + ≥3 bidders → 返共识 hash 集合
+    - L3 ≤2 bidders + 无 tender: 返空 hash + warnings='baseline_unavailable_low_bidder_count'
+
+    BOQ 维度仅走 L1(D5);非 BOQ 维度全套三级降级。
+    """
+    is_boq = dimension in BOQ_DIMENSIONS
+
+    if is_boq:
+        tender_hashes = await _load_tender_boq_hashes(session, project_id)
+    else:
+        tender_hashes = await _load_tender_segment_hashes(session, project_id)
+
+    if tender_hashes:
+        # L1: tender 路径活跃(L1 优先于投标方数量门槛)
+        return SegmentBaselineHashes(
+            hash_to_source={h: "tender" for h in tender_hashes},
+            baseline_source="tender",
+            warnings=[],
+        )
+
+    # 无 tender + BOQ → none(BOQ 不走 L2/L3 共识)
+    if is_boq:
+        return SegmentBaselineHashes(
+            hash_to_source={},
+            baseline_source="none",
+            warnings=[],
+        )
+
+    bidder_count = await _count_alive_bidders(session, project_id)
+
+    # L3: ≤2 bidders + 无 tender → 警示
+    if bidder_count <= LOW_BIDDER_THRESHOLD:
+        return SegmentBaselineHashes(
+            hash_to_source={},
+            baseline_source="none",
+            warnings=[WARN_LOW_BIDDER],
+        )
+
+    # L2: ≥3 bidders + 无 tender → 共识
+    bidder_role_hashes = await _load_bidder_segment_hashes_by_role(
+        session, project_id
+    )
+    consensus_hashes = _compute_consensus_hashes(bidder_role_hashes)
+    if not consensus_hashes:
+        return SegmentBaselineHashes(
+            hash_to_source={},
+            baseline_source="none",
+            warnings=[],
+        )
+    return SegmentBaselineHashes(
+        hash_to_source={h: "consensus" for h in consensus_hashes},
+        baseline_source="consensus",
+        warnings=[],
+    )
+
+
 __all__ = [
     "BaselineResolution",
+    "SegmentBaselineHashes",
     "BOQ_DIMENSIONS",
     "CONSENSUS_MIN_DISTINCT_BIDDERS",
     "LOW_BIDDER_THRESHOLD",
@@ -442,4 +528,5 @@ __all__ = [
     "_build_tender_adjustment",
     "resolve_baseline",
     "produce_baseline_adjustments",
+    "get_excluded_segment_hashes_with_source",
 ]

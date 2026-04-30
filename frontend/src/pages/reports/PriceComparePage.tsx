@@ -9,6 +9,7 @@
  *
  * data-testid 保留:anomaly-toggle / price-table
  */
+import type * as React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
@@ -25,7 +26,9 @@ import type { TableProps } from "antd";
 import CompareSubTabs from "../../components/reports/CompareSubTabs";
 import ReportNavBar from "../../components/reports/ReportNavBar";
 import { ApiError, api } from "../../services/api";
+import { colors } from "../../theme/tokens";
 import type { PriceCompareResponse, PriceRow } from "../../types";
+import { isTenderBaselineEnabled } from "../../utils/featureFlags";
 
 export function PriceComparePage() {
   const { projectId, version } = useParams<{
@@ -39,6 +42,7 @@ export function PriceComparePage() {
   const [onlyAnomalies, setOnlyAnomalies] = useState(false);
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
+  const baselineEnabled = isTenderBaselineEnabled();
 
   useEffect(() => {
     if (!projectId) return;
@@ -243,7 +247,20 @@ export function PriceComparePage() {
               pagination={false}
               size="middle"
               style={{ border: "none" }}
-              rowClassName={(r) => (r.has_anomaly ? "price-anomaly-row bg-red-50" : "")}
+              rowClassName={(r) => {
+                const baselineRow =
+                  baselineEnabled && r.baseline_matched === true;
+                if (baselineRow) return "price-baseline-row";
+                return r.has_anomaly ? "price-anomaly-row bg-red-50" : "";
+              }}
+              onRow={(r) => {
+                const baselineRow =
+                  baselineEnabled && r.baseline_matched === true;
+                if (!baselineRow) return {};
+                return {
+                  style: { background: colors.bgTemplate },
+                } as React.HTMLAttributes<HTMLElement>;
+              }}
               // 保留 price-table data-testid 兼容契约
               components={{
                 body: {

@@ -44,6 +44,9 @@ export const colors = {
   warningBg: "#fcf3e3",
   info: "#1d4584",
   infoBg: "#eef3fb",
+
+  // 模板段灰底(detect-tender-baseline §7):baseline_matched 段落/单元格背景
+  bgTemplate: "rgba(138, 145, 157, 0.08)",
 } as const;
 
 export const typography = {

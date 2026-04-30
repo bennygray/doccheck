@@ -41,6 +41,8 @@ import FileTree from "../../components/projects/FileTree";
 import ParseProgressIndicator from "../../components/projects/ParseProgressIndicator";
 import PriceConfigForm from "../../components/projects/PriceConfigForm";
 import PriceRulesPanel from "../../components/projects/PriceRulesPanel";
+import RerunAfterTenderDialog from "../../components/projects/RerunAfterTenderDialog";
+import TenderUploadCard from "../../components/projects/TenderUploadCard";
 import UploadButton from "../../components/projects/UploadButton";
 import { DetectProgressIndicator } from "../../components/detect/DetectProgressIndicator";
 import { StartDetectButton } from "../../components/detect/StartDetectButton";
@@ -48,6 +50,7 @@ import { useDetectProgress } from "../../hooks/useDetectProgress";
 import { useParseProgress } from "../../hooks/useParseProgress";
 import { ApiError, api } from "../../services/api";
 import type { BidDocument, Bidder, ProjectDetail } from "../../types";
+import { isTenderBaselineEnabled } from "../../utils/featureFlags";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "草稿",
@@ -109,6 +112,11 @@ export default function ProjectDetailPage() {
   const [bidders, setBidders] = useState<Bidder[]>([]);
   // 侧边 Drawer 选中的投标人 id(null = 关闭)
   const [drawerBidderId, setDrawerBidderId] = useState<number | null>(null);
+  // detect-tender-baseline §7:招标文件上传后,若已有完成版本则提示重跑
+  const [showRerunDialog, setShowRerunDialog] = useState(false);
+  const [rerunLoading, setRerunLoading] = useState(false);
+
+  const tenderBaselineEnabled = isTenderBaselineEnabled();
 
   const pollRef = useRef<number | null>(null);
 
@@ -492,6 +500,20 @@ export default function ProjectDetailPage() {
         )}
       </Card>
 
+      {/* 招标文件(detect-tender-baseline §7) — feature flag 控制整组隐藏/显示 */}
+      {tenderBaselineEnabled && (
+        <div style={{ marginBottom: 16 }}>
+          <TenderUploadCard
+            projectId={projectId}
+            onChanged={() => {
+              if (project.status === "completed") {
+                setShowRerunDialog(true);
+              }
+            }}
+          />
+        </div>
+      )}
+
       {/* 投标人管理 */}
       <Card
         variant="outlined"
@@ -726,6 +748,34 @@ export default function ProjectDetailPage() {
           onSubmitted={() => {
             setDecryptTarget(null);
             void reloadProject();
+          }}
+        />
+      )}
+      {tenderBaselineEnabled && (
+        <RerunAfterTenderDialog
+          open={showRerunDialog}
+          loading={rerunLoading}
+          onCancel={() => setShowRerunDialog(false)}
+          onConfirm={async () => {
+            setRerunLoading(true);
+            try {
+              await api.startAnalysis(projectId);
+              await detect.refetch();
+              await reloadProject();
+              void message.success("已基于新基线重新启动检测");
+              setShowRerunDialog(false);
+            } catch (err) {
+              if (err instanceof ApiError && err.status === 409) {
+                void message.info("已在检测中,进度面板已展开");
+                setShowRerunDialog(false);
+              } else if (err instanceof ApiError) {
+                void message.error(`启动失败 (${err.status})`);
+              } else {
+                void message.error("启动失败,请稍后重试");
+              }
+            } finally {
+              setRerunLoading(false);
+            }
           }}
         />
       )}

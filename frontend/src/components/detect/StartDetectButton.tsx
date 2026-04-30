@@ -3,13 +3,18 @@
  *
  * - 前置条件 tooltip:bidder<2 / 有非终态 bidder / analyzing 中
  * - 点击调 POST /analysis/start;409 幂等
+ * - detect-tender-baseline §7.9:flag=true 且未上传招标文件时弹预检查 dialog
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, App, Button, Tooltip } from "antd";
 import { PlayCircleOutlined } from "@ant-design/icons";
 
+import StartDetectPreCheckDialog, {
+  shouldSkipPreCheckDialog,
+} from "../projects/StartDetectPreCheckDialog";
 import { ApiError, api } from "../../services/api";
 import type { BidderSummary } from "../../types";
+import { isTenderBaselineEnabled } from "../../utils/featureFlags";
 
 const BIDDER_TERMINAL_STATES = new Set<string>([
   "identified",
@@ -39,7 +44,30 @@ export function StartDetectButton({
 }: StartDetectButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPreCheck, setShowPreCheck] = useState(false);
+  const [hasTender, setHasTender] = useState<boolean>(false);
   const { message } = App.useApp();
+
+  const tenderBaselineEnabled = isTenderBaselineEnabled();
+
+  useEffect(() => {
+    if (!tenderBaselineEnabled) return;
+    let cancelled = false;
+    api
+      .listTenders(projectId)
+      .then((list) => {
+        if (cancelled) return;
+        const alive = list.filter((t) => t.parse_status !== "failed");
+        setHasTender(alive.length > 0);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setHasTender(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenderBaselineEnabled, projectId]);
 
   const bidderCount = bidders.length;
   const nonTerminal = bidders.filter(
@@ -63,7 +91,7 @@ export function StartDetectButton({
       ? "启动中..."
       : "启动检测";
 
-  const onClick = async () => {
+  const performStart = async () => {
     setError(null);
     setLoading(true);
     const hide = message.loading("检测已启动,正在初始化...", 0);
@@ -96,6 +124,18 @@ export function StartDetectButton({
     }
   };
 
+  const onClick = () => {
+    if (
+      tenderBaselineEnabled &&
+      !hasTender &&
+      !shouldSkipPreCheckDialog(projectId)
+    ) {
+      setShowPreCheck(true);
+      return;
+    }
+    void performStart();
+  };
+
   const btn = (
     <Button
       type="primary"
@@ -121,6 +161,19 @@ export function StartDetectButton({
           role="alert"
           showIcon
           style={{ marginTop: 4 }}
+        />
+      )}
+      {tenderBaselineEnabled && (
+        <StartDetectPreCheckDialog
+          projectId={projectId}
+          open={showPreCheck}
+          hasTender={hasTender}
+          bidderCount={bidders.length}
+          onCancel={() => setShowPreCheck(false)}
+          onConfirm={() => {
+            setShowPreCheck(false);
+            void performStart();
+          }}
         />
       )}
     </div>

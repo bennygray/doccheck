@@ -36,8 +36,17 @@ import {
 import { ExportButton } from "../../components/reports/ExportButton";
 import { ReviewPanel } from "../../components/reports/ReviewPanel";
 import ReportNavBar from "../../components/reports/ReportNavBar";
+import BaselineStatusBadge from "../../components/projects/BaselineStatusBadge";
+import StaleBaselineBadge from "../../components/reports/StaleBaselineBadge";
 import { ApiError, api } from "../../services/api";
-import type { ReportDimension, ReportResponse, RiskLevel } from "../../types";
+import { colors } from "../../theme/tokens";
+import type {
+  BaselineSource,
+  ReportDimension,
+  ReportResponse,
+  RiskLevel,
+} from "../../types";
+import { isTenderBaselineEnabled } from "../../utils/featureFlags";
 
 const LLM_FALLBACK_PREFIX = "AI 综合研判暂不可用";
 
@@ -107,6 +116,10 @@ export function ReportPage() {
   const [hasInsufficientIdentity, setHasInsufficientIdentity] =
     useState<boolean>(false);
 
+  // detect-tender-baseline §7.10:项目当前是否有招标文件 → 老报告 stale 判定
+  const [projectHasTender, setProjectHasTender] = useState(false);
+  const tenderBaselineEnabled = isTenderBaselineEnabled();
+
   // 404 自动重试:刚点完"检测完成"就进来时,判 LLM 还在 3-10s 跑,AR 行没写入 DB。
   // 最多重试 10 次 × 2s = 20s 窗口,够覆盖 judge.
   const [retryCount, setRetryCount] = useState(0);
@@ -172,6 +185,19 @@ export function ReportPage() {
         /* 失败静默降级:不显示提示 */
       });
   }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId || !tenderBaselineEnabled) return;
+    api
+      .listTenders(projectId)
+      .then((list) => {
+        const alive = list.filter((t) => t.parse_status !== "failed");
+        setProjectHasTender(alive.length > 0);
+      })
+      .catch(() => {
+        setProjectHasTender(false);
+      });
+  }, [projectId, tenderBaselineEnabled]);
 
   // 如果 404 且未达重试上限 → 2s 后自动重试
   useEffect(() => {
@@ -261,6 +287,15 @@ export function ReportPage() {
   const risk = RISK_META[report.risk_level];
   const ironcladCount = report.dimensions.filter((d) => d.is_ironclad).length;
 
+  // detect-tender-baseline §7.10:报告级 baseline_source(老报告缺该字段时默认 'none');
+  // 老报告 + 当前已上传招标文件 → 显示 stale badge
+  const reportBaselineSource: BaselineSource = report.baseline_source ?? "none";
+  const isStale =
+    tenderBaselineEnabled &&
+    projectHasTender &&
+    (reportBaselineSource === "none" ||
+      reportBaselineSource === "metadata_cluster");
+
   return (
     <div>
       <ReportNavBar
@@ -271,6 +306,13 @@ export function ReportPage() {
         tabKey="report"
         extra={
           <Space>
+            {tenderBaselineEnabled && (
+              <BaselineStatusBadge
+                source={reportBaselineSource}
+                warnings={report.warnings}
+              />
+            )}
+            {isStale && <StaleBaselineBadge />}
             <ExportButton projectId={projectId!} version={version!} />
           </Space>
         }
@@ -565,6 +607,9 @@ export function DimensionRow({
   // identity_info 缺失时显示降级提示
   const showIdentityDegraded =
     d.dimension === "error_consistency" && hasInsufficientIdentity;
+  // detect-tender-baseline §7.11:模板段 Tag — flag 控制下显示三色基线 Tag
+  const tenderBaselineEnabled = isTenderBaselineEnabled();
+  const baselineSource: BaselineSource = d.baseline_source ?? "none";
 
   return (
     <div
@@ -585,14 +630,17 @@ export function DimensionRow({
          gap: 20,
        }}
      >
-      {/* 左:维度名 + 代号 + 铁证 Tag */}
-      <div style={{ flex: "0 0 200px", minWidth: 0 }}>
+      {/* 左:维度名 + 代号 + 铁证 Tag + 基线 Tag */}
+      <div style={{ flex: "0 0 220px", minWidth: 0 }}>
         <Typography.Text strong style={{ fontSize: 14, display: "block" }}>
           {DIMENSION_LABELS[d.dimension] ?? d.dimension}
           {d.is_ironclad && (
             <Tag color="error" style={{ margin: "0 0 0 6px", fontWeight: 600 }}>
               铁证
             </Tag>
+          )}
+          {tenderBaselineEnabled && baselineSource !== "none" && (
+            <BaselineDimensionTag source={baselineSource} />
           )}
         </Typography.Text>
         <Typography.Text
@@ -676,6 +724,51 @@ export function DimensionRow({
         />
       )}
     </div>
+  );
+}
+
+/* ───────── 维度级基线 Tag(detect-tender-baseline §7.11):蓝/橙/灰三色 ───────── */
+function BaselineDimensionTag({ source }: { source: BaselineSource }) {
+  const meta: Record<
+    Exclude<BaselineSource, "none">,
+    { label: string; color: string; bg: string; tip: string }
+  > = {
+    tender: {
+      label: "招标基线",
+      color: colors.primary,
+      bg: colors.primaryBg,
+      tip: "本维度基于招标文件命中段已剔除铁证(L1)",
+    },
+    consensus: {
+      label: "共识基线",
+      color: colors.warning,
+      bg: colors.warningBg,
+      tip: "本维度基于跨投标方共识识别模板段(L2)",
+    },
+    metadata_cluster: {
+      label: "元数据聚类",
+      color: colors.textTertiary,
+      bg: "#f5f7fa",
+      tip: "本维度基于 metadata 聚类识别模板段(老路径)",
+    },
+  };
+  if (source === "none") return null;
+  const m = meta[source];
+  return (
+    <Tooltip title={m.tip}>
+      <Tag
+        data-testid={`dimension-baseline-tag-${source}`}
+        style={{
+          margin: "0 0 0 6px",
+          color: m.color,
+          background: m.bg,
+          borderColor: m.color,
+          fontWeight: 500,
+        }}
+      >
+        {m.label}
+      </Tag>
+    </Tooltip>
   );
 }
 

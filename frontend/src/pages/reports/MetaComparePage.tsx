@@ -16,7 +16,9 @@ import { Card, Empty, Spin, Typography } from "antd";
 import CompareSubTabs from "../../components/reports/CompareSubTabs";
 import ReportNavBar from "../../components/reports/ReportNavBar";
 import { ApiError, api } from "../../services/api";
+import { colors } from "../../theme/tokens";
 import type { MetaCompareResponse } from "../../types";
+import { isTenderBaselineEnabled } from "../../utils/featureFlags";
 
 /** color_group → 颜色(克制,不霓虹) */
 const GROUP_COLORS = [
@@ -68,6 +70,7 @@ export function MetaComparePage() {
   const [data, setData] = useState<MetaCompareResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const baselineEnabled = isTenderBaselineEnabled();
 
   useEffect(() => {
     if (!projectId) return;
@@ -181,11 +184,16 @@ export function MetaComparePage() {
                         HIGH_SENSITIVITY_FIELDS.has(field.field_name) &&
                         !cell.is_common &&
                         cell.color_group !== null;
-                      const bg = isHighSensitivity
-                        ? "#fdecec"
-                        : cell.is_common
-                          ? undefined
-                          : groupBgColor(cell.color_group);
+                      // detect-tender-baseline §7.13:模板段灰底优先(覆盖 group/common 颜色)
+                      const baselineHit =
+                        baselineEnabled && cell.baseline_matched === true;
+                      const bg = baselineHit
+                        ? colors.bgTemplate
+                        : isHighSensitivity
+                          ? "#fdecec"
+                          : cell.is_common
+                            ? undefined
+                            : groupBgColor(cell.color_group);
                       return (
                         <td
                           key={data.bidders[i].bidder_id}
@@ -195,8 +203,15 @@ export function MetaComparePage() {
                             fontWeight: isHighSensitivity ? 600 : 400,
                             background: bg,
                           }}
-                          title={cell.is_common ? "通用值,已过滤" : undefined}
+                          title={
+                            baselineHit
+                              ? `模板段(${cell.baseline_source ?? "none"})— 已剔除`
+                              : cell.is_common
+                                ? "通用值,已过滤"
+                                : undefined
+                          }
                           data-testid={cell.is_common ? "common-cell" : undefined}
+                          data-baseline-matched={baselineHit ? "true" : undefined}
                         >
                           {formatValue(field.field_name, cell.value)}
                         </td>

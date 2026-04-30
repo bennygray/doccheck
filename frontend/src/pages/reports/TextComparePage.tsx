@@ -16,7 +16,9 @@ import { Button, Card, Empty, Select, Space, Spin, Typography } from "antd";
 import CompareSubTabs from "../../components/reports/CompareSubTabs";
 import ReportNavBar from "../../components/reports/ReportNavBar";
 import { ApiError, api } from "../../services/api";
+import { colors } from "../../theme/tokens";
 import type { TextCompareResponse, TextMatch } from "../../types";
+import { isTenderBaselineEnabled } from "../../utils/featureFlags";
 
 // 相似度 → 背景色(越高越深琥珀)
 function simBgColor(sim: number): string {
@@ -24,6 +26,46 @@ function simBgColor(sim: number): string {
   if (sim >= 0.75) return "rgba(194, 124, 14, 0.26)";
   if (sim >= 0.6) return "rgba(194, 124, 14, 0.16)";
   return "rgba(194, 124, 14, 0.08)";
+}
+
+// detect-tender-baseline §7.12:模板段灰底优先级高于 simBgColor
+function paragraphBgColor(
+  match: TextMatch | undefined,
+  baselineEnabled: boolean,
+): string | undefined {
+  if (!match) return undefined;
+  if (baselineEnabled && match.baseline_matched) return colors.bgTemplate;
+  return simBgColor(match.sim);
+}
+
+function BaselineTag({ source }: { source: NonNullable<TextMatch["baseline_source"]> }) {
+  const label =
+    source === "tender" ? "L1 招标" : source === "consensus" ? "L2 共识" : "模板";
+  const fg =
+    source === "tender"
+      ? colors.primary
+      : source === "consensus"
+        ? colors.warning
+        : colors.textTertiary;
+  return (
+    <span
+      data-testid={`baseline-tag-${source}`}
+      style={{
+        display: "inline-block",
+        fontSize: 10,
+        fontWeight: 500,
+        color: fg,
+        border: `1px solid ${fg}`,
+        borderRadius: 3,
+        padding: "0 4px",
+        marginRight: 6,
+        verticalAlign: "middle",
+        lineHeight: "16px",
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 export function TextComparePage() {
@@ -218,6 +260,7 @@ export function TextComparePage() {
 
   const hasData =
     data.left_paragraphs.length > 0 || data.right_paragraphs.length > 0;
+  const baselineEnabled = isTenderBaselineEnabled();
 
   const roleExtra =
     data.available_roles.length > 1 ? (
@@ -330,10 +373,13 @@ export function TextComparePage() {
                 </Typography.Text>
                 {data.left_paragraphs.map((p) => {
                   const match = leftMatchMap.get(p.paragraph_index);
+                  const isBaselineHit =
+                    baselineEnabled && match?.baseline_matched === true;
                   return (
                     <div
                       key={p.paragraph_index}
                       data-para-idx={p.paragraph_index}
+                      data-baseline-matched={isBaselineHit ? "true" : undefined}
                       style={{
                         padding: "6px 8px",
                         marginBottom: 4,
@@ -341,18 +387,23 @@ export function TextComparePage() {
                         fontSize: 13,
                         lineHeight: 1.7,
                         cursor: match ? "pointer" : "default",
-                        backgroundColor: match ? simBgColor(match.sim) : undefined,
-                        color: "#1f2328",
+                        backgroundColor: paragraphBgColor(match, baselineEnabled),
+                        color: isBaselineHit ? "#5c6370" : "#1f2328",
                       }}
                       title={
-                        match
-                          ? `相似度: ${(match.sim * 100).toFixed(1)}%`
-                          : undefined
+                        isBaselineHit
+                          ? `模板段(${match?.baseline_source ?? "none"})— 已剔除铁证`
+                          : match
+                            ? `相似度: ${(match.sim * 100).toFixed(1)}%`
+                            : undefined
                       }
                       onClick={
                         match ? () => scrollToMatch(match.b_idx, "right") : undefined
                       }
                     >
+                      {isBaselineHit && match?.baseline_source && (
+                        <BaselineTag source={match.baseline_source} />
+                      )}
                       {p.text}
                     </div>
                   );
@@ -386,10 +437,13 @@ export function TextComparePage() {
                 </Typography.Text>
                 {data.right_paragraphs.map((p) => {
                   const match = rightMatchMap.get(p.paragraph_index);
+                  const isBaselineHit =
+                    baselineEnabled && match?.baseline_matched === true;
                   return (
                     <div
                       key={p.paragraph_index}
                       data-para-idx={p.paragraph_index}
+                      data-baseline-matched={isBaselineHit ? "true" : undefined}
                       style={{
                         padding: "6px 8px",
                         marginBottom: 4,
@@ -397,18 +451,23 @@ export function TextComparePage() {
                         fontSize: 13,
                         lineHeight: 1.7,
                         cursor: match ? "pointer" : "default",
-                        backgroundColor: match ? simBgColor(match.sim) : undefined,
-                        color: "#1f2328",
+                        backgroundColor: paragraphBgColor(match, baselineEnabled),
+                        color: isBaselineHit ? "#5c6370" : "#1f2328",
                       }}
                       title={
-                        match
-                          ? `相似度: ${(match.sim * 100).toFixed(1)}%`
-                          : undefined
+                        isBaselineHit
+                          ? `模板段(${match?.baseline_source ?? "none"})— 已剔除铁证`
+                          : match
+                            ? `相似度: ${(match.sim * 100).toFixed(1)}%`
+                            : undefined
                       }
                       onClick={
                         match ? () => scrollToMatch(match.a_idx, "left") : undefined
                       }
                     >
+                      {isBaselineHit && match?.baseline_source && (
+                        <BaselineTag source={match.baseline_source} />
+                      )}
                       {p.text}
                     </div>
                   );

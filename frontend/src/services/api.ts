@@ -30,6 +30,8 @@ import type {
   PriceConfig,
   RulesConfig,
   RulesConfigResponse,
+  TenderDocument,
+  TenderUploadResult,
   TextCompareResponse,
   PriceConfigPayload,
   PriceItem,
@@ -517,5 +519,49 @@ export const api = {
     request<LLMTestResponse>("/admin/llm/test", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+
+  // ===========================================================================
+  // detect-tender-baseline §7:招标文件 (tender) 客户端
+  // ===========================================================================
+
+  listTenders: (projectId: number | string) =>
+    request<TenderDocument[]>(`/projects/${projectId}/tender/`),
+
+  /** POST /api/projects/{pid}/tender — 上传招标文件(multipart) */
+  uploadTender: async (
+    projectId: number | string,
+    file: File,
+  ): Promise<TenderUploadResult> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const headers = new Headers();
+    const token = authStorage.getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`${API_BASE}/projects/${projectId}/tender/`, {
+      method: "POST",
+      body: fd,
+      headers,
+    });
+    if (res.status === 401) {
+      authStorage.clear();
+      onUnauthorized?.();
+      throw new ApiError(401, "unauthorized");
+    }
+    if (!res.ok) {
+      let detail: unknown = res.statusText;
+      try {
+        detail = (await res.json())?.detail ?? res.statusText;
+      } catch {
+        // body 可能非 JSON
+      }
+      throw new ApiError(res.status, detail);
+    }
+    return (await res.json()) as TenderUploadResult;
+  },
+
+  deleteTender: (projectId: number | string, tenderId: number | string) =>
+    request<void>(`/projects/${projectId}/tender/${tenderId}`, {
+      method: "DELETE",
     }),
 };

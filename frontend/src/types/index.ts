@@ -147,6 +147,36 @@ export interface UploadResult {
   skipped_duplicates: string[];
 }
 
+// =============================================================================
+// detect-tender-baseline §7 类型
+// =============================================================================
+
+/** 与后端 BaselineSourceLiteral 对齐(schemas/report.py) */
+export type BaselineSource = "tender" | "consensus" | "metadata_cluster" | "none";
+
+/** UI 派生的基线状态等级:tender→L1, consensus→L2, metadata_cluster/none→L3 */
+export type BaselineStatus = "L1" | "L2" | "L3";
+
+export type TenderParseStatus = "pending" | "parsing" | "extracted" | "failed";
+
+export interface TenderDocument {
+  id: number;
+  project_id: number;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  md5: string;
+  parse_status: TenderParseStatus | string;
+  parse_error: string | null;
+  created_at: string;
+}
+
+export interface TenderUploadResult {
+  tender_id: number;
+  file_name: string;
+  parse_status: TenderParseStatus | string;
+}
+
 export type Currency = "CNY" | "USD" | "EUR" | "HKD";
 export type UnitScale = "yuan" | "wan_yuan" | "fen";
 
@@ -362,6 +392,9 @@ export interface ReportDimension {
   is_ironclad: boolean;
   status_counts: ReportDimensionStatusCounts;
   summaries: string[];
+  // detect-tender-baseline §7:维度级 baseline 来源(老报告缺该字段时 UI fallback 'none')
+  baseline_source?: BaselineSource;
+  warnings?: string[];
 }
 
 export interface ReportResponse {
@@ -376,6 +409,9 @@ export interface ReportResponse {
   manual_review_comment: string | null;
   reviewer_id: number | null;
   reviewed_at: string | null;
+  // detect-tender-baseline §7:报告级最强 baseline 来源(老报告缺该字段时 UI fallback 'none')
+  baseline_source?: BaselineSource;
+  warnings?: string[];
 }
 
 // =============================================================================
@@ -409,6 +445,8 @@ export interface PairComparisonItem {
   score: number;
   is_ironclad: boolean;
   evidence_summary: string | null;
+  // detect-tender-baseline §7:PC 级 baseline 来源(老报告默认 'none')
+  baseline_source?: BaselineSource;
 }
 
 export interface PairsResponse {
@@ -467,6 +505,9 @@ export interface TextMatch {
   label: string | null;
   a_text: string | null;
   b_text: string | null;
+  // detect-tender-baseline §7:段级 baseline 命中标记(后端 §3 evidence_json.samples 已写入)
+  baseline_matched?: boolean;
+  baseline_source?: BaselineSource;
 }
 
 export interface TextCompareResponse {
@@ -492,6 +533,9 @@ export interface PriceCell {
   unit_price: number | null;
   total_price: number | null;
   deviation_pct: number | null;
+  // detect-tender-baseline §7:行级 baseline 命中(BOQ 项与 tender baseline 匹配)
+  baseline_matched?: boolean;
+  baseline_source?: BaselineSource;
 }
 
 export interface PriceRow {
@@ -500,6 +544,9 @@ export interface PriceRow {
   mean_unit_price: number | null;
   cells: PriceCell[];
   has_anomaly: boolean;
+  // detect-tender-baseline §7:整行 baseline 命中(BOQ 项被 tender baseline 剔除)
+  baseline_matched?: boolean;
+  baseline_source?: BaselineSource;
 }
 
 export interface PriceCompareResponse {
@@ -517,6 +564,9 @@ export interface MetaCellValue {
   value: string | null;
   is_common: boolean;
   color_group: number | null;
+  // detect-tender-baseline §7:单元格 baseline 命中(后续 baseline-aware metadata 时启用)
+  baseline_matched?: boolean;
+  baseline_source?: BaselineSource;
 }
 
 export interface MetaFieldRow {

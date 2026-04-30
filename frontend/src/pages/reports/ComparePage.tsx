@@ -25,8 +25,10 @@ import { FireOutlined, RightOutlined } from "@ant-design/icons";
 import CompareSubTabs from "../../components/reports/CompareSubTabs";
 import ReportNavBar from "../../components/reports/ReportNavBar";
 import { ApiError, api } from "../../services/api";
+import { colors } from "../../theme/tokens";
 import type { PairComparisonItem } from "../../types";
 import { summarizeEvidence } from "../../utils/evidenceSummary";
+import { isTenderBaselineEnabled } from "../../utils/featureFlags";
 
 const DIMENSION_LABELS: Record<string, string> = {
   text_similarity: "文本相似度",
@@ -396,9 +398,21 @@ function DimensionHitRow({
     !!item.evidence_summary &&
     item.evidence_summary.trim().startsWith("{") &&
     summary !== item.evidence_summary;
+  // detect-tender-baseline §7.13:PC 命中模板基线时整行灰底
+  const baselineEnabled = isTenderBaselineEnabled();
+  const baselineHit =
+    baselineEnabled &&
+    item.baseline_source !== undefined &&
+    item.baseline_source !== "none";
 
   return (
-    <div style={{ borderBottom: "1px solid #f0f2f5" }}>
+    <div
+      style={{
+        borderBottom: "1px solid #f0f2f5",
+        background: baselineHit ? colors.bgTemplate : undefined,
+      }}
+      data-baseline-source={baselineHit ? item.baseline_source : undefined}
+    >
       <div
         style={{
           padding: "10px 20px",

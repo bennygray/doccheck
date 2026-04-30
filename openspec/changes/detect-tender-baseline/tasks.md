@@ -83,26 +83,26 @@
 
 ## 7. 前端基线 UI(D12 ⑦) + feature flag
 
-- [ ] 7.1 [impl] 修改 `frontend/.env.example` + `frontend/.env`:加 `VITE_TENDER_BASELINE_ENABLED=false`
-- [ ] 7.1b [impl] 修改 `frontend/src/theme/tokens.ts`:加 `bgTemplate: 'rgba(138,145,157,0.08)'` 派生 token(不复用既有 textTertiary hex,而是新加 rgba token 给模板段灰底专用)
-- [ ] 7.2 [impl] 新建 `frontend/src/utils/featureFlags.ts`:暴露 `isTenderBaselineEnabled()`
-- [ ] 7.3 [impl] 新建 `components/projects/TenderUploadCard.tsx`:**copy** AddBidderDialog 的 drag-drop 内联代码(useState(dragActive) + 原生 onDrop)+ 500MB 校验;**本次 change 不抽 useDragDrop hook**(避免范围爆炸);若 TenderUploadCard / AddBidderDialog 重叠代码 > 30 行,在 follow-up change 中再抽公共 hook(本 change 显式不做)
-- [ ] 7.4 [impl] 新建 `components/projects/BaselineStatusBadge.tsx`:L1 蓝/L2 琥珀/L3 中性灰,色值复用 `tokens.ts`
-- [ ] 7.5 [impl] 新建 `components/projects/StartDetectPreCheckDialog.tsx`:Alert warning + 不再提醒 checkbox(localStorage `tender_baseline_warning_dismissed_<pid>`)
-- [ ] 7.6 [impl] 新建 `components/projects/RerunAfterTenderDialog.tsx`:Alert info + "立即重新检测?是/否"
-- [ ] 7.7 [impl] 新建 `components/reports/StaleBaselineBadge.tsx`:老版本无 tender 警示 Badge
-- [ ] 7.8 [impl] 修改 `pages/ProjectDetailPage.tsx`:加招标文件区块(feature flag 控制 + 整组隐藏/显示)
-- [ ] 7.9 [impl] 修改 `components/projects/StartDetectButton.tsx`:加预检查 dialog 调用
-- [ ] 7.10 [impl] 修改 `pages/ReportPage.tsx`:头部加 BaselineStatusBadge + 老版本 Stale Badge
-- [ ] 7.11 [impl] 修改 `components/reports/DimensionRow.tsx`:模板段 Tag 渲染规则(蓝/橙/灰三色 + 文案)
-- [ ] 7.12 [impl] 修改 `pages/TextComparePage.tsx`:模板段灰底**直接 import `colors.bgTemplate`**(7.1b 加的 token,**不**硬编码 rgba)+ 行首 Tag,优先于既有 simBgColor
-- [ ] 7.13 [impl] 修改 `pages/ComparePage.tsx` + `MetaComparePage.tsx` + `PriceComparePage.tsx`:模板段灰底
-- [ ] 7.14 [impl] 修改 `types/index.ts`:加 `TenderDocument` / `BaselineSource` / `BaselineStatus` 类型
-- [ ] 7.15 [impl] 修改 `services/api.ts`:加 `uploadTender` / `listTender` / `deleteTender` API 客户端
-- [ ] 7.16 [L1] `__tests__/TenderUploadCard.test.tsx` + `BaselineStatusBadge.test.tsx` + `StartDetectPreCheckDialog.test.tsx` + `RerunAfterTenderDialog.test.tsx` 4 组件单测
-- [ ] 7.17 [L1] `__tests__/featureFlags.test.ts`:flag=true/false 各组件渲染分支
-- [ ] 7.18 [L1] frontend tsc 0 errors + Vitest 全绿
-- [ ] 7.19 [L2] 验证门 ⑦:前端 L1 全绿,且本地 `npm run dev` 启动后 flag=false 时 UI 与 change 前完全一致
+- [x] 7.1 [impl] 修改 `frontend/.env.example` + `frontend/.env`:加 `VITE_TENDER_BASELINE_ENABLED=false`
+- [x] 7.1b [impl] 修改 `frontend/src/theme/tokens.ts`:加 `bgTemplate: 'rgba(138,145,157,0.08)'` 派生 token(不复用既有 textTertiary hex,而是新加 rgba token 给模板段灰底专用)
+- [x] 7.2 [impl] 新建 `frontend/src/utils/featureFlags.ts`:暴露 `isTenderBaselineEnabled()`
+- [x] 7.3 [impl] 新建 `components/projects/TenderUploadCard.tsx`:**copy** AddBidderDialog 的 drag-drop 内联代码(useState(dragActive) + 原生 onDrop)+ 500MB 校验;**本次 change 不抽 useDragDrop hook**(避免范围爆炸);若 TenderUploadCard / AddBidderDialog 重叠代码 > 30 行,在 follow-up change 中再抽公共 hook(本 change 显式不做)
+- [x] 7.4 [impl] 新建 `components/projects/BaselineStatusBadge.tsx`:L1 蓝/L2 琥珀/L3 中性灰,色值复用 `tokens.ts`
+- [x] 7.5 [impl] 新建 `components/projects/StartDetectPreCheckDialog.tsx`:Alert warning + 不再提醒 checkbox(localStorage `tender_baseline_warning_dismissed_<pid>`)
+- [x] 7.6 [impl] 新建 `components/projects/RerunAfterTenderDialog.tsx`:Alert info + "立即重新检测?是/否"
+- [x] 7.7 [impl] 新建 `components/reports/StaleBaselineBadge.tsx`:老版本无 tender 警示 Badge
+- [x] 7.8 [impl] 修改 `pages/ProjectDetailPage.tsx`:加招标文件区块(feature flag 控制 + 整组隐藏/显示)
+- [x] 7.9 [impl] 修改 `components/projects/StartDetectButton.tsx`:加预检查 dialog 调用
+- [x] 7.10 [impl] 修改 `pages/ReportPage.tsx`:头部加 BaselineStatusBadge + 老版本 Stale Badge
+- [x] 7.11 [impl] 修改 `components/reports/DimensionRow.tsx`:模板段 Tag 渲染规则(蓝/橙/灰三色 + 文案)
+- [x] 7.12 [impl] 修改 `pages/TextComparePage.tsx`:模板段灰底**直接 import `colors.bgTemplate`**(7.1b 加的 token,**不**硬编码 rgba)+ 行首 Tag,优先于既有 simBgColor
+- [x] 7.13 [impl] 修改 `pages/ComparePage.tsx` + `MetaComparePage.tsx` + `PriceComparePage.tsx`:模板段灰底
+- [x] 7.14 [impl] 修改 `types/index.ts`:加 `TenderDocument` / `BaselineSource` / `BaselineStatus` 类型
+- [x] 7.15 [impl] 修改 `services/api.ts`:加 `uploadTender` / `listTender` / `deleteTender` API 客户端
+- [x] 7.16 [L1] `__tests__/TenderUploadCard.test.tsx` + `BaselineStatusBadge.test.tsx` + `StartDetectPreCheckDialog.test.tsx` + `RerunAfterTenderDialog.test.tsx` 4 组件单测(实际落 sibling `*.test.tsx`,与 AddBidderDialog 既有惯例一致)
+- [x] 7.17 [L1] `__tests__/featureFlags.test.ts`:flag=true/false 各组件渲染分支(实际落 `utils/featureFlags.test.ts`)
+- [x] 7.18 [L1] frontend tsc 0 errors + Vitest 全绿(npm run build 0 err / npm test 145 测试 30 文件全绿)
+- [x] 7.19 [L2] 验证门 ⑦:前端 L1 全绿;flag=false `.env` + `npm run dev` 启动正常,所有 baseline UI 入口被 `isTenderBaselineEnabled()` / `tenderBaselineEnabled` 守门,与 change 前等价
 
 ## 8. L3 完整集 + 凭证归档(D12 ⑧)
 

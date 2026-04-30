@@ -51,6 +51,10 @@ class ChapterScoreResult:
     plagiarism_count: int
     para_pair_count: int  # 章节内段落对数(sim >= threshold)
     samples: list[dict] = field(default_factory=list)  # 前 5 条 para 对(本章节内)
+    # detect-tender-baseline §4 章节级 baseline 标记
+    # chapter_baseline_source ∈ {tender, consensus, none};章节标题 hash 命中即非 none
+    chapter_baseline_source: str = "none"
+    chapter_baseline_matched: bool = False
 
 
 __all__ = ["ChapterBlock", "ChapterPair", "ChapterScoreResult"]

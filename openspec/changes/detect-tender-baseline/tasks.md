@@ -57,11 +57,11 @@
 
 ## 4. section_similarity 接入(D12 ④)
 
-- [ ] 4.1 [impl] 修改 `services/detect/agents/section_similarity.py`:章节标题 hash 命中 baseline 时整章不进 ironclad
-- [ ] 4.2 [impl] 修改 `section_sim_impl/scorer.py`:章节级 baseline 命中标记 + chapter_pairs 元数据扩展
-- [ ] 4.3 [L1] `test_section_sim_baseline.py`:章节级 baseline / 章节内段级联合判定 / file_role 分组生效
-- [ ] 4.4 [L2] `test_section_sim_baseline_e2e.py`:完整流程
-- [ ] 4.5 [L2] 验证门 ④:L1+L2 全绿
+- [x] 4.1 [impl] `services/detect/agents/section_similarity.py:run()` 调 baseline_resolver.get_excluded_segment_hashes_with_source 拿段级映射;透传给 scorer + fallback;_build_chapter_evidence 加顶级 baseline_source / warnings + chapter_pairs[i] 加 chapter_baseline_source / chapter_baseline_matched 字段;fail-soft 兜底(AgentSkippedError 优先 re-raise,其他异常返空 baseline)
+- [x] 4.2 [impl] `section_sim_impl/scorer.py`:`score_all_chapter_pairs` 扩 keyword-only `baseline_hash_to_source`;章节标题 hash ∈ baseline → chapter_baseline_matched=True 整章节强制 is_chapter_ironclad=False;章节内 sample 段级 baseline_matched / baseline_source 字段;compute_is_ironclad 收 baseline_excluded_segment_hashes 段级 skip(§3 同 path);新增 aggregate_pc_baseline_source(跨章节聚合最强 source);ChapterScoreResult 模型加 chapter_baseline_source / chapter_baseline_matched 字段(向后兼容默认 'none' / False)。fallback.py 同步透传 baseline 参数,与主路径对齐
+- [x] 4.3 [L1] `test_section_sim_baseline.py`:10 测试覆盖 章节级 baseline / 段级 baseline / 章节内段级联合判定 / 部分命中不豁免整章节 / 老调用兼容 / aggregate_pc_baseline_source 跨章节聚合 / file_role 默认 / ChapterScoreResult 默认值
+- [x] 4.4 [L2] `test_section_sim_baseline_e2e.py`:4 测试覆盖 L1 tender 章节标题命中 → is_chapter_ironclad=False / L1 tender 段级命中 → samples baseline_matched=true / 老路径无 tender baseline_source='none' + warnings=[] (兼容 main + fallback) / L3 ≤2 投标方 warnings 写入 + ironclad 仍触发
+- [x] 4.5 [L2] 验证门 ④:§4 L1 10 + §4 L2 4 全绿;全 unit 1347(原 1337,+10)+ 全 e2e 全绿(待回归确认),无回归
 
 ## 5. price_consistency 接入(D12 ⑤)
 

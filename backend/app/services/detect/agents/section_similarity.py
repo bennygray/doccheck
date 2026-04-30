@@ -18,6 +18,7 @@ import logging
 from decimal import Decimal
 
 from app.models.pair_comparison import PairComparison
+from app.services.detect import baseline_resolver
 from app.services.detect.agents.section_sim_impl import (
     aligner,
     chapter_parser,
@@ -39,6 +40,7 @@ from app.services.detect.context import (
     AgentRunResult,
     PreflightResult,
 )
+from app.services.detect.errors import AgentSkippedError
 from app.services.detect.registry import register_agent
 
 logger = logging.getLogger(__name__)
@@ -100,6 +102,27 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         if seg_b.doc_id else []
     )
 
+    # detect-tender-baseline §4:加载 baseline 段级 hash 集合(章节标题 + 段级共用同 set)
+    # fail-soft:任何异常返空 baseline,不阻塞 detector(L3 立场:基线缺失 ≠ 信号无效)
+    try:
+        baseline_segs = await baseline_resolver.get_excluded_segment_hashes_with_source(
+            ctx.session, ctx.project_id, "section_similarity"
+        )
+        baseline_hash_to_source = baseline_segs.hash_to_source
+        baseline_warnings = list(baseline_segs.warnings)
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise,防 helper 抛 AgentSkippedError 被
+        # 通用 except 吞成 failed 绕过 skipped 语义(harden-async-infra H2 同型)
+        raise
+    except Exception as exc:  # noqa: BLE001 - baseline 失败 fail-soft 不阻 detector
+        logger.error(
+            "section_similarity: baseline_resolver failed project=%s err=%s",
+            ctx.project_id,
+            exc,
+        )
+        baseline_hash_to_source = {}
+        baseline_warnings = []
+
     # 2) 正则切章(基于 raw_paras,标题行独立不合并)
     min_chapter_chars_v = s_config.min_chapter_chars()
     chapters_a = chapter_parser.extract_chapters(raw_paras_a, min_chapter_chars_v)
@@ -130,6 +153,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             degrade_reason=degrade_reason,
             chapters_a_count=len(chapters_a),
             chapters_b_count=len(chapters_b),
+            # detect-tender-baseline §4:fallback 路径同样接 baseline
+            baseline_hash_to_source=baseline_hash_to_source,
+            baseline_warnings=baseline_warnings,
         )
         summary = f"章节切分失败,已降级整文档粒度({degrade_reason})"
         if evidence.get("degraded"):
@@ -142,7 +168,7 @@ async def run(ctx: AgentContext) -> AgentRunResult:
     threshold = s_config.title_align_threshold()
     chapter_pairs = aligner.align_chapters(chapters_a, chapters_b, threshold)
 
-    # 5) 章节评分
+    # 5) 章节评分(detect-tender-baseline §4:透传 baseline 段级 hash 映射)
     (
         chapter_results,
         _all_pairs,
@@ -156,9 +182,11 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         ctx.bidder_a.name,
         ctx.bidder_b.name,
         doc_role,
+        baseline_hash_to_source=baseline_hash_to_source,
     )
 
     pair_score, is_ironclad = scorer.aggregate_pair_level(chapter_results)
+    pc_baseline_source = scorer.aggregate_pc_baseline_source(chapter_results)
 
     # 6) 构造 evidence_json
     evidence = _build_chapter_evidence(
@@ -172,6 +200,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
         chapter_results=chapter_results,
         all_judgments=all_judgments,
         ai_meta=ai_meta,
+        # detect-tender-baseline §4:PC 顶级 baseline_source / warnings
+        baseline_source=pc_baseline_source,
+        baseline_warnings=baseline_warnings,
     )
 
     # summary
@@ -201,8 +232,17 @@ def _build_chapter_evidence(
     chapter_results,
     all_judgments: dict,
     ai_meta: dict | None,
+    baseline_source: str = "none",
+    baseline_warnings: list[str] | None = None,
 ) -> dict:
-    """章节模式 evidence_json(对齐 design D7 schema)。"""
+    """章节模式 evidence_json(对齐 design D7 schema)。
+
+    detect-tender-baseline §4 扩展:
+    - 顶级 baseline_source(章节标题 + 段级命中取最强 source);老调用默认 "none"
+    - 顶级 warnings(L3 警示数组);老调用默认 []
+    - chapter_pairs[i] 加 chapter_baseline_source / chapter_baseline_matched
+    - samples[i] 加 baseline_matched / baseline_source(scorer 已注入)
+    """
     degraded = ai_meta is None
     plag = sum(1 for v in all_judgments.values() if v == "plagiarism")
     tmpl = sum(1 for v in all_judgments.values() if v == "template")
@@ -228,6 +268,9 @@ def _build_chapter_evidence(
             "chapter_score": r.chapter_score,
             "is_chapter_ironclad": r.is_chapter_ironclad,
             "plagiarism_count": r.plagiarism_count,
+            # detect-tender-baseline §4 章节级 baseline 标记
+            "chapter_baseline_source": r.chapter_baseline_source,
+            "chapter_baseline_matched": r.chapter_baseline_matched,
         }
         for r in sorted_results
     ]
@@ -270,6 +313,9 @@ def _build_chapter_evidence(
             else None
         ),
         "samples": samples,
+        # detect-tender-baseline §4:PC 顶级 baseline_source + warnings
+        "baseline_source": baseline_source,
+        "warnings": list(baseline_warnings or []),
     }
 
 

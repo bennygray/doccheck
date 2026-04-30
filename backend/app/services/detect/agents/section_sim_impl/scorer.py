@@ -5,6 +5,11 @@
 2. 所有章节的 para_pairs 合并 → 按 title_sim × avg_para_sim 粗排截前 MAX_PAIRS_TO_LLM
 3. 一次 LLM 调用(C7 llm_judge.call_llm_judge)给全部送审段落对定性
 4. 回落到各章节:聚合本章节的 judgments → 算 chapter_score + is_chapter_ironclad
+
+detect-tender-baseline §4 章节级 baseline 接入:
+- 章节标题 hash ∈ baseline → 整章节 is_chapter_ironclad=False(章节是模板)
+- 章节内 sample 段 hash ∈ baseline → 段被标 baseline_matched(供前端段级灰底)
+  + 段级 ironclad 跳过(复用 §3 compute_is_ironclad 的 baseline_excluded 路径)
 """
 
 from __future__ import annotations
@@ -34,6 +39,11 @@ from app.services.llm.base import LLMProvider
 # 每章节在 evidence_json.chapter_pairs[*].samples 上限
 _CHAPTER_SAMPLES_LIMIT = 15
 
+# detect-tender-baseline §4:baseline_source 优先级(与 §3 aggregator 对齐)
+_BASELINE_SOURCE_PRIORITY: dict[str, int] = {
+    "tender": 3, "consensus": 2, "none": 0
+}
+
 
 def compute_all_pair_sims_batch(
     chapter_pair_data: list[tuple[list[str], list[str]]],
@@ -61,11 +71,23 @@ async def score_all_chapter_pairs(
     bidder_a_name: str,
     bidder_b_name: str,
     doc_role: str,
+    *,
+    baseline_hash_to_source: dict[str, str] | None = None,
 ) -> tuple[list[ChapterScoreResult], list[ParaPair], dict[int, str], dict | None]:
     """对所有章节对评分,返 (chapter_results, all_para_pairs, all_judgments, ai_meta)。
 
     all_* 用于 evidence_json 跨章节汇总字段。
+
+    detect-tender-baseline §4 keyword-only `baseline_hash_to_source`:
+    - 章节标题 hash ∈ baseline → 该章节对 chapter_baseline_source 标 source,
+      is_chapter_ironclad=False(整章节是模板,即使 LLM 判 plagiarism 也不顶铁证)
+    - 章节内 sample 段 hash ∈ baseline → sample.baseline_matched=True + source 段级
+    - compute_is_ironclad 收到 baseline_excluded_segment_hashes → ≥50 字 exact_match
+      段被跳过(§3 同 path)
+    - 不传(老调用)→ 行为完全等价于 §4 前
     """
+    hash_to_source = baseline_hash_to_source or {}
+    baseline_set = set(hash_to_source.keys())
     threshold = c7_config.pair_score_threshold()
     max_pairs_to_llm = c7_config.max_pairs_to_llm()
 
@@ -154,29 +176,65 @@ async def score_all_chapter_pairs(
         else:
             chapter_score = 0.0
 
-        is_chapter_ironclad = c7_aggregator.compute_is_ironclad(local_judgments)
-        plag_count = sum(1 for v in local_judgments.values() if v == "plagiarism")
-
         ca = chapters_a[cp.a_idx]
         cb = chapters_b[cp.b_idx]
 
+        # detect-tender-baseline §4:章节级 baseline 判定 — 章节标题 hash 命中
+        # → 整章节 is_chapter_ironclad=False(章节是模板)
+        chapter_baseline_source = "none"
+        chapter_baseline_matched = False
+        if baseline_set:
+            for title in (ca.title, cb.title):
+                if not title:
+                    continue
+                h = c7_aggregator._segment_hash_for(title)
+                if h in baseline_set:
+                    chapter_baseline_matched = True
+                    src = hash_to_source.get(h, "none")
+                    if (
+                        _BASELINE_SOURCE_PRIORITY[src]
+                        > _BASELINE_SOURCE_PRIORITY[chapter_baseline_source]
+                    ):
+                        chapter_baseline_source = src
+
+        # 段级 ironclad 跳过(§3 同 path);章节级命中再覆盖整体
+        is_chapter_ironclad = c7_aggregator.compute_is_ironclad(
+            local_judgments,
+            pairs=combined_pairs,
+            baseline_excluded_segment_hashes=baseline_set,
+        )
+        if chapter_baseline_matched:
+            # 章节标题命中 baseline → 整章节是模板,is_chapter_ironclad MUST = False
+            # (即使 LLM 判 plagiarism 也不顶铁证;模板段被多家应标方共填合规)
+            is_chapter_ironclad = False
+        plag_count = sum(1 for v in local_judgments.values() if v == "plagiarism")
+
         # 本章节 samples(按 sim 降序前 N)
         samples_src = sorted(combined_pairs, key=lambda p: p.sim, reverse=True)
-        samples = [
-            {
-                "a_idx": p.a_idx,
-                "b_idx": p.b_idx,
-                "a_text": p.a_text,
-                "b_text": p.b_text,
-                "sim": p.sim,
-                "label": (
-                    local_judgments.get(i)
-                    if i < len(local_pairs_in_selected)
-                    else None
-                ),
-            }
-            for i, p in enumerate(samples_src[:_CHAPTER_SAMPLES_LIMIT])
-        ]
+        samples = []
+        for i, p in enumerate(samples_src[:_CHAPTER_SAMPLES_LIMIT]):
+            # detect-tender-baseline §4:sample 段级 baseline 标记(同 §3)
+            seg_baseline_source = "none"
+            if baseline_set:
+                seg_h = c7_aggregator._segment_hash_for(p.a_text)
+                if seg_h in baseline_set:
+                    seg_baseline_source = hash_to_source.get(seg_h, "none")
+            samples.append(
+                {
+                    "a_idx": p.a_idx,
+                    "b_idx": p.b_idx,
+                    "a_text": p.a_text,
+                    "b_text": p.b_text,
+                    "sim": p.sim,
+                    "label": (
+                        local_judgments.get(i)
+                        if i < len(local_pairs_in_selected)
+                        else None
+                    ),
+                    "baseline_matched": seg_baseline_source != "none",
+                    "baseline_source": seg_baseline_source,
+                }
+            )
 
         chapter_results.append(
             ChapterScoreResult(
@@ -192,6 +250,8 @@ async def score_all_chapter_pairs(
                 plagiarism_count=plag_count,
                 para_pair_count=len(pairs),
                 samples=samples,
+                chapter_baseline_source=chapter_baseline_source,
+                chapter_baseline_matched=chapter_baseline_matched,
             )
         )
 
@@ -213,4 +273,33 @@ def aggregate_pair_level(
     return round(pair_score, 2), is_ironclad
 
 
-__all__ = ["score_all_chapter_pairs", "aggregate_pair_level"]
+def aggregate_pc_baseline_source(
+    chapter_results: list[ChapterScoreResult],
+) -> str:
+    """detect-tender-baseline §4:PC 顶级 baseline_source = 所有命中 source 的最强。
+
+    取自:① 各章节 chapter_baseline_source(章节标题命中)② 各章节 sample 的
+    baseline_source(段级命中)。优先级 tender > consensus > none。
+    """
+    pc_src = "none"
+    for r in chapter_results:
+        if (
+            _BASELINE_SOURCE_PRIORITY[r.chapter_baseline_source]
+            > _BASELINE_SOURCE_PRIORITY[pc_src]
+        ):
+            pc_src = r.chapter_baseline_source
+        for s in r.samples:
+            seg_src = s.get("baseline_source", "none")
+            if (
+                _BASELINE_SOURCE_PRIORITY[seg_src]
+                > _BASELINE_SOURCE_PRIORITY[pc_src]
+            ):
+                pc_src = seg_src
+    return pc_src
+
+
+__all__ = [
+    "score_all_chapter_pairs",
+    "aggregate_pair_level",
+    "aggregate_pc_baseline_source",
+]

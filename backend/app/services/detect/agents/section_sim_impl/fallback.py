@@ -33,12 +33,21 @@ async def run_doc_level_fallback(
     degrade_reason: str,
     chapters_a_count: int,
     chapters_b_count: int,
+    *,
+    baseline_hash_to_source: dict[str, str] | None = None,
+    baseline_warnings: list[str] | None = None,
 ) -> tuple[float, bool, dict]:
     """走整文档 TF-IDF + LLM 路径,返 (score, is_ironclad, evidence_json)。
 
     evidence_json 的 algorithm / degraded_to_doc_level / degrade_reason / chapter_* 字段
     标记本次是"章节切分失败降级"。
+
+    detect-tender-baseline §4:fallback 路径与主路径对齐 — 段级 baseline 命中跳过
+    ironclad + samples 段级 baseline_matched / baseline_source + 顶级 baseline_source
+    / warnings 同 §3 c7 aggregator 内部处理。
     """
+    hash_to_source = baseline_hash_to_source or {}
+    baseline_set = set(hash_to_source.keys())
     threshold = c7_config.pair_score_threshold()
     max_pairs = c7_config.max_pairs_to_llm()
 
@@ -67,7 +76,11 @@ async def run_doc_level_fallback(
         judgments, ai_meta = {}, {"overall": "未检出超阈值段落对", "confidence": "high"}
 
     score = c7_aggregator.aggregate_pair_score(para_pairs, judgments)
-    is_ironclad = c7_aggregator.compute_is_ironclad(judgments)
+    is_ironclad = c7_aggregator.compute_is_ironclad(
+        judgments,
+        pairs=para_pairs,
+        baseline_excluded_segment_hashes=baseline_set,
+    )
 
     # 复用 C7 的 build_evidence_json 起手,再追加章节层专属字段
     base_evidence = c7_aggregator.build_evidence_json(
@@ -78,6 +91,8 @@ async def run_doc_level_fallback(
         pairs=para_pairs,
         judgments=judgments,
         ai_meta=ai_meta,
+        baseline_hash_to_source=hash_to_source,
+        baseline_warnings=baseline_warnings,
     )
     # 覆盖 algorithm 标签
     base_evidence["algorithm"] = "tfidf_cosine_fallback_to_doc"

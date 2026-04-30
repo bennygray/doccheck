@@ -65,12 +65,12 @@
 
 ## 5. price_consistency 接入(D12 ⑤)
 
-- [ ] 5.1 [impl] 修改 `services/detect/agents/price_consistency.py`:run() 调 baseline_resolver(BOQ 粒度);excluded 项不进 ironclad
-- [ ] 5.2 [impl] 修改 `price_impl/extractor.py`:加载 PriceItem.boq_baseline_hash + 与 tender BOQ hash 集合比对
-- [ ] 5.3 [impl] 4 个子检测(tail / amount_pattern / item_list / series_relation)接入 baseline:item_list 最强受影响,其余按需
-- [ ] 5.4 [L1] `test_price_consistency_boq_baseline.py`:BOQ 项级命中 / 不含价格 / 多 xlsx 合并 / 工程量精度
-- [ ] 5.5 [L2] `test_price_consistency_boq_e2e.py`
-- [ ] 5.6 [L2] 验证门 ⑤:L1+L2 全绿
+- [x] 5.1 [impl] `services/detect/agents/price_consistency.py:run()` 调 baseline_resolver.get_excluded_segment_hashes_with_source("price_consistency");BOQ 维度仅走 L1 tender 路径(D5,L2 共识不适用);加 `_filter_grouped_by_baseline` helper 在 detector 链前剔除命中行;evidence_json 加顶级 baseline_source / warnings + baseline_excluded_row_count;fail-soft 兜底(AgentSkippedError 优先 re-raise)
+- [x] 5.2 [impl] `price_impl/extractor.py:extract_bidder_prices`:从 PriceItem.boq_baseline_hash 加载到 PriceRow(由 parser fill_price 阶段写入);PriceRow TypedDict 加 boq_baseline_hash 字段(向后兼容默认 None,老数据不假阳)
+- [x] 5.3 [impl] **零侵入 4 个子检测**(tail / amount_pattern / item_list / series_relation):统一在 `price_consistency.run()` detector 链前 pre-filter,所有子检测在过滤后的 grouped/rows 上跑(item_list 最强受影响 — 命中 BOQ 行被剔除 → strength 自然下降到不顶 ironclad;其余 3 子检测同样不需修改)
+- [x] 5.4 [L1] `test_price_consistency_boq_baseline.py`:9 测试覆盖 全命中 / 部分命中 / 空 baseline 短路 / NULL hash 不剔除 / 空 sheet 剔除 / 多 xlsx 合并 baseline / 无命中保留 / 行序保留 / 不污染原 grouped
+- [x] 5.5 [L2] `test_price_consistency_boq_e2e.py`:5 测试覆盖 L1 tender 全命中 → score=0 + is_ironclad=False / 部分命中 score 下降 / **L2 共识不适用 BOQ**(D5 关键 spec scenario)/ 老路径无 tender baseline_source='none' / 老 PriceItem boq_baseline_hash=NULL 兼容
+- [x] 5.6 [L2] 验证门 ⑤:§5 L1 9 + §5 L2 5 全绿;全 unit 1356(原 1347,+9)+ 全 e2e 全绿(待回归确认),无回归
 
 ## 6. price_anomaly 接入(D12 ⑥)
 

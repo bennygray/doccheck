@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 
+from app.services.detect import baseline_resolver
 from app.services.detect.agents._preflight_helpers import bidder_has_priced
 from app.services.detect.agents.price_impl import write_pair_comparison_row
 from app.services.detect.agents.price_impl.amount_pattern_detector import (
@@ -19,6 +20,7 @@ from app.services.detect.agents.price_impl.extractor import (
     extract_bidder_prices,
     flatten_rows,
 )
+from app.services.detect.agents.price_impl.models import PriceRow
 from app.services.detect.agents.price_impl.item_list_detector import (
     detect_item_list_similarity,
 )
@@ -83,6 +85,33 @@ def _doc_ids_from_grouped(grouped: dict) -> list[int]:
     )
 
 
+def _filter_grouped_by_baseline(
+    grouped: dict[str, list[PriceRow]],
+    baseline_set: set[str],
+) -> tuple[dict[str, list[PriceRow]], int]:
+    """detect-tender-baseline §5:从 grouped 中剔除 boq_baseline_hash ∈ baseline 的行。
+
+    返 (filtered_grouped, excluded_count)。
+    - boq_baseline_hash 为 NULL 的行**不**被剔除(老数据 / 不完整行兜底,fail-soft)
+    - 全空 set 时直接返原 grouped + 0(短路,零开销)
+    """
+    if not baseline_set:
+        return grouped, 0
+    filtered: dict[str, list[PriceRow]] = {}
+    excluded = 0
+    for sheet, rows in grouped.items():
+        kept = []
+        for r in rows:
+            h = r.get("boq_baseline_hash")
+            if h is not None and h in baseline_set:
+                excluded += 1
+                continue
+            kept.append(r)
+        if kept:
+            filtered[sheet] = kept
+    return filtered, excluded
+
+
 @register_agent("price_consistency", "pair", preflight)
 async def run(ctx: AgentContext) -> AgentRunResult:
     cfg = load_price_config()
@@ -107,6 +136,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             },
             "doc_ids_a": [],
             "doc_ids_b": [],
+            # detect-tender-baseline §5:即使全部禁用,evidence schema 也带 baseline 字段
+            "baseline_source": "none",
+            "warnings": [],
         }
         await write_pair_comparison_row(
             ctx, dimension=_DIMENSION, score=0.0, evidence=evidence
@@ -121,12 +153,44 @@ async def run(ctx: AgentContext) -> AgentRunResult:
     if ctx.bidder_a is None or ctx.bidder_b is None:
         return AgentRunResult(score=0.0, summary="上下文缺失,跳过")
 
+    # detect-tender-baseline §5:加载 BOQ 项级 baseline hash 集合(D5 仅 L1 tender 路径,
+    # L2 共识不适用 BOQ — 招标方下发同一份工程量清单合法,共识阈值会把多家应标方
+    # 全部误剔成"模板"变零分);fail-soft:任何异常返空 baseline,不阻 detector
     try:
-        grouped_a = await extract_bidder_prices(
+        baseline_segs = await baseline_resolver.get_excluded_segment_hashes_with_source(
+            ctx.session, ctx.project_id, "price_consistency"
+        )
+        baseline_boq_hashes = set(baseline_segs.hash_to_source.keys())
+        baseline_source = baseline_segs.baseline_source
+        baseline_warnings = list(baseline_segs.warnings)
+    except AgentSkippedError:
+        # agent-skipped-error-guard:前置 re-raise,防 helper 抛 AgentSkippedError 被
+        # 通用 except 吞成 failed 绕过 skipped 语义(harden-async-infra H2 同型)
+        raise
+    except Exception as exc:  # noqa: BLE001 - baseline 失败 fail-soft 不阻 detector
+        logger.error(
+            "price_consistency: baseline_resolver failed project=%s err=%s",
+            ctx.project_id,
+            exc,
+        )
+        baseline_boq_hashes = set()
+        baseline_source = "none"
+        baseline_warnings = []
+
+    try:
+        grouped_a_raw = await extract_bidder_prices(
             ctx.session, ctx.bidder_a.id, cfg
         )
-        grouped_b = await extract_bidder_prices(
+        grouped_b_raw = await extract_bidder_prices(
             ctx.session, ctx.bidder_b.id, cfg
+        )
+        # detect-tender-baseline §5:在 detector 链前剔除 baseline 命中行
+        # (零侵入 4 个子检测,所有子检测在过滤后的 grouped/rows 上跑)
+        grouped_a, excluded_a = _filter_grouped_by_baseline(
+            grouped_a_raw, baseline_boq_hashes
+        )
+        grouped_b, excluded_b = _filter_grouped_by_baseline(
+            grouped_b_raw, baseline_boq_hashes
         )
         rows_a = flatten_rows(grouped_a)
         rows_b = flatten_rows(grouped_b)
@@ -180,6 +244,9 @@ async def run(ctx: AgentContext) -> AgentRunResult:
             },
             "doc_ids_a": [],
             "doc_ids_b": [],
+            # detect-tender-baseline §5:错误路径 evidence 也带 baseline 字段
+            "baseline_source": baseline_source,
+            "warnings": baseline_warnings,
         }
         await write_pair_comparison_row(
             ctx, dimension=_DIMENSION, score=0.0, evidence=evidence
@@ -195,6 +262,14 @@ async def run(ctx: AgentContext) -> AgentRunResult:
     evidence["doc_role"] = _DOC_ROLE
     evidence["doc_ids_a"] = _doc_ids_from_grouped(grouped_a)
     evidence["doc_ids_b"] = _doc_ids_from_grouped(grouped_b)
+    # detect-tender-baseline §5:PC 顶级 baseline_source / warnings + 过滤计数
+    # (filter 已在 detector 链前应用,baseline-命中行不参与 score 计算 → 自然不顶 ironclad)
+    evidence["baseline_source"] = baseline_source
+    evidence["warnings"] = baseline_warnings
+    evidence["baseline_excluded_row_count"] = {
+        "bidder_a": excluded_a,
+        "bidder_b": excluded_b,
+    }
 
     is_ironclad = (
         evidence.get("enabled", False)

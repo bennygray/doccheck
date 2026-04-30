@@ -51,6 +51,9 @@ async def extract_bidder_prices(
                 "total_price_raw": it.total_price,
                 "total_price_float": decimal_to_float_safe(it.total_price),
                 "tail_key": split_price_tail(it.total_price, tail_n),
+                # detect-tender-baseline §5:加载 BOQ baseline hash(parser fill_price 写入,
+                # 老数据 / 不完整行为 NULL,detector filter 时跳过 NULL 不假阳)
+                "boq_baseline_hash": it.boq_baseline_hash,
             }
         )
     return dict(grouped)

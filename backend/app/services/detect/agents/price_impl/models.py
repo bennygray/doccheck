@@ -23,6 +23,10 @@ class PriceRow(TypedDict):
     # 预计算字段
     total_price_float: float | None
     tail_key: tuple[str, int] | None  # (尾 N 位字符串, 整数位长)
+    # detect-tender-baseline §5:BOQ 项级 hash(D5 sha256(项目名+描述+单位+工程量)),
+    # 由 parser fill_price 阶段写入 PriceItem.boq_baseline_hash;detector 用此过滤
+    # tender BOQ 命中行(L1 路径,L2 共识不适用 BOQ 维度,见 design D5)
+    boq_baseline_hash: str | None
 
 
 class SubDimResult(TypedDict, total=False):

@@ -48,13 +48,17 @@ def _guess_mime_with_magic(head: bytes) -> str | None:
 
 
 def _validate_magic(extension: str, head: bytes) -> bool:
-    """魔数校验:libmagic 优先,失败 fallback 到字节头硬比对。"""
+    """魔数校验:libmagic 优先,octet-stream 或不可用时 fallback 到字节头硬比对。
+
+    libmagic 对小型 zip(如全 docx/xlsx 的小招标包)可能返 application/octet-stream
+    "我不知道",此时不应直接判错,而应继续 fallback 字节头判定。
+    """
     mime = _guess_mime_with_magic(head)
-    if mime is not None:
+    if mime is not None and mime != "application/octet-stream":
         expected = _EXPECTED_MIME_PREFIXES.get(extension, ())
         return any(mime.startswith(p) for p in expected)
 
-    # fallback:硬比对文件头
+    # libmagic 不可用 或 返 octet-stream → fallback 字节头硬比对
     expected_bytes = _MAGIC_BYTES.get(extension, ())
     return any(head.startswith(b) for b in expected_bytes)
 

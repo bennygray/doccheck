@@ -12,13 +12,19 @@ from __future__ import annotations
 
 import io
 import os
+from pathlib import Path
 
+import pytest
 from sqlalchemy import select
 
 from app.db.session import async_session
 from app.models.tender_document import TenderDocument
 
 from ._c4_helpers import seed_project
+
+# 真实回归 fixture:用户演示用 模板.zip(全 docx/xlsx, 142KB, libmagic 误判 octet-stream)
+# 仅在本地 dev 机器存在该路径时启用,CI/其他机器自动 skip
+_REAL_TEMPLATE_ZIP = Path(r"C:\Users\7way\Desktop\测试\模板.zip")
 
 
 def _build_minimal_docx_bytes() -> bytes:
@@ -128,6 +134,34 @@ async def test_upload_tender_pdf_returns_415(
             files={"file": ("file.pdf", b"%PDF-1.4 fake content", "application/pdf")},
         )
         assert r.status_code == 415, r.text
+    finally:
+        os.environ.pop("INFRA_DISABLE_EXTRACT", None)
+
+
+@pytest.mark.skipif(
+    not _REAL_TEMPLATE_ZIP.exists(),
+    reason="real-world 模板.zip fixture 不存在(非本地 dev 机器),跳过",
+)
+async def test_upload_tender_real_template_zip_passes_validator_regression(
+    seeded_reviewer, reviewer_token, auth_client
+):
+    """回归:真 模板.zip(libmagic 返 application/octet-stream)应能通过 validator。
+
+    Bug:小型 zip 全 docx/xlsx 时 libmagic 不识别返 octet-stream,validator 之前
+    直接判错。修复后 octet-stream 走字节头 fallback,PK\\x03\\x04 命中 → 通过。
+    """
+    os.environ["INFRA_DISABLE_EXTRACT"] = "1"
+    try:
+        project = await seed_project(owner_id=seeded_reviewer.id, name="P-real")
+        client = await auth_client(reviewer_token)
+
+        zip_bytes = _REAL_TEMPLATE_ZIP.read_bytes()
+        r = await client.post(
+            f"/api/projects/{project.id}/tender/",
+            files={"file": ("模板.zip", zip_bytes, "application/zip")},
+        )
+        assert r.status_code == 201, r.text
+        assert r.json()["file_name"] == "模板.zip"
     finally:
         os.environ.pop("INFRA_DISABLE_EXTRACT", None)
 

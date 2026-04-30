@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.services.upload import validator as validator_module
 from app.services.upload.validator import (
     MAX_ARCHIVE_BYTES,
     FileTooLarge,
@@ -68,6 +69,90 @@ class TestMagicNumberMatch:
             )
 
     def test_zip_ext_with_text_bytes_rejected(self) -> None:
+        with pytest.raises(UnsupportedMediaType, match="魔数"):
+            validate_archive_file(
+                filename="fake.zip",
+                head_bytes=b"hello world\n" + b"\x00" * 20,
+                total_size=1024,
+            )
+
+
+class TestMagicLibmagicFallback:
+    """libmagic 返回值与字节头 fallback 的协作场景。
+
+    回归 bug:小 zip(全 docx/xlsx)libmagic 返 application/octet-stream 时
+    不应直接判错,需 fallback 字节头判定。
+    """
+
+    def test_libmagic_octet_stream_with_zip_head_falls_back_and_passes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # libmagic "我不知道" + 头字节是 PK\x03\x04 → fallback 必须通过
+        monkeypatch.setattr(
+            validator_module,
+            "_guess_mime_with_magic",
+            lambda head: "application/octet-stream",
+        )
+        assert (
+            validate_archive_file(filename="x.zip", head_bytes=_ZIP_HEAD, total_size=1024)
+            == ".zip"
+        )
+
+    def test_libmagic_returns_zip_mime_passes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # libmagic 明确返 application/zip → 直接通过
+        monkeypatch.setattr(
+            validator_module,
+            "_guess_mime_with_magic",
+            lambda head: "application/zip",
+        )
+        assert (
+            validate_archive_file(filename="x.zip", head_bytes=_ZIP_HEAD, total_size=1024)
+            == ".zip"
+        )
+
+    def test_libmagic_returns_mismatch_mime_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # libmagic 给出非 octet-stream 但与扩展名不匹配 → 显式 mismatch,直接拒
+        monkeypatch.setattr(
+            validator_module,
+            "_guess_mime_with_magic",
+            lambda head: "image/png",
+        )
+        with pytest.raises(UnsupportedMediaType, match="魔数"):
+            validate_archive_file(
+                filename="fake.zip",
+                head_bytes=b"\x89PNG\r\n\x1a\n" + b"\x00" * 24,
+                total_size=1024,
+            )
+
+    def test_libmagic_unavailable_and_bad_head_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # libmagic 不可用(None)+ 头字节也错 → fallback 失败,拒
+        monkeypatch.setattr(
+            validator_module,
+            "_guess_mime_with_magic",
+            lambda head: None,
+        )
+        with pytest.raises(UnsupportedMediaType, match="魔数"):
+            validate_archive_file(
+                filename="fake.zip",
+                head_bytes=b"hello world\n" + b"\x00" * 20,
+                total_size=1024,
+            )
+
+    def test_libmagic_octet_stream_with_bad_head_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # libmagic 返 octet-stream + 头字节也错 → fallback 失败,拒
+        monkeypatch.setattr(
+            validator_module,
+            "_guess_mime_with_magic",
+            lambda head: "application/octet-stream",
+        )
         with pytest.raises(UnsupportedMediaType, match="魔数"):
             validate_archive_file(
                 filename="fake.zip",

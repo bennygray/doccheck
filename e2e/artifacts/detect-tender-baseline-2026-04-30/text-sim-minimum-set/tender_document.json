@@ -1,0 +1,15 @@
+{
+  "id": 1,
+  "file_name": "Ä£°å.zip",
+  "md5": "2f55b006bbcf831bc864feb50fc6090b",
+  "parse_status": "extracted",
+  "segment_hashes_count": 210,
+  "boq_baseline_hashes_count": 10,
+  "segment_hashes_sample": [
+    "a14b54803b9e1df2c839447f4c1d1c5263ced45b7205593d6d9c2d90d96a3431",
+    "3ac268a5deec6c157f2f110ecf82535a8aff1286891974a7ed289941eb606882",
+    "57ad5065f4d320e10c870fd8f74f0a23ddb2b622dc01bb5b62fc396b16ef1428",
+    "9700aedb91eec431084424873200d10d9c617990ec1062663023d850a3e57ccb",
+    "d91a2317cffd6a9dc5d68aa000ee1fc89131313e9cb92090b591719565bc2ee1"
+  ]
+}

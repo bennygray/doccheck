@@ -1,0 +1,353 @@
+[
+  {
+    "agent_name": "section_similarity",
+    "type": "pair",
+    "pair": [
+      4174,
+      4175
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 67780,
+    "score": 55.49,
+    "summary": "章节级对比完成,151 对齐章节,未命中铁证",
+    "error": null
+  },
+  {
+    "agent_name": "section_similarity",
+    "type": "pair",
+    "pair": [
+      4175,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 115567,
+    "score": 56.52,
+    "summary": "章节级命中:3 段抄袭 / 408 对齐章节",
+    "error": null
+  },
+  {
+    "agent_name": "text_similarity",
+    "type": "pair",
+    "pair": [
+      4175,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 141792,
+    "score": 80.94,
+    "summary": "该 pair 存在多处高度疑似同源抄袭的个性化表述段落（如材料保管检查、竣工资料审查、现场签证论述、合同熟悉等），同时包含大量行业通用规范条文及投标文件格式模板。",
+    "error": null
+  },
+  {
+    "agent_name": "section_similarity",
+    "type": "pair",
+    "pair": [
+      4174,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 174154,
+    "score": 32.82,
+    "summary": "章节级对比完成,151 对齐章节,未命中铁证",
+    "error": null
+  },
+  {
+    "agent_name": "style",
+    "type": "global",
+    "pair": [
+      null,
+      null
+    ],
+    "status": "timeout",
+    "elapsed_ms": 300174,
+    "score": null,
+    "summary": "Agent 超时 (>300s)",
+    "error": null
+  },
+  {
+    "agent_name": "text_similarity",
+    "type": "pair",
+    "pair": [
+      4174,
+      4175
+    ],
+    "status": "timeout",
+    "elapsed_ms": 302935,
+    "score": null,
+    "summary": "Agent 超时 (>300s)",
+    "error": null
+  },
+  {
+    "agent_name": "text_similarity",
+    "type": "pair",
+    "pair": [
+      4174,
+      4176
+    ],
+    "status": "timeout",
+    "elapsed_ms": 301595,
+    "score": null,
+    "summary": "Agent 超时 (>300s)",
+    "error": null
+  },
+  {
+    "agent_name": "metadata_time",
+    "type": "pair",
+    "pair": [
+      4174,
+      4175
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 42,
+    "score": 43.75,
+    "summary": "时间维度命中:created_at_match,modified_at_cluster(共 3 条)",
+    "error": null
+  },
+  {
+    "agent_name": "metadata_time",
+    "type": "pair",
+    "pair": [
+      4175,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 41,
+    "score": 43.75,
+    "summary": "时间维度命中:created_at_match,modified_at_cluster(共 3 条)",
+    "error": null
+  },
+  {
+    "agent_name": "metadata_author",
+    "type": "pair",
+    "pair": [
+      4174,
+      4175
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 44,
+    "score": 81.25,
+    "summary": "元数据字段命中:author,last_saved_by(共 3 条)",
+    "error": null
+  },
+  {
+    "agent_name": "price_anomaly",
+    "type": "global",
+    "pair": [
+      null,
+      null
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 370,
+    "score": null,
+    "summary": "样本数不足,无法判定异常低价",
+    "error": null
+  },
+  {
+    "agent_name": "structure_similarity",
+    "type": "pair",
+    "pair": [
+      4175,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 519,
+    "score": 100.0,
+    "summary": "结构铁证命中(字段=1.00、填充=1.00),综合 score=100.0",
+    "error": null
+  },
+  {
+    "agent_name": "metadata_machine",
+    "type": "pair",
+    "pair": [
+      4174,
+      4175
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 315,
+    "score": null,
+    "summary": "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+    "error": null
+  },
+  {
+    "agent_name": "error_consistency",
+    "type": "global",
+    "pair": [
+      null,
+      null
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 37,
+    "score": null,
+    "summary": "error_consistency: 无可抽关键词",
+    "error": null
+  },
+  {
+    "agent_name": "price_consistency",
+    "type": "pair",
+    "pair": [
+      4174,
+      4175
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 59,
+    "score": 70.0,
+    "summary": "报价一致命中:tail,amount_pattern,series;score=70.00",
+    "error": null
+  },
+  {
+    "agent_name": "image_reuse",
+    "type": "global",
+    "pair": [
+      null,
+      null
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 2752,
+    "score": 30.0,
+    "summary": "图片复用命中:byte_match=1, visual_similar=0",
+    "error": null
+  },
+  {
+    "agent_name": "metadata_author",
+    "type": "pair",
+    "pair": [
+      4175,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 2764,
+    "score": 81.25,
+    "summary": "元数据字段命中:author,last_saved_by(共 3 条)",
+    "error": null
+  },
+  {
+    "agent_name": "price_consistency",
+    "type": "pair",
+    "pair": [
+      4174,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 2795,
+    "score": 12.5,
+    "summary": "报价一致命中:tail;score=12.50",
+    "error": null
+  },
+  {
+    "agent_name": "metadata_time",
+    "type": "pair",
+    "pair": [
+      4174,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 2924,
+    "score": 65.0,
+    "summary": "时间维度命中:created_at_match,modified_at_cluster(共 4 条)",
+    "error": null
+  },
+  {
+    "agent_name": "price_consistency",
+    "type": "pair",
+    "pair": [
+      4175,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 2910,
+    "score": 12.5,
+    "summary": "报价一致命中:tail;score=12.50",
+    "error": null
+  },
+  {
+    "agent_name": "metadata_machine",
+    "type": "pair",
+    "pair": [
+      4174,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 342,
+    "score": null,
+    "summary": "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+    "error": null
+  },
+  {
+    "agent_name": "metadata_author",
+    "type": "pair",
+    "pair": [
+      4174,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 1400,
+    "score": 100.0,
+    "summary": "[铁证] 元数据字段命中:author,last_saved_by(共 4 条)",
+    "error": null
+  },
+  {
+    "agent_name": "price_overshoot",
+    "type": "global",
+    "pair": [
+      null,
+      null
+    ],
+    "status": "skipped",
+    "elapsed_ms": 1340,
+    "score": null,
+    "summary": "未设限价",
+    "error": null
+  },
+  {
+    "agent_name": "metadata_machine",
+    "type": "pair",
+    "pair": [
+      4175,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 1547,
+    "score": null,
+    "summary": "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+    "error": null
+  },
+  {
+    "agent_name": "price_total_match",
+    "type": "global",
+    "pair": [
+      null,
+      null
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 1444,
+    "score": null,
+    "summary": "未发现两家总额完全相等",
+    "error": null
+  },
+  {
+    "agent_name": "structure_similarity",
+    "type": "pair",
+    "pair": [
+      4174,
+      4176
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 4776,
+    "score": 100.0,
+    "summary": "结构铁证命中(目录 LCS=3/3+3、字段=1.00、填充=1.00),综合 score=100.0",
+    "error": null
+  },
+  {
+    "agent_name": "structure_similarity",
+    "type": "pair",
+    "pair": [
+      4174,
+      4175
+    ],
+    "status": "succeeded",
+    "elapsed_ms": 2072,
+    "score": 100.0,
+    "summary": "结构铁证命中(字段=1.00、填充=1.00),综合 score=100.0",
+    "error": null
+  }
+]

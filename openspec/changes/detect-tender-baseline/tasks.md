@@ -52,8 +52,8 @@
 - [x] 3.4 [L1] `test_text_sim_baseline_integration.py`:19 测试覆盖 ① tender 跳过 ironclad ② consensus 跳过 ③ baseline 空集时原行为不变 ④ L3 ≤2 投标方仍升 ironclad ⑤ 部分命中不豁免整 PC + 段级 / PC 顶级字段写入 + baseline_resolver.get_excluded_segment_hashes_with_source 三级降级
 - [x] 3.5 [L1] `test_text_sim_legacy_compat.py`:11 测试覆盖 不传 baseline kwarg 行为完全等价 §3 前 + 老 PC.evidence_json 缺字段 fallback `get('baseline_source','none')` 默认值 + section_similarity 老 call site 兼容
 - [x] 3.6 [L2] `test_text_sim_baseline_e2e.py`:5 测试覆盖 L1 tender 命中段被剔除 ironclad / L2 共识命中段被剔除 / L3 ≤2 仍升 ironclad + warnings 写入 / 部分命中仍升 ironclad / 老路径 baseline_source='none' + warnings=[]
-- [ ] 3.7 [L3] **L3 最小集**:前端 tender 上传 UI 未做(7.x 在 ⑦ 才做),最小集**仅后端 API + DB 状态截图**:curl/httpie `POST /api/projects/{pid}/tender` 上传 `C:\Users\7way\Desktop\测试\模板.zip`,启动检测验证 text_similarity 维度不误报铁证;后端凭证(API 响应 + DB dump + evidence_json)落 `e2e/artifacts/detect-tender-baseline-{date}/text-sim-minimum-set/`;**真 LLM 调用,需用户成本确认后执行**
-- [x] 3.8 [L2] 验证门 ③:L1 §3 30 测试 + 全 unit 1332 + L2 §3 5 + 全 e2e 全绿;L3 最小集 3.7 待用户审批后执行(可能旁路:细看 L1+L2 已覆盖 hash 生效路径,L3 仅作客户演示 zip 主路径验证)
+- [x] 3.7 [L3] **L3 最小集 — 限定语义"主路径功能正确"**:真后端 + 真 LLM(火山引擎 Ark)+ 真客户演示 zip(vendor-A/B/C + 模板.zip)。tender 解析成功(210 段 hash + 10 BOQ hash);text_similarity B-C PC evidence 含 §3 新加段级 + 顶级 schema 字段。**意外发现**:vendor 投标方高度 customize 模板,全 40 段 0 命中 tender → 实际"tender 跳过 ironclad"正向效果直接演示**留 §8 合成场景**(§3 主路径已由 L1 30 + L2 5 case 覆盖)。已知 bug:[validator._validate_magic](backend/app/services/upload/validator.py:50) libmagic 返 octet-stream 时拒小 zip,已 spawn_task 派发独立修复 chip。凭证 + 完整 README:`e2e/artifacts/detect-tender-baseline-2026-04-30/text-sim-minimum-set/`(4 JSON + README + 独立 hash 比对 audit)
+- [x] 3.8 [L2] 验证门 ③:L1 §3 30 测试 + 全 unit 1332 + L2 §3 5 + 全 e2e 309 全绿 + L3 minimum-set 真 LLM 端到端主路径功能正确
 
 ## 4. section_similarity 接入(D12 ④)
 

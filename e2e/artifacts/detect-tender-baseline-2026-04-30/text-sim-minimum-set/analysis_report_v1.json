@@ -1,0 +1,208 @@
+{
+  "version": 1,
+  "total_score": 92.0,
+  "risk_level": "high",
+  "llm_conclusion": "投标人4175与4176在文本相似度（80.94分）及章节相似度（56.52分）两个维度均触发铁证，高度疑似投标文件抄袭或协同制作；另4174与4175在价格一致性维度得分70分，显示报价策略存在关联。其余维度未见明显异常。综合判定本案高度疑似围标/串标，建议立即启动深度调查并固定电子证据。",
+  "template_cluster_detected": true,
+  "template_cluster_adjusted_scores": {
+    "clusters": [
+      {
+        "bidder_ids": [
+          4174,
+          4175,
+          4176
+        ],
+        "cluster_key_sample": {
+          "author": "lp",
+          "created_at": "2023-10-09T07:16:00+00:00"
+        }
+      }
+    ],
+    "adjustments": [
+      {
+        "pair": [
+          4174,
+          4175
+        ],
+        "oa_id": null,
+        "scope": "pc",
+        "reason": "template_cluster_excluded",
+        "dimension": "metadata_time",
+        "raw_score": 43.75,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": false,
+        "raw_has_iron_evidence": null
+      },
+      {
+        "pair": [
+          4175,
+          4176
+        ],
+        "oa_id": null,
+        "scope": "pc",
+        "reason": "template_cluster_excluded",
+        "dimension": "metadata_time",
+        "raw_score": 43.75,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": false,
+        "raw_has_iron_evidence": null
+      },
+      {
+        "pair": [
+          4174,
+          4175
+        ],
+        "oa_id": null,
+        "scope": "pc",
+        "reason": "template_cluster_excluded",
+        "dimension": "metadata_author",
+        "raw_score": 81.25,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": false,
+        "raw_has_iron_evidence": null
+      },
+      {
+        "pair": [
+          4175,
+          4176
+        ],
+        "oa_id": null,
+        "scope": "pc",
+        "reason": "template_cluster_excluded",
+        "dimension": "structure_similarity",
+        "raw_score": 100.0,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": true,
+        "raw_has_iron_evidence": null
+      },
+      {
+        "pair": [
+          4175,
+          4176
+        ],
+        "oa_id": null,
+        "scope": "pc",
+        "reason": "template_cluster_excluded",
+        "dimension": "metadata_author",
+        "raw_score": 81.25,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": false,
+        "raw_has_iron_evidence": null
+      },
+      {
+        "pair": [
+          4175,
+          4176
+        ],
+        "oa_id": null,
+        "scope": "pc",
+        "reason": "template_cluster_downgrade_suppressed_by_ironclad",
+        "dimension": "text_similarity",
+        "raw_score": 80.94,
+        "adjusted_score": 80.94,
+        "raw_is_ironclad": true,
+        "raw_has_iron_evidence": null
+      },
+      {
+        "pair": [
+          4174,
+          4176
+        ],
+        "oa_id": null,
+        "scope": "pc",
+        "reason": "template_cluster_excluded",
+        "dimension": "metadata_time",
+        "raw_score": 65.0,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": false,
+        "raw_has_iron_evidence": null
+      },
+      {
+        "pair": [
+          4174,
+          4176
+        ],
+        "oa_id": null,
+        "scope": "pc",
+        "reason": "template_cluster_excluded",
+        "dimension": "metadata_author",
+        "raw_score": 100.0,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": true,
+        "raw_has_iron_evidence": null
+      },
+      {
+        "pair": [
+          4174,
+          4176
+        ],
+        "oa_id": null,
+        "scope": "pc",
+        "reason": "template_cluster_excluded",
+        "dimension": "structure_similarity",
+        "raw_score": 100.0,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": true,
+        "raw_has_iron_evidence": null
+      },
+      {
+        "pair": [
+          4174,
+          4175
+        ],
+        "oa_id": null,
+        "scope": "pc",
+        "reason": "template_cluster_excluded",
+        "dimension": "structure_similarity",
+        "raw_score": 100.0,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": true,
+        "raw_has_iron_evidence": null
+      },
+      {
+        "pair": null,
+        "oa_id": 1107,
+        "scope": "def_oa",
+        "reason": "def_oa_aggregation_after_template_exclusion",
+        "dimension": "metadata_time",
+        "raw_score": 65.0,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": null,
+        "raw_has_iron_evidence": false
+      },
+      {
+        "pair": null,
+        "oa_id": 1110,
+        "scope": "def_oa",
+        "reason": "def_oa_aggregation_after_template_exclusion",
+        "dimension": "structure_similarity",
+        "raw_score": 100.0,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": null,
+        "raw_has_iron_evidence": true
+      },
+      {
+        "pair": null,
+        "oa_id": 1111,
+        "scope": "def_oa",
+        "reason": "def_oa_aggregation_after_template_exclusion",
+        "dimension": "metadata_author",
+        "raw_score": 100.0,
+        "adjusted_score": 0.0,
+        "raw_is_ironclad": null,
+        "raw_has_iron_evidence": true
+      },
+      {
+        "pair": null,
+        "oa_id": 1112,
+        "scope": "def_oa",
+        "reason": "def_oa_aggregation_after_template_exclusion",
+        "dimension": "text_similarity",
+        "raw_score": 80.94,
+        "adjusted_score": 80.94,
+        "raw_is_ironclad": null,
+        "raw_has_iron_evidence": true
+      }
+    ]
+  }
+}

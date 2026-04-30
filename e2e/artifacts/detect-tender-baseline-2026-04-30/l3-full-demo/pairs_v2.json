@@ -1,0 +1,214 @@
+{
+  "items": [
+    {
+      "id": 495,
+      "dimension": "metadata_author",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"field\": \"author\", \"value\": \"Administrator\", \"doc_ids_a\": [3327], \"doc_ids_b\": [3323], \"normalized\": \"administrator\"}, {\"field\": \"author\", \"value\": \"LP\", \"doc_ids_a\": [3324, 3325, 3326], \"d",
+      "baseline_source": "none"
+    },
+    {
+      "id": 498,
+      "dimension": "metadata_author",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"field\": \"author\", \"value\": \"Administrator\", \"doc_ids_a\": [3323], \"doc_ids_b\": [3319], \"normalized\": \"administrator\"}, {\"field\": \"author\", \"value\": \"LP\", \"doc_ids_a\": [3320, 3321, 3322], \"d",
+      "baseline_source": "none"
+    },
+    {
+      "id": 500,
+      "dimension": "metadata_author",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"field\": \"author\", \"value\": \"Administrator\", \"doc_ids_a\": [3327], \"doc_ids_b\": [3319], \"normalized\": \"administrator\"}, {\"field\": \"author\", \"value\": \"LP\", \"doc_ids_a\": [3324, 3325, 3326], \"d",
+      "baseline_source": "none"
+    },
+    {
+      "id": 507,
+      "dimension": "structure_similarity",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"doc_id_a\": [3325, 3327], \"doc_id_b\": [3321, 3323], \"doc_role\": \"pricing\", \"algorithm\": \"structure_sim_v1\", \"dimensions\": {\"directory\": {\"score\": 1.0, \"reason\": null, \"lcs_length\": 3, \"titles_a_count",
+      "baseline_source": "none"
+    },
+    {
+      "id": 508,
+      "dimension": "structure_similarity",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"doc_id_a\": [3321, 3323], \"doc_id_b\": [3317, 3319], \"doc_role\": \"pricing\", \"algorithm\": \"structure_sim_v1\", \"dimensions\": {\"directory\": {\"score\": 1.0, \"reason\": null, \"lcs_length\": 3, \"titles_a_count",
+      "baseline_source": "none"
+    },
+    {
+      "id": 509,
+      "dimension": "structure_similarity",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"doc_id_a\": [3325, 3327], \"doc_id_b\": [3317, 3319], \"doc_role\": \"pricing\", \"algorithm\": \"structure_sim_v1\", \"dimensions\": {\"directory\": {\"score\": 1.0, \"reason\": null, \"lcs_length\": 3, \"titles_a_count",
+      "baseline_source": "none"
+    },
+    {
+      "id": 510,
+      "dimension": "text_similarity",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"samples\": [{\"sim\": 1.0, \"a_idx\": 0, \"b_idx\": 0, \"label\": \"exact_match\", \"a_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件\\n（技术标）\\n投标人（盖章）：\", \"b_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件",
+      "baseline_source": "none"
+    },
+    {
+      "id": 511,
+      "dimension": "text_similarity",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"samples\": [{\"sim\": 1.0, \"a_idx\": 0, \"b_idx\": 0, \"label\": \"exact_match\", \"a_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件\\n（技术标）\\n投标人（盖章）：\", \"b_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件",
+      "baseline_source": "none"
+    },
+    {
+      "id": 512,
+      "dimension": "text_similarity",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"samples\": [{\"sim\": 1.0, \"a_idx\": 0, \"b_idx\": 0, \"label\": \"exact_match\", \"a_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件\\n（技术标）\\n投标人（盖章）：\", \"b_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件",
+      "baseline_source": "none"
+    },
+    {
+      "id": 496,
+      "dimension": "metadata_time",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"times\": [\"2025-12-16T13:24:16+00:00\", \"2025-12-16T13:24:16+00:00\"], \"dimension\": \"modified_at_cluster\", \"doc_ids_a\": [3323], \"doc_ids_b\": [3319], \"window_min\": 5}, {\"times\": [\"2025-12-24T0",
+      "baseline_source": "none"
+    },
+    {
+      "id": 497,
+      "dimension": "metadata_time",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"times\": [\"2025-12-16T13:24:16+00:00\", \"2025-12-16T13:24:16+00:00\"], \"dimension\": \"modified_at_cluster\", \"doc_ids_a\": [3327], \"doc_ids_b\": [3323], \"window_min\": 5}, {\"times\": [\"2025-12-24T0",
+      "baseline_source": "none"
+    },
+    {
+      "id": 502,
+      "dimension": "metadata_time",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"times\": [\"2025-12-16T13:24:16+00:00\", \"2025-12-16T13:24:16+00:00\"], \"dimension\": \"modified_at_cluster\", \"doc_ids_a\": [3327], \"doc_ids_b\": [3319], \"window_min\": 5}, {\"times\": [\"2025-12-24T0",
+      "baseline_source": "none"
+    },
+    {
+      "id": 513,
+      "dimension": "section_similarity",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"samples\": [{\"sim\": 1.0, \"a_idx\": 0, \"b_idx\": 0, \"label\": \"exact_match\", \"a_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件\\n（技术标）\\n投标人（盖章）：\", \"b_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件",
+      "baseline_source": "none"
+    },
+    {
+      "id": 514,
+      "dimension": "section_similarity",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"samples\": [{\"sim\": 1.0, \"a_idx\": 0, \"b_idx\": 0, \"label\": \"exact_match\", \"a_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件\\n（技术标）\\n投标人（盖章）：\", \"b_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件",
+      "baseline_source": "none"
+    },
+    {
+      "id": 515,
+      "dimension": "section_similarity",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"samples\": [{\"sim\": 1.0, \"a_idx\": 0, \"b_idx\": 0, \"label\": \"exact_match\", \"a_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件\\n（技术标）\\n投标人（盖章）：\", \"b_text\": \"锂源（江苏）科技有限公司\\n江苏锂源年产24万吨LFP项目工程监理\\n投 标 文 件",
+      "baseline_source": "none"
+    },
+    {
+      "id": 505,
+      "dimension": "metadata_machine",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+      "baseline_source": "none"
+    },
+    {
+      "id": 506,
+      "dimension": "metadata_machine",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+      "baseline_source": "none"
+    },
+    {
+      "id": 499,
+      "dimension": "metadata_machine",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+      "baseline_source": "none"
+    },
+    {
+      "id": 503,
+      "dimension": "price_consistency",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "{\"score\": 0.0, \"reason\": null, \"enabled\": true, \"subdims\": {\"tail\": {\"hits\": [], \"score\": null, \"reason\": \"至少一侧无可比对报价行\", \"enabled\": true}, \"series\": {\"hits\": [], \"score\": null, \"reason\": \"对齐样本不足(需 ≥ 3",
+      "baseline_source": "tender"
+    },
+    {
+      "id": 501,
+      "dimension": "price_consistency",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "{\"score\": 0.0, \"reason\": null, \"enabled\": true, \"subdims\": {\"tail\": {\"hits\": [], \"score\": null, \"reason\": \"至少一侧无可比对报价行\", \"enabled\": true}, \"series\": {\"hits\": [], \"score\": null, \"reason\": \"对齐样本不足(需 ≥ 3",
+      "baseline_source": "tender"
+    },
+    {
+      "id": 504,
+      "dimension": "price_consistency",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "{\"score\": 0.0, \"reason\": null, \"enabled\": true, \"subdims\": {\"tail\": {\"hits\": [], \"score\": null, \"reason\": \"至少一侧无可比对报价行\", \"enabled\": true}, \"series\": {\"hits\": [], \"score\": null, \"reason\": \"对齐样本不足(需 ≥ 3",
+      "baseline_source": "tender"
+    }
+  ]
+}

@@ -131,6 +131,20 @@ async def get_report(
         if at.summary:
             summaries_by_dim[at.agent_name].append(at.summary)
 
+    # detect-tender-baseline §8.0:从 PC.evidence_json.baseline_source 聚合维度级 baseline
+    # (取所有 PC 的最强 source:tender > consensus > metadata_cluster > none)
+    _SOURCE_RANK = {"tender": 3, "consensus": 2, "metadata_cluster": 1, "none": 0}
+    dim_baseline_source: dict[str, str] = defaultdict(lambda: "none")
+    dim_warnings: dict[str, set[str]] = defaultdict(set)
+    for pc in pair_rows:
+        ev = pc.evidence_json or {}
+        src = ev.get("baseline_source") or "none"
+        if _SOURCE_RANK.get(src, 0) > _SOURCE_RANK.get(dim_baseline_source[pc.dimension], 0):
+            dim_baseline_source[pc.dimension] = src
+        for w in ev.get("warnings") or []:
+            if isinstance(w, str):
+                dim_warnings[pc.dimension].add(w)
+
     dimensions: list[ReportDimension] = []
     for dim in ALL_DIMENSIONS:
         dimensions.append(
@@ -142,11 +156,21 @@ async def get_report(
                     dim, ReportDimensionStatusCounts()
                 ),
                 summaries=summaries_by_dim.get(dim, []),
+                baseline_source=dim_baseline_source.get(dim, "none"),
+                warnings=sorted(dim_warnings.get(dim, set())),
             )
         )
 
     # 按 is_ironclad desc + best_score desc 排序
     dimensions.sort(key=lambda d: (not d.is_ironclad, -d.best_score))
+
+    # 报告级 baseline_source = 所有维度的最强 source(取 tender > consensus > metadata_cluster > none)
+    report_baseline_source: str = "none"
+    report_warnings: set[str] = set()
+    for d in dimensions:
+        if _SOURCE_RANK.get(d.baseline_source, 0) > _SOURCE_RANK.get(report_baseline_source, 0):
+            report_baseline_source = d.baseline_source
+        report_warnings.update(d.warnings)
 
     return ReportResponse(
         version=report.version,
@@ -160,6 +184,8 @@ async def get_report(
         manual_review_comment=report.manual_review_comment,
         reviewer_id=report.reviewer_id,
         reviewed_at=report.reviewed_at,
+        baseline_source=report_baseline_source,
+        warnings=sorted(report_warnings),
     )
 
 

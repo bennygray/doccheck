@@ -1,0 +1,154 @@
+{
+  "items": [
+    {
+      "id": 494,
+      "dimension": "structure_similarity",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"doc_id_a\": [3325, 3327], \"doc_id_b\": [3317, 3319], \"doc_role\": \"pricing\", \"algorithm\": \"structure_sim_v1\", \"dimensions\": {\"directory\": {\"score\": 1.0, \"reason\": null, \"lcs_length\": 3, \"titles_a_count",
+      "baseline_source": "none"
+    },
+    {
+      "id": 485,
+      "dimension": "metadata_author",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"field\": \"author\", \"value\": \"Administrator\", \"doc_ids_a\": [3323], \"doc_ids_b\": [3319], \"normalized\": \"administrator\"}, {\"field\": \"author\", \"value\": \"LP\", \"doc_ids_a\": [3320, 3321, 3322], \"d",
+      "baseline_source": "none"
+    },
+    {
+      "id": 488,
+      "dimension": "metadata_author",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"field\": \"author\", \"value\": \"Administrator\", \"doc_ids_a\": [3327], \"doc_ids_b\": [3319], \"normalized\": \"administrator\"}, {\"field\": \"author\", \"value\": \"LP\", \"doc_ids_a\": [3324, 3325, 3326], \"d",
+      "baseline_source": "none"
+    },
+    {
+      "id": 484,
+      "dimension": "metadata_time",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"times\": [\"2025-12-16T13:24:16+00:00\", \"2025-12-16T13:24:16+00:00\"], \"dimension\": \"modified_at_cluster\", \"doc_ids_a\": [3327], \"doc_ids_b\": [3323], \"window_min\": 5}, {\"times\": [\"2025-12-24T0",
+      "baseline_source": "none"
+    },
+    {
+      "id": 490,
+      "dimension": "metadata_time",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"times\": [\"2025-12-16T13:24:16+00:00\", \"2025-12-16T13:24:16+00:00\"], \"dimension\": \"modified_at_cluster\", \"doc_ids_a\": [3323], \"doc_ids_b\": [3319], \"window_min\": 5}, {\"times\": [\"2025-12-24T0",
+      "baseline_source": "none"
+    },
+    {
+      "id": 491,
+      "dimension": "metadata_time",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"times\": [\"2025-12-16T13:24:16+00:00\", \"2025-12-16T13:24:16+00:00\"], \"dimension\": \"modified_at_cluster\", \"doc_ids_a\": [3327], \"doc_ids_b\": [3319], \"window_min\": 5}, {\"times\": [\"2025-12-24T0",
+      "baseline_source": "none"
+    },
+    {
+      "id": 492,
+      "dimension": "structure_similarity",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"doc_id_a\": [3321, 3323], \"doc_id_b\": [3317, 3319], \"doc_role\": \"pricing\", \"algorithm\": \"structure_sim_v1\", \"dimensions\": {\"directory\": {\"score\": 1.0, \"reason\": null, \"lcs_length\": 3, \"titles_a_count",
+      "baseline_source": "none"
+    },
+    {
+      "id": 493,
+      "dimension": "structure_similarity",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"doc_id_a\": [3325, 3327], \"doc_id_b\": [3321, 3323], \"doc_role\": \"pricing\", \"algorithm\": \"structure_sim_v1\", \"dimensions\": {\"directory\": {\"score\": 1.0, \"reason\": null, \"lcs_length\": 3, \"titles_a_count",
+      "baseline_source": "none"
+    },
+    {
+      "id": 480,
+      "dimension": "metadata_author",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"hits\": [{\"field\": \"author\", \"value\": \"Administrator\", \"doc_ids_a\": [3327], \"doc_ids_b\": [3323], \"normalized\": \"administrator\"}, {\"field\": \"author\", \"value\": \"LP\", \"doc_ids_a\": [3324, 3325, 3326], \"d",
+      "baseline_source": "none"
+    },
+    {
+      "id": 481,
+      "dimension": "metadata_machine",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+      "baseline_source": "none"
+    },
+    {
+      "id": 483,
+      "dimension": "metadata_machine",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+      "baseline_source": "none"
+    },
+    {
+      "id": 489,
+      "dimension": "metadata_machine",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+      "baseline_source": "none"
+    },
+    {
+      "id": 482,
+      "dimension": "price_consistency",
+      "bidder_a_id": 4778,
+      "bidder_b_id": 4779,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "{\"score\": 0.0, \"reason\": null, \"enabled\": true, \"subdims\": {\"tail\": {\"hits\": [], \"score\": null, \"reason\": \"至少一侧无可比对报价行\", \"enabled\": true}, \"series\": {\"hits\": [], \"score\": null, \"reason\": \"对齐样本不足(需 ≥ 3",
+      "baseline_source": "tender"
+    },
+    {
+      "id": 486,
+      "dimension": "price_consistency",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4778,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "{\"score\": 0.0, \"reason\": null, \"enabled\": true, \"subdims\": {\"tail\": {\"hits\": [], \"score\": null, \"reason\": \"至少一侧无可比对报价行\", \"enabled\": true}, \"series\": {\"hits\": [], \"score\": null, \"reason\": \"对齐样本不足(需 ≥ 3",
+      "baseline_source": "tender"
+    },
+    {
+      "id": 487,
+      "dimension": "price_consistency",
+      "bidder_a_id": 4777,
+      "bidder_b_id": 4779,
+      "score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "{\"score\": 0.0, \"reason\": null, \"enabled\": true, \"subdims\": {\"tail\": {\"hits\": [], \"score\": null, \"reason\": \"至少一侧无可比对报价行\", \"enabled\": true}, \"series\": {\"hits\": [], \"score\": null, \"reason\": \"对齐样本不足(需 ≥ 3",
+      "baseline_source": "tender"
+    }
+  ]
+}

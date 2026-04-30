@@ -18,6 +18,9 @@ class ReportDimensionStatusCounts(BaseModel):
     skipped: int = 0
 
 
+BaselineSourceLiteral = Literal["tender", "consensus", "metadata_cluster", "none"]
+
+
 class ReportDimension(BaseModel):
     dimension: str
     best_score: float
@@ -26,6 +29,9 @@ class ReportDimension(BaseModel):
         default_factory=ReportDimensionStatusCounts
     )
     summaries: list[str] = Field(default_factory=list)
+    # detect-tender-baseline §8.0:维度级 baseline 来源 + warnings(老 evidence 缺该字段时默认)
+    baseline_source: BaselineSourceLiteral = "none"
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ReportResponse(BaseModel):
@@ -45,12 +51,12 @@ class ReportResponse(BaseModel):
     # CH-2 detect-template-exclusion: 模板簇识别可观测性
     template_cluster_detected: bool = False
     template_cluster_adjusted_scores: dict[str, Any] | None = None
+    # detect-tender-baseline §8.0:报告级 baseline_source(取所有维度最强 source);warnings 聚合
+    baseline_source: BaselineSourceLiteral = "none"
+    warnings: list[str] = Field(default_factory=list)
 
 
 # ================================================================= C15
-
-
-BaselineSourceLiteral = Literal["tender", "consensus", "metadata_cluster", "none"]
 
 
 class ReportDimensionDetail(BaseModel):

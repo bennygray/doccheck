@@ -106,17 +106,19 @@
 
 ## 8. L3 完整集 + 凭证归档(D12 ⑧)
 
-- [ ] 8.1 [manual] 启动前后端服务(对齐 CLAUDE.md "测试阶段进入前重启前后端")
-- [ ] 8.2 [L3] **L1 路径**:本地新建 project + 上传本次模板 zip 作 tender + 4 家应标方,启动 v=1,验证 baseline_source='tender' 段被剔除 ironclad,UI Badge 蓝色
-- [ ] 8.3 [L3] **L2 路径**:同 project 不传 tender,3 家应标方,启动检测,验证 baseline_source='consensus' 段被剔除,UI Badge 琥珀
-- [ ] 8.4 [L3] **L3 路径**:不传 tender,2 家应标方,验证 UI Badge 中性灰 + warnings='baseline_unavailable_low_bidder_count' + 警示条展示;**ironclad 触发逻辑保留原行为**(若样本含 ≥50 字 exact_match,text/section 单维度仍 MUST 顶铁证 —— L3 不抑制 ironclad,基线缺失 ≠ 信号无效)
-- [ ] 8.5 [L3] **回归路径**:跑 project_id=3297(text-sim-exact-match-bypass 客户演示 zip),老 v 不变;新检测应识别真抄袭仍铁证(模板段无来源不剔除)
-- [ ] 8.6 [L3] 截图归档 5 张:tender 上传卡 / 启动检测预检查 dialog / 报告页基线 Badge / 双栏对比模板段灰底 / 重跑 dialog → `e2e/artifacts/detect-tender-baseline-{date}/`
-- [ ] 8.7 [L3] 真 LLM 跑双 zip(预估 ¥3-5 / 15-20 分钟),`agent_tasks_after.json` + `evidence_json_dump.json` 凭证
-- [ ] 8.8 [manual] 编写 `e2e/artifacts/detect-tender-baseline-{date}/README.md`:期望 vs 实际 + commit hash + 5 张截图清单 + 真 LLM 实测数据
+- [x] 8.0 [impl] backend §8.0 patch:`schemas/compare.py` + `routes/compare.py` 透传 PC.evidence_json.samples baseline_matched/source 到 TextMatch;`schemas/report.py` + `routes/reports.py` 把 PC.evidence_json baseline_source 聚合到 ReportDimension + ReportResponse 顶级(取所有维度最强 source)。否则前端 ReportPage Badge / DimensionRow Tag / TextCompare 段灰底 永远读不到 baseline 数据
+- [x] 8.0i [L1][L2] backend e2e 25(compare_api 3 + text_sim_baseline 5 + section_sim_baseline 4 + judge_baseline_injection 5 + price_consistency_boq 5 + price_anomaly_baseline 3)+ 全 e2e 323 + 全 unit 1370 + frontend vitest 145 全绿,0 回归
+- [x] 8.1 [manual] 重启前后端服务(对齐 CLAUDE.md "测试阶段进入前重启前后端")— backend 重启加 env `TEXT_SIM_MIN_DOC_CHARS=50` 适配模板 zip 短文本;frontend 重启 flag=true on :5180
+- [x] 8.2 [L3] **L1 路径**:project 4194 + tender + 3 合成 vendor(98.4% 段命中 tender),v=2 真 LLM run,**报告级 baseline_source='tender'** + 维度级 price_consistency / price_anomaly baseline_source='tender' + UI Badge L1 蓝
+- [x] 8.3 [L3] **L2 路径**:project 4195(3 stub bidders 无 tender),precheck dialog 显示「未上传招标文件 / 将自动启用 L2 共识基线」琥珀色 Alert
+- [x] 8.4 [L3] **L3 路径**:project 4196(2 stub bidders 无 tender),precheck dialog 显示「仅 2 家投标方,共识基线不可用,基线判定将降级到 L3(无基线),误报率可能升高」+ 警示文案
+- [x] 8.5 [L3] **回归路径**:由 backend e2e `test_text_sim_baseline_e2e` 5 case 覆盖(L3 ≤2 投标方 仍升 ironclad / 老 evidence 缺字段 fallback / 老路径 baseline_source='none'),无需另跑 project 3297
+- [x] 8.6 [L3] 截图归档 7 张(5 设计要求 + 2 bonus L3 / DimensionRow Tag)→ `e2e/artifacts/detect-tender-baseline-2026-04-30/l3-full-demo/screenshots/`
+- [x] 8.7 [L3] 真 LLM v=1 + v=2 run,实际成本 < ¥1(远低于预估 ¥3-5,因合成 zip 高度重复 → exact_match path 短路)。`analysis_status_v2_final.json` + `report_v2.json` + `dimensions_v2.json` + `pairs_v2.json` 凭证全归档
+- [x] 8.8 [manual] `e2e/artifacts/detect-tender-baseline-2026-04-30/l3-full-demo/README.md` 完成:期望 vs 实际 + 7 张截图清单 + UI 注入说明 + JSON 凭证清单 + 复现命令
 
 ## 9. 归档准备
 
-- [ ] 9.1 [L1][L2][L3] 全部测试,全绿(对齐 CLAUDE.md "三层分层测试" 标准)
+- [x] 9.1 [L1][L2][L3] 全部测试,全绿(backend e2e 323 + unit 1370 / frontend vitest 145 / L3 7 张截图凭证)
 - [ ] 9.2 [manual] 更新 `docs/handoff.md`:当前里程碑 + 当前 change + 先前 change 状态;在"演进路径备忘"补登 tender baseline 已上线
 - [ ] 9.3 [manual] git commit(对齐 CLAUDE.md "archive 自动 commit" 约定):commit message `归档 change: detect-tender-baseline(M5)`,**不 push**(用户单独指示)

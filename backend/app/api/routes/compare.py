@@ -200,6 +200,11 @@ async def compare_text(
         # flip 时 a_idx/b_idx 也要互换,保证返给前端的索引和请求的 bidder_a/b 一致
         orig_a_idx = s.get("b_idx" if flip else "a_idx", 0)
         orig_b_idx = s.get("a_idx" if flip else "b_idx", 0)
+        # detect-tender-baseline §8.0:段级 baseline 字段透传给前端(老 evidence 缺该字段时默认 false / 'none')
+        sample_baseline_matched = bool(s.get("baseline_matched", False))
+        sample_baseline_source = s.get("baseline_source") or "none"
+        if sample_baseline_source not in ("tender", "consensus", "metadata_cluster", "none"):
+            sample_baseline_source = "none"
 
         def _fallback() -> None:
             matches.append(
@@ -210,6 +215,8 @@ async def compare_text(
                     label=s.get("label"),
                     a_text=a_text,
                     b_text=b_text,
+                    baseline_matched=sample_baseline_matched,
+                    baseline_source=sample_baseline_source,
                 )
             )
 
@@ -241,6 +248,8 @@ async def compare_text(
                             label=s.get("label"),
                             a_text=a_parts[k],
                             b_text=b_parts[k],
+                            baseline_matched=sample_baseline_matched,
+                            baseline_source=sample_baseline_source,
                         )
                     )
                     emitted += 1

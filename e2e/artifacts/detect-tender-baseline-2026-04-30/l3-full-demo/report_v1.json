@@ -1,0 +1,211 @@
+{
+  "version": 1,
+  "total_score": 0.0,
+  "risk_level": "indeterminate",
+  "llm_conclusion": "证据不足,无法判定围标风险(有效信号维度全部为零)",
+  "created_at": "2026-04-30T12:00:27.420892Z",
+  "dimensions": [
+    {
+      "dimension": "structure_similarity",
+      "best_score": 100.0,
+      "is_ironclad": true,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "结构铁证命中(目录 LCS=3/3+3、字段=1.00、填充=1.00),综合 score=100.0",
+        "结构铁证命中(目录 LCS=3/3+3、字段=1.00、填充=1.00),综合 score=100.0",
+        "结构铁证命中(目录 LCS=3/3+3、字段=1.00、填充=1.00),综合 score=100.0"
+      ]
+    },
+    {
+      "dimension": "metadata_author",
+      "best_score": 100.0,
+      "is_ironclad": true,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "[铁证] 元数据字段命中:author,last_saved_by(共 4 条)",
+        "[铁证] 元数据字段命中:author,last_saved_by(共 4 条)",
+        "[铁证] 元数据字段命中:author,last_saved_by(共 4 条)"
+      ]
+    },
+    {
+      "dimension": "metadata_time",
+      "best_score": 100.0,
+      "is_ironclad": true,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "[铁证] 时间维度命中:created_at_match,modified_at_cluster(共 5 条)",
+        "[铁证] 时间维度命中:created_at_match,modified_at_cluster(共 5 条)",
+        "[铁证] 时间维度命中:created_at_match,modified_at_cluster(共 5 条)"
+      ]
+    },
+    {
+      "dimension": "text_similarity",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 0,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 3
+      },
+      "summaries": [
+        "文档过短无法对比",
+        "文档过短无法对比",
+        "文档过短无法对比"
+      ]
+    },
+    {
+      "dimension": "section_similarity",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 0,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 3
+      },
+      "summaries": [
+        "文档过短无法对比",
+        "文档过短无法对比",
+        "文档过短无法对比"
+      ]
+    },
+    {
+      "dimension": "metadata_machine",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+        "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失",
+        "元数据缺失:app_name/app_version/template 三字段构成的完整元组在至少一侧缺失"
+      ]
+    },
+    {
+      "dimension": "price_consistency",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 3,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "未发现报价一致信号(参与子检测 1 个)",
+        "未发现报价一致信号(参与子检测 1 个)",
+        "未发现报价一致信号(参与子检测 1 个)"
+      ]
+    },
+    {
+      "dimension": "price_anomaly",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "样本数不足,无法判定异常低价"
+      ]
+    },
+    {
+      "dimension": "error_consistency",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "[降级检测] 未发现交叉污染信号"
+      ]
+    },
+    {
+      "dimension": "style",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "未发现风格一致的投标人组合"
+      ]
+    },
+    {
+      "dimension": "image_reuse",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 0,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 1
+      },
+      "summaries": [
+        "未提取到图片"
+      ]
+    },
+    {
+      "dimension": "price_total_match",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 1,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 0
+      },
+      "summaries": [
+        "数据缺失,无法判定总额相等"
+      ]
+    },
+    {
+      "dimension": "price_overshoot",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "status_counts": {
+        "succeeded": 0,
+        "failed": 0,
+        "timeout": 0,
+        "skipped": 1
+      },
+      "summaries": [
+        "未设限价"
+      ]
+    }
+  ],
+  "manual_review_status": null,
+  "manual_review_comment": null,
+  "reviewer_id": null,
+  "reviewed_at": null,
+  "template_cluster_detected": false,
+  "template_cluster_adjusted_scores": null
+}

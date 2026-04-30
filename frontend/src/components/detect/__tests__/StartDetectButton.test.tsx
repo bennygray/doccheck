@@ -24,6 +24,16 @@ const makeBidder = (
 describe("StartDetectButton", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // detect-tender-baseline §7 / §8.0:.env flag=true 后 click 会先弹 precheck dialog,
+    // 这里给所有测试默认 mock listTenders 返空 + localStorage 标 dismissed 跳过 dialog,
+    // 避免对老测试断言"clicking button → startAnalysis 直调"的语义影响。
+    vi.spyOn(api, "listTenders").mockResolvedValue([]);
+    try {
+      window.localStorage.setItem("tender_baseline_warning_dismissed_1", "1");
+      window.localStorage.setItem("tender_baseline_warning_dismissed_42", "1");
+    } catch {
+      /* ignore */
+    }
   });
 
   it("禁用当 bidder < 2", () => {

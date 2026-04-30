@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+# detect-tender-baseline §8.0:与 schemas/report.py BaselineSourceLiteral 对齐
+BaselineSourceLiteral = Literal["tender", "consensus", "metadata_cluster", "none"]
 
 
 # ── Text Compare (US-7.1) ──────────────────────────────────────────
@@ -20,6 +25,9 @@ class TextMatch(BaseModel):
     label: str | None = None
     a_text: str | None = None
     b_text: str | None = None
+    # detect-tender-baseline §8.0:段级 baseline 命中(透传自 PC.evidence_json.samples)
+    baseline_matched: bool = False
+    baseline_source: BaselineSourceLiteral = "none"
 
 
 class TextCompareResponse(BaseModel):

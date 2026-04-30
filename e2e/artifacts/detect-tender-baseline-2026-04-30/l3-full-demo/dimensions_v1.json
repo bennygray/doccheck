@@ -1,0 +1,121 @@
+{
+  "dimensions": [
+    {
+      "dimension": "text_similarity",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "",
+      "manual_review_json": null,
+      "baseline_source": "none",
+      "warnings": []
+    },
+    {
+      "dimension": "section_similarity",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "",
+      "manual_review_json": null,
+      "baseline_source": "none",
+      "warnings": []
+    },
+    {
+      "dimension": "structure_similarity",
+      "best_score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"source\": \"pair_aggregation\", \"best_score\": 100.0, \"pair_count\": 3, \"has_iron_evidence\": true, \"ironclad_pair_count\": 3}",
+      "manual_review_json": null,
+      "baseline_source": "metadata_cluster",
+      "warnings": []
+    },
+    {
+      "dimension": "metadata_author",
+      "best_score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"source\": \"pair_aggregation\", \"best_score\": 100.0, \"pair_count\": 3, \"has_iron_evidence\": true, \"ironclad_pair_count\": 3}",
+      "manual_review_json": null,
+      "baseline_source": "metadata_cluster",
+      "warnings": []
+    },
+    {
+      "dimension": "metadata_time",
+      "best_score": 100.0,
+      "is_ironclad": true,
+      "evidence_summary": "{\"source\": \"pair_aggregation\", \"best_score\": 100.0, \"pair_count\": 3, \"has_iron_evidence\": true, \"ironclad_pair_count\": 3}",
+      "manual_review_json": null,
+      "baseline_source": "metadata_cluster",
+      "warnings": []
+    },
+    {
+      "dimension": "metadata_machine",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "",
+      "manual_review_json": null,
+      "baseline_source": "none",
+      "warnings": []
+    },
+    {
+      "dimension": "price_consistency",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "",
+      "manual_review_json": null,
+      "baseline_source": "tender",
+      "warnings": []
+    },
+    {
+      "dimension": "price_anomaly",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "",
+      "manual_review_json": null,
+      "baseline_source": "tender",
+      "warnings": []
+    },
+    {
+      "dimension": "error_consistency",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "",
+      "manual_review_json": null,
+      "baseline_source": "none",
+      "warnings": []
+    },
+    {
+      "dimension": "style",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "",
+      "manual_review_json": null,
+      "baseline_source": "metadata_cluster",
+      "warnings": []
+    },
+    {
+      "dimension": "image_reuse",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "",
+      "manual_review_json": null,
+      "baseline_source": "none",
+      "warnings": []
+    },
+    {
+      "dimension": "price_total_match",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "",
+      "manual_review_json": null,
+      "baseline_source": "none",
+      "warnings": []
+    },
+    {
+      "dimension": "price_overshoot",
+      "best_score": 0.0,
+      "is_ironclad": false,
+      "evidence_summary": "",
+      "manual_review_json": null,
+      "baseline_source": "none",
+      "warnings": []
+    }
+  ]
+}
